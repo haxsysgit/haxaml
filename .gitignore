@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+wheels/
+
+# Virtual environments and local env
+.venv/
+.env
+.env.*
+!.env.example
+
+# uv local state
+.python-version
+
+# Generated agent exports and local FRAME state
+.haxaml/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+HAXAML.md
+.cursor/
+.github/
+.windsurf/
+
+# Project scratchpads and non-public material
+legacy_docs/
+linkedinin_post/
+designs/
+aibb/
+minitrack/
+haxaml_mcp.md
+benchmarks.md
+collect.md
+implementation_detail.md
+main.py
+resc.txt
+roadmap.md
+usage.md
+requirements.txt
+setup.py
+/schemas/
+/templates/
+
+# Node or deploy leftovers
+node_modules/
+.netlify/
+deploy/
+planning/
