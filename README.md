@@ -1,158 +1,216 @@
 # Haxaml
 
-Deterministic agent-management framework for AI-assisted development. Stop re-explaining your project every session — Haxaml gives LLM agents a stable governance layer through **FRAME**.
+Haxaml is a deterministic project-governance layer for AI coding agents.
 
-- **You** are the owner. You decide what gets built.
-- **Haxaml** is the architect desk — validates, stores, compacts, exports. No intelligence, no ML.
-- **AI agents** (Claude, Codex, Cursor, Copilot, Windsurf, Gemini) are the builders. They read FRAME, code, then write back what changed.
+It gives tools like Claude Code, Codex, Cursor, Copilot, Windsurf, and Gemini a shared project brain called **FRAME**: facts, rules, work history, architecture map, and expected next steps.
 
-## Setup (MCP — Recommended)
+The short version: Haxaml helps agents stop rediscovering your project from scratch every session.
 
-The fastest way to use Haxaml is as an MCP server. Your AI agent calls Haxaml tools natively during conversation — no CLI needed.
+## Why This Exists
 
-### Install
+AI coding agents are useful, but projects can get messy fast:
+
+- one agent follows `AGENTS.md`, another follows `CLAUDE.md`
+- old decisions live in random markdown files
+- every session rereads the same repo context
+- bug fixes accidentally break unrelated features
+- switching tools slowly turns one project into five slightly different memories
+
+Haxaml does not replace your agent. It gives your agents a stable operating layer.
+
+You still decide what gets built. The LLM still reasons and writes code. Haxaml stores, validates, compacts, and exports the project state so every agent starts from the same truth.
+
+## What Haxaml Is
+
+Haxaml is:
+
+- a CLI for creating and validating FRAME project files
+- an MCP server that agents can call directly
+- a deterministic exporter for agent-native instruction files
+- a project diary for runs, decisions, risks, and completed work
+- a lightweight context builder for reducing repeated prompt setup
+
+Haxaml is not:
+
+- an LLM
+- a code generator
+- a prompt marketplace
+- a magic benchmark claim machine
+- another agent pretending to be the boss
+
+## FRAME
+
+FRAME is the project model Haxaml implements.
+
+| Letter | File | Meaning |
+| --- | --- | --- |
+| F | `.haxaml/facts.yaml` | What is true about the project |
+| R | `.haxaml/rules.yaml` | How agents should work |
+| A | `.haxaml/acts.yaml` | What happened, changed, or was decided |
+| M | `.haxaml/map.yaml` | What modules exist and what affects what |
+| E | `.haxaml/expect.yaml` | What should happen next |
+
+The files are plain YAML. Humans can read them. Machines can validate them. Agents can use them without being handed a huge wall of context every time.
+
+## Install
+
+With pip:
 
 ```bash
-pip install haxaml[mcp]
+pip install haxaml
 ```
 
-### Connect Your IDE
+With uv:
 
-Add to your MCP config (Windsurf, Cursor, Claude Desktop, or any MCP client):
+```bash
+uv tool install haxaml
+```
+
+For local development:
+
+```bash
+git clone https://github.com/haxsysgit/haxaml.git
+cd haxaml
+uv sync --all-extras
+uv run haxaml --help
+```
+
+## Quick Start
+
+Create FRAME files in an existing project:
+
+```bash
+haxaml init
+```
+
+Validate them:
+
+```bash
+haxaml validate
+```
+
+Generate compact context for an agent:
+
+```bash
+haxaml context --tokens
+```
+
+Export agent-native instruction files:
+
+```bash
+haxaml export --all
+```
+
+Start and complete a governed task:
+
+```bash
+haxaml run --task "add checkout flow" --description "Implement checkout state and validation"
+haxaml done --task "add checkout flow" --result success --changes "Added checkout state and tests"
+```
+
+## MCP Setup
+
+Haxaml also runs as an MCP server, which is the nicer workflow if your editor or agent supports MCP.
+
+```bash
+haxaml-mcp
+```
+
+Example MCP config:
 
 ```json
 {
   "mcpServers": {
     "haxaml": {
       "command": "haxaml-mcp",
-      "env": { "HAXAML_PROJECT_DIR": "/path/to/your/project" }
+      "env": {
+        "HAXAML_PROJECT_DIR": "/path/to/your/project"
+      }
     }
   }
 }
 ```
 
-That's it. The agent now has 14 governance tools and 6 read-only FRAME resources.
+The MCP server exposes tools for init, validation, context, run tracking, state compaction, exports, adoption, needs checks, impact checks, and benchmarks.
 
-### What the Agent Gets
+## Agent Exports
 
-| Tool | What it does |
-| --- | --- |
-| `haxaml_init` | Scaffold `.haxaml/` FRAME files |
-| `haxaml_validate` | Validate FRAME against schemas |
-| `haxaml_context` | Get compact project context + token count |
-| `haxaml_run` / `haxaml_done` | Start and record governed tasks |
-| `haxaml_needs` | List what the user still needs to provide |
-| `haxaml_impact` | Check module dependencies before changing code |
-| `haxaml_health` | Full project health dashboard |
-| `haxaml_export` | Export FRAME → agent-native files |
-| `haxaml_adopt` | Adopt an existing project into FRAME |
+FRAME is the source of truth. Agent files are generated views.
 
-Full MCP reference: [advanced.md](advanced.md)
-
-## Setup (CLI)
-
-If you prefer the command line or need to script Haxaml:
-
-```bash
-pip install haxaml
-```
-
-```bash
-haxaml init              # scaffold .haxaml/ FRAME files
-haxaml validate          # check everything is valid
-haxaml export --all      # export to all agent-native files
-```
-
-## What FRAME Stores
-
-Haxaml implements FRAME in `.haxaml/`:
-
-| File | Role |
-| --- | --- |
-| `facts.yaml` | Project truth: identity, stack, goals, constraints, services |
-| `rules.yaml` | Agent rules: how builders should behave before, during, and after tasks |
-| `acts.yaml` | Project diary: active task, completed work, decisions, risks, run history |
-| `map.yaml` | Optional architecture map: modules, ownership, dependencies, impact checks |
-| `expect.yaml` | Runbook: expected runs, required materials, done criteria, map policy |
-
-The LLM writes the content. Haxaml validates, stores, and keeps the team aligned.
-
-Raw token size is format- and fixture-dependent. In some benchmark fixtures, a single markdown file is smaller than raw YAML. FRAME value is the deterministic governance layer: validated project truth, governed state history, and controllable compiled views (for example `AGENTS.md`) from one source of truth.
-
-## Codex Prompt Profile (Optional)
-
-For Codex exports, `rules.yaml` can include an optional `agent_profile` block:
-
-- `persona` — role, tone, and operating constraints
-- `reasoning_policy` — keep private reasoning private, require concise public rationale and checklists
-- `output_contract` — required output sections and formatting notes
-- `few_shot_examples` — explicit input/output examples
-- `example_policy` — deterministic limits for ordering and truncation budget
-
-Haxaml does not generate examples with an LLM. It renders explicit examples first, then derives bounded examples from recent `.haxaml/acts.yaml` decisions/completed-task summaries when needed.
-
-## How It Works
-
-**New project** — the agent calls `haxaml_init`, asks clarifying questions, fills in FRAME, then builds:
-
-```
-You: "Build me an ecommerce site"
-Agent → haxaml_init()          → scaffolds .haxaml/
-Agent → asks: DB? Payment API?  → you provide materials
-Agent → fills in FRAME files
-Agent → haxaml_run("catalog")  → starts governed task
-Agent → builds...
-Agent → haxaml_done("catalog") → records in diary
-```
-
-**Existing project** — the agent scans what's already there:
-
-```
-Agent → haxaml_adopt()         → inventories CLAUDE.md, README, etc.
-Agent → fills FRAME from evidence
-Agent → haxaml_export("all")   → syncs all agent-native files
-```
-
-**Follow-up prompts** — the agent reads the diary instead of asking you to re-explain:
-
-```
-You: "Now add payments"
-Agent → haxaml_context()       → reads full project state
-Agent → haxaml_needs()         → "Blocking: Stripe API key"
-You: provide key
-Agent → haxaml_run("payments") → builds with full context
-```
-
-## Auto Re-Export
-
-FRAME files are the source of truth. Agent-native files (CLAUDE.md, AGENTS.md, etc.) are generated views that stay in sync automatically:
-
-```bash
-haxaml install-hook    # git pre-commit hook — re-exports before every commit
-haxaml watch           # file watcher — re-exports when .haxaml/ changes
-```
-
-The MCP server also auto re-exports after `haxaml_done` and `haxaml_init`.
-
-## Supported Agents
-
-| Agent/tool | Export command | Native file |
+| Agent/tool | Export command | Output file |
 | --- | --- | --- |
 | Claude Code | `haxaml export --agent claude` | `CLAUDE.md` |
-| Cursor | `haxaml export --agent cursor` | `.cursor/rules/haxaml.mdc` |
 | Codex | `haxaml export --agent codex` | `AGENTS.md` |
 | GitHub Copilot | `haxaml export --agent copilot` | `.github/copilot-instructions.md` |
+| Cursor | `haxaml export --agent cursor` | `.cursor/rules/haxaml.mdc` |
 | Windsurf/Cascade | `haxaml export --agent windsurf` | `.windsurf/rules/haxaml.md` |
 | Gemini CLI | `haxaml export --agent gemini` | `GEMINI.md` |
 
-## What Haxaml Is Not
+That means you can keep one governed model and still feed each tool the file format it expects.
 
-Haxaml is not an LLM, not a code generator, not a prompt library. It is the framework AI agents use to manage themselves through FRAME.
+## Existing Projects
 
-## More
+If a repo already has agent files, Haxaml can inventory them and scaffold FRAME from that evidence.
 
-- [advanced.md](advanced.md) — detailed FRAME model, MCP reference, runbooks, map.yaml, benchmarks, compatibility
+Dry run:
 
-## Status
+```bash
+haxaml adopt --from-native
+```
 
-MCP server and auto re-export are production-ready. FRAME-vs-long-prompt benchmarks are still planned.
+Write adoption notes and missing FRAME files:
+
+```bash
+haxaml adopt --from-native --write
+```
+
+Haxaml does not invent project truth during adoption. It points at the evidence and leaves unknowns explicit so an agent or human can fill them properly.
+
+## Benchmarks
+
+Haxaml currently includes practical token and state-growth utilities:
+
+```bash
+haxaml benchmark --dir .
+```
+
+These measure YAML/JSON token counts, parse speed, FRAME context budget, and simulated `acts.yaml` growth.
+
+Important detail: FRAME is not sold as "YAML is always smaller than markdown." Sometimes raw markdown is smaller. The value is deterministic governance: validation, state tracking, compact compiled views, and a source of truth that survives tool switching.
+
+## Development
+
+```bash
+uv sync --all-extras
+uv run pytest -q
+uv build
+uv run twine check dist/*
+```
+
+The package is managed with `uv`. Release publishing is handled by the GitHub workflow in `.github/workflows/publish.yml` and uses `uv publish`.
+
+## Project Status
+
+Current version: `0.1.0`
+
+Working today:
+
+- FRAME schemas
+- CLI commands
+- MCP server
+- state/run tracking
+- native agent exports
+- project adoption
+- auto re-export
+- token benchmark utilities
+
+Still evolving:
+
+- deeper FRAME-vs-long-prompt benchmark suite
+- packaging polish
+- more examples from real projects
+
+## More Docs
+
+- [advanced.md](advanced.md) for the detailed FRAME model, command reference, MCP tools, export behavior, map policy, and release notes.
+- Research files in this repo cover the prompt-format and agent-governance background that led to Haxaml.
