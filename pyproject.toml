@@ -32,13 +32,11 @@ classifiers = [
 dependencies = [
   "click>=8.1",
   "jsonschema>=4.20",
+  "mcp>=1.0",
   "pyyaml>=6.0"
 ]
 
 [project.optional-dependencies]
-mcp = [
-  "mcp>=1.0"
-]
 bench = [
   "tiktoken>=0.5"
 ]
@@ -49,7 +47,6 @@ dev = [
 ]
 all = [
   "build>=1.2",
-  "mcp>=1.0",
   "pytest>=8.0",
   "tiktoken>=0.5",
   "twine>=5.0"
