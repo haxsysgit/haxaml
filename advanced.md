@@ -136,6 +136,7 @@ haxaml benchmark --dir .
 Start the MCP server:
 
 ```bash
+uvx haxaml-mcp
 haxaml mcp
 haxaml-mcp
 ```
@@ -144,7 +145,31 @@ haxaml-mcp
 
 Haxaml uses stdio MCP transport.
 
-Example config:
+The recommended setup is `uvx`, because it avoids global installs and keeps the MCP command copy-pasteable across editors.
+
+Default config:
+
+```json
+{
+  "mcpServers": {
+    "haxaml": {
+      "command": "uvx",
+      "args": ["haxaml-mcp"],
+      "env": {
+        "HAXAML_PROJECT_DIR": "/path/to/project"
+      }
+    }
+  }
+}
+```
+
+If you want a persistent local install instead:
+
+```bash
+uv tool install haxaml
+```
+
+Then use:
 
 ```json
 {
@@ -158,6 +183,8 @@ Example config:
   }
 }
 ```
+
+Docker is not the primary setup for Haxaml MCP. The server is a small local stdio process, and Docker adds path mounts and project-directory confusion without buying much yet.
 
 Tools exposed:
 

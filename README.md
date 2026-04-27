@@ -110,13 +110,35 @@ haxaml done --task "add checkout flow" --result success --changes "Added checkou
 
 ## MCP Setup
 
-Haxaml also runs as an MCP server, which is the nicer workflow if your editor or agent supports MCP.
+Haxaml also runs as an MCP server, which is the nicest workflow if your editor or agent supports MCP.
 
-```bash
-haxaml-mcp
+The easiest setup is `uvx`. No global install, no virtualenv ceremony, no Docker volume weirdness.
+
+Use this as the default MCP config:
+
+```json
+{
+  "mcpServers": {
+    "haxaml": {
+      "command": "uvx",
+      "args": ["haxaml-mcp"],
+      "env": {
+        "HAXAML_PROJECT_DIR": "/path/to/your/project"
+      }
+    }
+  }
+}
 ```
 
-Example MCP config:
+The MCP server exposes tools for init, validation, context, run tracking, state compaction, exports, adoption, needs checks, impact checks, and benchmarks.
+
+If you prefer a stable local install, use:
+
+```bash
+uv tool install haxaml
+```
+
+Then configure MCP with:
 
 ```json
 {
@@ -131,7 +153,7 @@ Example MCP config:
 }
 ```
 
-The MCP server exposes tools for init, validation, context, run tracking, state compaction, exports, adoption, needs checks, impact checks, and benchmarks.
+Docker is intentionally not the recommended path right now. Haxaml is a small stdio MCP server that reads and writes local FRAME files, so `uvx` is simpler and less error-prone.
 
 ## Agent Exports
 
