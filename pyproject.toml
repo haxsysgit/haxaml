@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "haxaml"
+version = "0.1.0"
+description = "Deterministic agent-management framework that implements FRAME governance for AI-assisted software development."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+  { name = "Hax" }
+]
+keywords = [
+  "ai-agents",
+  "agent-governance",
+  "mcp",
+  "developer-tools",
+  "context-engineering"
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Build Tools",
+  "Topic :: Software Development :: Libraries :: Python Modules"
+]
+dependencies = [
+  "click>=8.1",
+  "jsonschema>=4.20",
+  "pyyaml>=6.0"
+]
+
+[project.optional-dependencies]
+mcp = [
+  "mcp>=1.0"
+]
+bench = [
+  "tiktoken>=0.5"
+]
+dev = [
+  "build>=1.2",
+  "pytest>=8.0",
+  "twine>=5.0"
+]
+all = [
+  "build>=1.2",
+  "mcp>=1.0",
+  "pytest>=8.0",
+  "tiktoken>=0.5",
+  "twine>=5.0"
+]
+
+[project.scripts]
+haxaml = "haxaml.cli:cli"
+haxaml-mcp = "haxaml.mcp_server:main"
+
+[project.urls]
+Homepage = "https://github.com/haxsysgit/haxaml"
+Repository = "https://github.com/haxsysgit/haxaml"
+
+[tool.setuptools.packages.find]
+include = ["haxaml*"]
+
+[tool.setuptools.package-data]
+haxaml = ["schemas/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
