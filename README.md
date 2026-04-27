@@ -112,7 +112,7 @@ haxaml done --task "add checkout flow" --result success --changes "Added checkou
 
 Haxaml also runs as an MCP server, which is the nicest workflow if your editor or agent supports MCP.
 
-The easiest setup is `uvx`. No global install, no virtualenv ceremony, no Docker volume weirdness.
+The easiest setup is `uvx`. No global install and no virtualenv ceremony.
 
 Use this as the default MCP config:
 
@@ -152,8 +152,6 @@ Then configure MCP with:
   }
 }
 ```
-
-Docker is intentionally not the recommended path right now. Haxaml is a small stdio MCP server that reads and writes local FRAME files, so `uvx` is simpler and less error-prone.
 
 ## Agent Exports
 

@@ -184,8 +184,6 @@ Then use:
 }
 ```
 
-Docker is not the primary setup for Haxaml MCP. The server is a small local stdio process, and Docker adds path mounts and project-directory confusion without buying much yet.
-
 Tools exposed:
 
 | Tool | Purpose |
