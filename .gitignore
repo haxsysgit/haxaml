@@ -25,7 +25,9 @@ CLAUDE.md
 GEMINI.md
 HAXAML.md
 .cursor/
-.github/
+.github/*
+!.github/workflows/
+!.github/workflows/*.yml
 .windsurf/
 
 # Project scratchpads and non-public material
