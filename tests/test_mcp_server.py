@@ -3,6 +3,7 @@
 import os
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -16,6 +17,8 @@ from haxaml.mcp_server import (
     haxaml_run,
     haxaml_done,
     haxaml_export,
+    haxaml_upgrade,
+    haxaml_mcp_bootstrap,
     haxaml_adopt,
     haxaml_needs,
     haxaml_impact,
@@ -31,11 +34,18 @@ from haxaml.mcp_server import (
 )
 
 
+def _msg(result):
+    if isinstance(result, dict):
+        return result.get("data", {}).get("message", "")
+    return str(result)
+
+
 @pytest.fixture
 def fresh_project(tmp_path):
     """Create a fresh project with initialized FRAME files."""
     result = haxaml_init(str(tmp_path))
-    assert "✓ Initialized FRAME" in result
+    assert result["ok"] is True
+    assert "✓ Initialized FRAME" in _msg(result)
     return tmp_path
 
 
@@ -119,7 +129,8 @@ def governed_project(fresh_project):
 class TestInit:
     def test_creates_frame_files(self, tmp_path):
         result = haxaml_init(str(tmp_path))
-        assert "✓ Initialized FRAME" in result
+        assert result["ok"] is True
+        assert "✓ Initialized FRAME" in _msg(result)
         assert (tmp_path / ".haxaml" / "facts.yaml").exists()
         assert (tmp_path / ".haxaml" / "rules.yaml").exists()
         assert (tmp_path / ".haxaml" / "acts.yaml").exists()
@@ -127,11 +138,13 @@ class TestInit:
 
     def test_does_not_overwrite_existing(self, fresh_project):
         result = haxaml_init(str(fresh_project))
-        assert "already exists" in result
+        assert result["ok"] is True
+        assert "already exists" in _msg(result)
 
     def test_scaffolds_validate(self, fresh_project):
         result = haxaml_validate(str(fresh_project))
-        assert "facts.yaml is valid" in result
+        assert result["ok"] is True
+        assert "facts.yaml is valid" in _msg(result)
 
 
 # ─── Validate ────────────────────────────────────────────────────────────────
@@ -140,20 +153,24 @@ class TestInit:
 class TestValidate:
     def test_all_valid(self, governed_project):
         result = haxaml_validate(str(governed_project))
-        assert "✓ All FRAME files valid" in result
-        assert "✓ facts.yaml is valid" in result
-        assert "✓ rules.yaml is valid" in result
-        assert "✓ acts.yaml is valid" in result
-        assert "✓ expect.yaml is valid" in result
+        text = _msg(result)
+        assert result["ok"] is True
+        assert "✓ All FRAME files valid" in text
+        assert "✓ facts.yaml is valid" in text
+        assert "✓ rules.yaml is valid" in text
+        assert "✓ acts.yaml is valid" in text
+        assert "✓ expect.yaml is valid" in text
 
     def test_missing_facts_fails(self, tmp_path):
         result = haxaml_validate(str(tmp_path))
-        assert "✗ facts.yaml not found" in result
+        assert result["ok"] is False
+        assert "facts.yaml not found" in result["error"]["details"]["message"]
 
     def test_invalid_facts_reports_errors(self, governed_project):
         (governed_project / ".haxaml" / "facts.yaml").write_text("bad: true\n")
         result = haxaml_validate(str(governed_project))
-        assert "✗ facts.yaml" in result
+        assert result["ok"] is False
+        assert "✗ facts.yaml" in result["error"]["details"]["message"]
 
     def test_fails_when_complexity_requires_map_but_map_missing(self, governed_project):
         rules_path = governed_project / ".haxaml" / "rules.yaml"
@@ -172,8 +189,10 @@ class TestValidate:
         expect_path.write_text(yaml.dump(expect, default_flow_style=False, sort_keys=False))
 
         result = haxaml_validate(str(governed_project))
-        assert "✗ map policy: map.yaml is required" in result
-        assert "✗ Validation failed" in result
+        details = result["error"]["details"]["message"]
+        assert result["ok"] is False
+        assert "✗ map policy: map.yaml is required" in details
+        assert "✗ Validation failed" in details
 
 
 # ─── Context ─────────────────────────────────────────────────────────────────
@@ -182,13 +201,17 @@ class TestValidate:
 class TestContext:
     def test_returns_context_with_tokens(self, governed_project):
         result = haxaml_context(str(governed_project))
-        assert "Project Facts" in result
-        assert "Token count:" in result
+        text = _msg(result)
+        assert result["ok"] is True
+        assert "Project Facts" in text
+        assert "Token count:" in text
 
     def test_without_state(self, governed_project):
         result = haxaml_context(str(governed_project), include_state=False)
-        assert "Project Facts" in result
-        assert "Current Acts" not in result
+        text = _msg(result)
+        assert result["ok"] is True
+        assert "Project Facts" in text
+        assert "Current Acts" not in text
 
 
 # ─── Health ──────────────────────────────────────────────────────────────────
@@ -197,13 +220,15 @@ class TestContext:
 class TestHealth:
     def test_healthy_project(self, governed_project):
         result = haxaml_health(str(governed_project))
-        assert "Project:    test-project" in result
-        assert "Ready:      ✓" in result
-        assert "Facts:      ✓ valid" in result
+        text = _msg(result)
+        assert result["ok"] is True
+        assert "Project:    test-project" in text
+        assert "Ready:      ✓" in text
+        assert "Facts:      ✓ valid" in text
 
     def test_missing_project(self, tmp_path):
         result = haxaml_health(str(tmp_path))
-        assert "✗" in result
+        assert result["ok"] is False
 
 
 # ─── Doctor ──────────────────────────────────────────────────────────────────
@@ -212,11 +237,14 @@ class TestHealth:
 class TestDoctor:
     def test_complete_facts(self, governed_project):
         result = haxaml_doctor(str(governed_project))
-        assert "complete" in result or "recommendation" in result
+        text = _msg(result)
+        assert result["ok"] is True
+        assert "complete" in text or "recommendation" in text
 
     def test_missing_facts(self, tmp_path):
         result = haxaml_doctor(str(tmp_path))
-        assert "not found" in result
+        assert result["ok"] is False
+        assert "not found" in result["error"]["message"]
 
 
 # ─── Run / Done ──────────────────────────────────────────────────────────────
@@ -225,7 +253,8 @@ class TestDoctor:
 class TestRunDone:
     def test_start_run(self, governed_project):
         result = haxaml_run("test task", description="testing", project_dir=str(governed_project))
-        assert "✓ Run started: test task" in result
+        assert result["ok"] is True
+        assert "✓ Run started: test task" in _msg(result)
 
     def test_complete_run(self, governed_project):
         haxaml_run("test task", project_dir=str(governed_project))
@@ -233,16 +262,18 @@ class TestRunDone:
             "test task", result="success", changes="did things",
             decisions="chose X", risks="none", project_dir=str(governed_project),
         )
-        assert "✓ Run" in result
-        assert "recorded (success)" in result
+        text = _msg(result)
+        assert result["ok"] is True
+        assert "✓ Run" in text
+        assert "recorded (success)" in text
 
     def test_run_fails_without_facts(self, tmp_path):
         result = haxaml_run("task", project_dir=str(tmp_path))
-        assert "✗" in result
+        assert result["ok"] is False
 
     def test_done_fails_without_facts(self, tmp_path):
         result = haxaml_done("task", project_dir=str(tmp_path))
-        assert "✗" in result
+        assert result["ok"] is False
 
 
 # ─── Export ──────────────────────────────────────────────────────────────────
@@ -251,23 +282,114 @@ class TestRunDone:
 class TestExport:
     def test_export_generic(self, governed_project):
         result = haxaml_export("generic", str(governed_project))
-        assert "✓ Exported to" in result
+        assert result["ok"] is True
+        assert "✓ Exported to" in _msg(result)
         assert (governed_project / "HAXAML.md").exists()
 
     def test_export_claude(self, governed_project):
         result = haxaml_export("claude", str(governed_project))
-        assert "✓ Exported to" in result
+        assert result["ok"] is True
+        assert "✓ Exported to" in _msg(result)
         assert (governed_project / "CLAUDE.md").exists()
 
     def test_export_all(self, governed_project):
         result = haxaml_export("all", str(governed_project))
-        assert "claude" in result
-        assert "codex" in result
-        assert "cursor" in result
+        text = _msg(result)
+        assert result["ok"] is True
+        assert "claude" in text
+        assert "codex" in text
+        assert "cursor" in text
 
     def test_export_invalid_agent(self, governed_project):
         result = haxaml_export("nonexistent", str(governed_project))
-        assert "✗" in result
+        assert result["ok"] is False
+
+    def test_export_codex_defaults_to_haxaml_agents(self, governed_project):
+        result = haxaml_export("codex", str(governed_project))
+        assert result["ok"] is True
+        assert "✓ Exported to" in _msg(result)
+        assert (governed_project / "haxaml-agents.md").exists()
+
+    def test_export_codex_override_native_replaces_agents_md(self, governed_project):
+        native = governed_project / "AGENTS.md"
+        native.write_text("human-written file\n", encoding="utf-8")
+
+        result = haxaml_export(
+            "codex",
+            str(governed_project),
+            override_native=True,
+        )
+        assert result["ok"] is True
+        assert "✓ Exported to" in _msg(result)
+        assert "Generated by Haxaml from FRAME" in native.read_text(encoding="utf-8")
+
+    def test_export_target_writes_custom_path(self, governed_project):
+        custom = governed_project / "TEAM_GUIDE.md"
+        result = haxaml_export(
+            "generic",
+            str(governed_project),
+            target=str(custom),
+        )
+        assert result["ok"] is True
+        assert "✓ Exported to" in _msg(result)
+        assert custom.exists()
+        assert "Generated by Haxaml from FRAME" in custom.read_text(encoding="utf-8")
+
+    def test_export_all_rejects_target(self, governed_project):
+        result = haxaml_export(
+            "all",
+            str(governed_project),
+            target="TEAM_GUIDE.md",
+        )
+        assert result["ok"] is False
+        assert "target cannot be used with agent='all'" in result["error"]["message"]
+
+    def test_export_dry_run_does_not_write(self, governed_project):
+        target = governed_project / "PREVIEW.md"
+        result = haxaml_export(
+            "generic",
+            str(governed_project),
+            target=str(target),
+            dry_run=True,
+            diff_preview=True,
+        )
+        assert result["ok"] is True
+        assert target.exists() is False
+        assert result["data"]["would_write"] is True
+        assert isinstance(result["data"]["diff"], str)
+
+
+class TestBootstrap:
+    def test_bootstrap_snippets_only(self, governed_project):
+        result = haxaml_mcp_bootstrap(str(governed_project), mode="snippets")
+        assert result["ok"] is True
+        assert "snippets" in result["data"]
+        assert result["data"]["writes"] == []
+
+    def test_bootstrap_write_mode(self, governed_project):
+        result = haxaml_mcp_bootstrap(
+            str(governed_project),
+            editors=["generic"],
+            mode="write",
+        )
+        assert result["ok"] is True
+        statuses = [w["status"] for w in result["data"]["writes"]]
+        assert "written" in statuses or "skipped_exists" in statuses
+        assert (governed_project / ".mcp.json").exists()
+
+
+class TestUpgrade:
+    def test_upgrade_dry_run(self):
+        result = haxaml_upgrade(target_version="9.9.9", dry_run=True)
+        assert result["ok"] is True
+        assert result["data"]["command"][:3] == ["uv", "tool", "upgrade"]
+        assert "haxaml==9.9.9" in result["data"]["command"]
+
+    @patch("haxaml.mcp_server.shutil.which", return_value=None)
+    def test_upgrade_requires_uv(self, _which):
+        result = haxaml_upgrade()
+        assert result["ok"] is False
+        assert result["error"]["code"] == "uv_not_found"
 
 
 # ─── Adopt ───────────────────────────────────────────────────────────────────
@@ -278,13 +400,16 @@ class TestAdopt:
         (tmp_path / "CLAUDE.md").write_text("# Rules\nUse pytest.\n")
         (tmp_path / "README.md").write_text("# Project\n")
         result = haxaml_adopt(str(tmp_path), write=False)
-        assert "Dry run" in result
-        assert "CLAUDE.md" in result
+        text = _msg(result)
+        assert result["ok"] is True
+        assert "Dry run" in text
+        assert "CLAUDE.md" in text
 
     def test_write(self, tmp_path):
         (tmp_path / "CLAUDE.md").write_text("# Rules\nUse pytest.\n")
         result = haxaml_adopt(str(tmp_path), write=True)
-        assert "✓ wrote" in result
+        assert result["ok"] is True
+        assert "✓ wrote" in _msg(result)
         assert (tmp_path / ".haxaml" / "ADOPTION.md").exists()
 
 
@@ -294,7 +419,9 @@ class TestAdopt:
 class TestNeeds:
     def test_no_blocking_needs(self, governed_project):
         result = haxaml_needs(str(governed_project))
-        assert "ready to build" in result or "Non-blocking" in result or "Active run" in result
+        text = _msg(result)
+        assert result["ok"] is True
+        assert "ready to build" in text or "Non-blocking" in text or "Active run" in text
 
     def test_blocking_unresolved(self, governed_project):
         facts_path = governed_project / ".haxaml" / "facts.yaml"
@@ -303,12 +430,13 @@ class TestNeeds:
         facts_path.write_text(yaml.dump(facts, default_flow_style=False, sort_keys=False))
 
         result = haxaml_needs(str(governed_project))
-        assert "Blocking" in result
-        assert "DB URI" in result
+        assert result["ok"] is True
+        assert "Blocking" in _msg(result)
+        assert "DB URI" in _msg(result)
 
     def test_missing_project(self, tmp_path):
         result = haxaml_needs(str(tmp_path))
-        assert "facts.yaml not found" in result
+        assert "facts.yaml not found" in _msg(result)
 
 
 # ─── Impact ──────────────────────────────────────────────────────────────────
@@ -317,7 +445,8 @@ class TestNeeds:
 class TestImpact:
     def test_no_map(self, governed_project):
         result = haxaml_impact("auth", str(governed_project))
-        assert "map.yaml not found" in result
+        assert result["ok"] is True
+        assert "map.yaml not found" in _msg(result)
 
     def test_module_found(self, governed_project):
         map_data = {
@@ -337,11 +466,13 @@ class TestImpact:
         )
 
         result = haxaml_impact("auth", str(governed_project))
-        assert "Module: auth" in result
-        assert "Authentication" in result
-        assert "src/auth/" in result
-        assert "api" in result
-        assert "api tests" in result
+        text = _msg(result)
+        assert result["ok"] is True
+        assert "Module: auth" in text
+        assert "Authentication" in text
+        assert "src/auth/" in text
+        assert "api" in text
+        assert "api tests" in text
 
     def test_module_not_found(self, governed_project):
         map_data = {"modules": [{"name": "auth", "purpose": "Auth", "files": []}],
@@ -351,8 +482,9 @@ class TestImpact:
         )
 
         result = haxaml_impact("nonexistent", str(governed_project))
-        assert "not found" in result
-        assert "auth" in result
+        assert result["ok"] is False
+        assert "not found" in result["error"]["message"]
+        assert "auth" in result["error"]["message"]
 
 
 # ─── State ───────────────────────────────────────────────────────────────────
@@ -361,17 +493,21 @@ class TestImpact:
 class TestState:
     def test_show(self, governed_project):
         result = haxaml_state_show(str(governed_project))
-        assert "Phase:" in result
-        assert "Active:" in result
-        assert "Completed:" in result
+        text = _msg(result)
+        assert result["ok"] is True
+        assert "Phase:" in text
+        assert "Active:" in text
+        assert "Completed:" in text
 
     def test_compact_no_runs(self, governed_project):
         result = haxaml_state_compact(str(governed_project))
-        assert "Compacted 0" in result
+        assert result["ok"] is True
+        assert "Compacted 0" in _msg(result)
 
     def test_show_missing(self, tmp_path):
         result = haxaml_state_show(str(tmp_path))
-        assert "not found" in result
+        assert result["ok"] is False
+        assert "not found" in result["error"]["message"]
 
 
 # ─── Resources ───────────────────────────────────────────────────────────────
@@ -415,13 +551,14 @@ class TestResources:
 class TestServerRegistration:
     def test_tool_count(self):
         tools = mcp_app._tool_manager._tools
-        assert len(tools) == 14
+        assert len(tools) == 16
 
     def test_expected_tools_registered(self):
         tools = mcp_app._tool_manager._tools
         expected = [
             "haxaml_init", "haxaml_validate", "haxaml_context", "haxaml_health",
             "haxaml_doctor", "haxaml_run", "haxaml_done", "haxaml_export",
+            "haxaml_upgrade", "haxaml_mcp_bootstrap",
             "haxaml_adopt", "haxaml_needs", "haxaml_impact", "haxaml_state_show",
             "haxaml_state_compact", "haxaml_benchmark",
         ]

@@ -1,6 +1,9 @@
 """Haxaml CLI — deterministic agent-management tooling for FRAME."""
 
+import json
 import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -10,10 +13,11 @@ from haxaml.state_manager import StateManager
 from haxaml.brain_builder import interactive_build
 from haxaml.benchmarks import format_benchmark_report
 from haxaml.paths import frame_path, resolve_frame_file
+from haxaml.versioning import MCP_LAUNCHER_PACKAGE, PACKAGE_NAME, get_version, version_spec
 
 
 @click.group()
-@click.version_option(version="0.1.0")
+@click.version_option(version=get_version())
 def cli():
     """Haxaml — deterministic FRAME tooling for AI-assisted development."""
     pass
@@ -31,6 +35,10 @@ def _mcp_tools():
 
 
 def _is_failure(result: str) -> bool:
+    if isinstance(result, dict):
+        if result.get("ok") is False:
+            return True
+        return False
     text = (result or "").strip()
     if not text:
         return False
@@ -39,12 +47,27 @@ def _is_failure(result: str) -> bool:
     return "Validation failed" in text
 
 
+def _result_text(result) -> str:
+    if isinstance(result, dict):
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        if data.get("message"):
+            return str(data["message"])
+        error = result.get("error") if isinstance(result.get("error"), dict) else {}
+        details = error.get("details") if isinstance(error.get("details"), dict) else {}
+        if details.get("message"):
+            return str(details["message"])
+        if error.get("message"):
+            return str(error["message"])
+        return json.dumps(result, indent=2, sort_keys=True)
+    return str(result or "")
+
+
 @cli.command()
 @click.argument("directory", default=".")
 def init(directory):
     """Initialize FRAME governance files in DIRECTORY."""
     result = _mcp_tools().haxaml_init(directory)
-    click.echo(result)
+    click.echo(_result_text(result))
 
 
 @cli.command()
@@ -52,7 +75,7 @@ def init(directory):
 def validate(project_dir):
     """Validate FRAME files against schemas."""
     result = _mcp_tools().haxaml_validate(project_dir)
-    click.echo(result)
+    click.echo(_result_text(result))
     if _is_failure(result):
         sys.exit(1)
 
@@ -67,9 +90,53 @@ def _resolve(project: Path, new_name: str, old_name: str) -> Path | None:
 def doctor(project_dir):
     """Check facts completeness beyond schema validation."""
     result = _mcp_tools().haxaml_doctor(project_dir)
-    click.echo(result)
+    click.echo(_result_text(result))
     if _is_failure(result):
         sys.exit(1)
+
+
+@cli.command()
+@click.option("--to", "target_version", default=None, help="Target version (default: latest).")
+@click.option("--include-mcp/--no-include-mcp", default=True, help="Upgrade haxaml-mcp too.")
+@click.option("--dry-run", is_flag=True, help="Print the upgrade command without executing it.")
+def upgrade(target_version, include_mcp, dry_run):
+    """Upgrade Haxaml with uv tool management."""
+    if not shutil.which("uv"):
+        click.echo("✗ `uv` is required for upgrade. Install uv first: https://docs.astral.sh/uv/")
+        sys.exit(1)
+
+    specs = [version_spec(PACKAGE_NAME, target_version)]
+    if include_mcp:
+        specs.append(version_spec(MCP_LAUNCHER_PACKAGE, target_version))
+
+    upgrade_cmd = ["uv", "tool", "upgrade", *specs]
+    if dry_run:
+        click.echo(f"Dry run:\n  {' '.join(upgrade_cmd)}")
+        return
+
+    first = subprocess.run(upgrade_cmd, capture_output=True, text=True)
+    if first.returncode == 0:
+        click.echo("✓ Upgrade complete via `uv tool upgrade`.")
+        output = (first.stdout or "").strip()
+        if output:
+            click.echo(output)
+        return
+
+    # Fallback: install/upgrade tools when upgrade fails because a tool was not previously installed.
+    failures = []
+    for spec in specs:
+        cmd = ["uv", "tool", "install", "--upgrade", spec]
+        step = subprocess.run(cmd, capture_output=True, text=True)
+        if step.returncode != 0:
+            failures.append((spec, (step.stderr or step.stdout or "").strip()))
+
+    if failures:
+        click.echo("✗ Upgrade failed.")
+        for spec, error in failures:
+            click.echo(f"  - {spec}: {error or 'unknown error'}")
+        sys.exit(1)
+
+    click.echo("✓ Upgrade complete via fallback install flow.")
 
 
 @cli.command()
@@ -79,11 +146,12 @@ def doctor(project_dir):
 def context(project_dir, no_state, tokens):
     """Output minimal context for an AI agent."""
     result = _mcp_tools().haxaml_context(project_dir, include_state=not no_state)
+    rendered = _result_text(result)
     if tokens:
-        click.echo(result)
+        click.echo(rendered)
         return
     marker = "\n\n--- Token count:"
-    base = result.split(marker, 1)[0]
+    base = rendered.split(marker, 1)[0]
     click.echo(base)
 
 
@@ -127,7 +195,7 @@ def adopt(project_dir, from_native, write_files, force):
         click.echo("✗ Only native-file adoption is supported right now. Use `haxaml adopt --from-native`.")
         sys.exit(1)
     result = _mcp_tools().haxaml_adopt(project_dir=project_dir, write=write_files, force=force)
-    click.echo(result)
+    click.echo(_result_text(result))
     if _is_failure(result):
         sys.exit(1)
 
@@ -136,7 +204,7 @@ def adopt(project_dir, from_native, write_files, force):
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 def needs(project_dir):
     """List what still needs user/agent input before safe building."""
-    click.echo(_mcp_tools().haxaml_needs(project_dir))
+    click.echo(_result_text(_mcp_tools().haxaml_needs(project_dir)))
 
 
 @cli.command()
@@ -144,7 +212,7 @@ def needs(project_dir):
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 def impact(module, project_dir):
     """Show what is affected when changing a module."""
-    click.echo(_mcp_tools().haxaml_impact(module, project_dir))
+    click.echo(_result_text(_mcp_tools().haxaml_impact(module, project_dir)))
 
 
 @cli.group()
@@ -174,7 +242,7 @@ def state_show(path):
         return
 
     result = _mcp_tools().haxaml_state_show(".")
-    click.echo(result)
+    click.echo(_result_text(result))
     if _is_failure(result):
         sys.exit(1)
 
@@ -194,7 +262,7 @@ def state_compact(path, keep):
         return
 
     result = _mcp_tools().haxaml_state_compact(".", keep_recent=keep)
-    click.echo(result)
+    click.echo(_result_text(result))
     if _is_failure(result):
         sys.exit(1)
 
@@ -225,7 +293,7 @@ def state_record(path, task, run_result, changes, decisions, risks):
 def health(project_dir):
     """Show project health report."""
     result = _mcp_tools().haxaml_health(project_dir)
-    click.echo(result)
+    click.echo(_result_text(result))
     if _is_failure(result):
         sys.exit(1)
 
@@ -244,7 +312,7 @@ def benchmark(facts_path, project_dir):
         return
 
     result = _mcp_tools().haxaml_benchmark(project_dir)
-    click.echo(result)
+    click.echo(_result_text(result))
     if _is_failure(result):
         sys.exit(1)
 
@@ -256,7 +324,7 @@ def benchmark(facts_path, project_dir):
 def run(project_dir, task, description):
     """Start an execution run (sets active task, validates preflight)."""
     result = _mcp_tools().haxaml_run(task=task, description=description, project_dir=project_dir)
-    click.echo(result)
+    click.echo(_result_text(result))
     if _is_failure(result):
         sys.exit(1)
 
@@ -279,7 +347,7 @@ def done(project_dir, task, run_result, changes, decisions, risks):
         risks=risks,
         project_dir=project_dir,
     )
-    click.echo(result)
+    click.echo(_result_text(result))
 
 
 @cli.command()
@@ -288,39 +356,119 @@ def done(project_dir, task, run_result, changes, decisions, risks):
               type=click.Choice(["claude", "windsurf", "copilot", "codex", "cursor", "gemini", "generic"]),
               help="Target AI agent")
 @click.option("--output", default=None, help="Override output file path")
+@click.option("--target", default=None, help="Alias of --output (preferred for agent workflows)")
 @click.option("--all", "export_all", is_flag=True, help="Export for all supported agents")
 @click.option("--print", "print_only", is_flag=True, help="Print to stdout instead of writing file")
+@click.option("--dry-run", is_flag=True, help="Preview export target without writing files.")
+@click.option("--diff-preview", is_flag=True, help="Include unified diff preview in export result.")
+@click.option(
+    "--override-native",
+    is_flag=True,
+    help="For codex export only: write native AGENTS.md instead of haxaml-agents.md.",
+)
+@click.option(
+    "--overwrite-existing",
+    is_flag=True,
+    help="Allow replacing existing non-Haxaml files at the output path.",
+)
 @click.option("--quiet", is_flag=True, help="Suppress success output")
-def export(project_dir, agent, output, export_all, print_only, quiet):
-    """Export FRAME files to agent-specific markdown (CLAUDE.md, AGENTS.md, etc.)."""
-    from haxaml.export_engine import export_frame_to_markdown, export_to_file, list_agents
+def export(
+    project_dir,
+    agent,
+    output,
+    target,
+    export_all,
+    print_only,
+    dry_run,
+    diff_preview,
+    override_native,
+    overwrite_existing,
+    quiet,
+):
+    """Export FRAME files (default: HAXAML.md; optional agent-specific targets)."""
+    from haxaml.export_engine import export_frame_to_markdown
 
-    if export_all and output is None and not print_only:
-        result = _mcp_tools().haxaml_export(agent="all", project_dir=project_dir)
+    if output and target:
+        click.echo("✗ Use only one of --output or --target.")
+        sys.exit(1)
+
+    output_path = target or output
+
+    if export_all and output_path is None and not print_only:
+        if dry_run or diff_preview:
+            click.echo("✗ --dry-run/--diff-preview cannot be combined with --all.")
+            sys.exit(1)
+        result = _mcp_tools().haxaml_export(
+            agent="all",
+            project_dir=project_dir,
+            override_native=override_native,
+            overwrite_existing=overwrite_existing,
+        )
         if not quiet:
-            click.echo(result)
+            click.echo(_result_text(result))
+        if _is_failure(result):
+            sys.exit(1)
         return
 
     if export_all:
-        for a in list_agents():
-            path = export_to_file(project_dir, a["name"])
-            if not quiet:
-                click.echo(f"✓ {a['name']:10s} → {path}")
+        click.echo("✗ --all cannot be combined with --output/--target or --print.")
+        sys.exit(1)
         return
 
     if print_only:
+        if output_path is not None:
+            click.echo("✗ --print cannot be combined with --output/--target.")
+            sys.exit(1)
+        if dry_run or diff_preview:
+            click.echo("✗ --print cannot be combined with --dry-run/--diff-preview.")
+            sys.exit(1)
         content = export_frame_to_markdown(project_dir, agent)
         click.echo(content)
         return
 
-    if output is None:
-        result = _mcp_tools().haxaml_export(agent=agent, project_dir=project_dir)
-        if not quiet:
-            click.echo(result)
-    else:
-        path = export_to_file(project_dir, agent, output)
-        if not quiet:
-            click.echo(f"✓ Exported to {path}")
+    result = _mcp_tools().haxaml_export(
+        agent=agent,
+        project_dir=project_dir,
+        target=output_path,
+        dry_run=dry_run,
+        diff_preview=diff_preview,
+        override_native=override_native,
+        overwrite_existing=overwrite_existing,
+    )
+    if not quiet:
+        click.echo(_result_text(result))
+        if diff_preview and isinstance(result, dict):
+            diff = result.get("data", {}).get("diff", "")
+            if diff:
+                click.echo(diff)
+    if _is_failure(result):
+        sys.exit(1)
+
+
+@cli.command("mcp-bootstrap")
+@click.option("--dir", "project_dir", default=".", help="Project directory")
+@click.option(
+    "--editor",
+    "editors",
+    multiple=True,
+    type=click.Choice(["claude_code", "cursor", "copilot", "generic"]),
+    help="Target editor(s). Repeatable.",
+)
+@click.option("--mode", default="both", type=click.Choice(["snippets", "write", "both"]))
+@click.option("--uvx/--no-uvx", default=True, help="Prefer uvx launcher in config snippets.")
+@click.option("--overwrite", is_flag=True, help="Overwrite existing haxaml MCP server block.")
+def mcp_bootstrap(project_dir, editors, mode, uvx, overwrite):
+    """Generate/write MCP bootstrap config for common editors."""
+    result = _mcp_tools().haxaml_mcp_bootstrap(
+        project_dir=project_dir,
+        editors=list(editors) if editors else None,
+        mode=mode,
+        uvx=uvx,
+        overwrite=overwrite,
+    )
+    click.echo(_result_text(result))
+    if _is_failure(result):
+        sys.exit(1)
 
 
 @cli.command("install-hook")
