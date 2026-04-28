@@ -49,7 +49,7 @@ from haxaml.export_engine import (
     export_to_file, list_agents, AGENT_CONFIGS, export_frame_to_markdown,
 )
 from haxaml.auto_export import export_if_stale
-from haxaml.init_templates import write_init_templates
+from haxaml.init_templates import write_init_templates, sync_rules_governance_version
 from haxaml.versioning import MCP_LAUNCHER_PACKAGE, PACKAGE_NAME, version_spec
 
 
@@ -152,6 +152,7 @@ def _compact_context_pack_payload(payload: dict) -> dict:
         "pack": resolved_pack,
         "requested_pack": requested_pack,
         "tokens": tokens,
+        "context_window_usage": meta.get("context_window_usage", {}),
         "included_sections": meta.get("included_sections", []),
         "omitted_sections": meta.get("omitted_sections", []),
         "omitted_context": meta.get("omitted_context", meta.get("compaction_notes", [])),
@@ -222,6 +223,8 @@ def _compact_success(tool: str, payload: dict) -> dict:
                 "verification_id",
                 "verification_verdict",
                 "gate_reasons",
+                "last_pack_tokens",
+                "last_context_window_usage",
                 "auto_exported",
             ],
         )
@@ -242,6 +245,7 @@ def _compact_success(tool: str, payload: dict) -> dict:
         report = payload.get("report", {}) if isinstance(payload.get("report"), dict) else {}
         compact = _pick_fields(payload, ["message"])
         compact["summary"] = {
+            "project": report.get("project"),
             "ready": report.get("ready"),
             "facts_valid": report.get("facts_valid"),
             "acts_valid": report.get("acts_valid"),
@@ -680,12 +684,26 @@ def haxaml_init(directory: str = ".", detail: str = DETAIL_SHORT) -> dict:
 
     facts_p = frame_path(project_dir, "facts.yaml")
     if facts_p.exists():
+        sync_result = sync_rules_governance_version(project_dir)
+        sync_message = ""
+        if sync_result.get("updated"):
+            from_version = sync_result.get("from") or "(empty)"
+            to_version = sync_result.get("to", "?")
+            sync_message = (
+                f"\n  ↻ Synced .haxaml/rules.yaml governance.version "
+                f"{from_version} → {to_version}"
+            )
         return _ok(
             "haxaml_init",
             {
-                "message": f"⚠ facts.yaml already exists at {facts_p}. Use haxaml_validate to check it.",
+                "message": (
+                    f"⚠ facts.yaml already exists at {facts_p}. Use haxaml_validate to check it."
+                    f"{sync_message}"
+                ),
                 "project_dir": str(project_dir),
                 "created": False,
+                "rules_version_synced": bool(sync_result.get("updated")),
+                "rules_version_sync": sync_result,
             },
             detail=detail_mode,
         )
@@ -890,8 +908,9 @@ def haxaml_health(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
         return _err("haxaml_health", "missing_frame", str(e))
 
     report = runner.get_project_health()
+    project_name = str(report.get("project", "")).strip() or "(unnamed)"
     lines = [
-        f"Project:    {report['project']}",
+        f"Project:    {project_name}",
         f"Ready:      {'✓' if report['ready'] else '✗'}",
         f"Facts:      {'✓ valid' if report['facts_valid'] else '✗ invalid'}",
         f"Acts:       {'✓ valid' if report['acts_valid'] else '✗ invalid'}",
@@ -1159,7 +1178,10 @@ def haxaml_session_plan(
     frame = load_frame_data(project_dir)
     guidance = _guidance_eval(task, frame)
     rules = frame.get("rules") or {}
-    verify_expect = ((rules.get("after_task") or {}).get("verify", []) or [])
+    verify_expect_raw = ((rules.get("after_task") or {}).get("verify", []) or [])
+    verify_expect = [
+        item.strip() for item in verify_expect_raw if isinstance(item, str) and item.strip()
+    ]
     if not verify_expect:
         verify_expect = [
             "Confirm changes satisfy task scope.",
@@ -1228,6 +1250,7 @@ def haxaml_context_pack(
         if not isinstance(compaction, dict):
             compaction = {}
         compaction["last_pack_tokens"] = tokens
+        compaction["last_window_usage"] = pack_data.get("_meta", {}).get("context_window_usage", {})
         resolved_pack = pack_data.get("_meta", {}).get("resolved_pack", pack)
         if resolved_pack in ("minimal", "balanced", "full"):
             compaction["default_pack"] = resolved_pack
@@ -1498,6 +1521,9 @@ def haxaml_session_record(
     warnings = list(run_result.warnings)
     if sm:
         state = sm.read()
+        context_compaction = state.get("context_compaction", {})
+        if not isinstance(context_compaction, dict):
+            context_compaction = {}
         if session_id:
             session = _find_session(state, session_id)
             if session:
@@ -1521,6 +1547,8 @@ def haxaml_session_record(
             "verification_verdict": latest_verdict,
             "gate_reasons": reconcile["gate_reasons"],
             "reconcile": reconcile,
+            "last_pack_tokens": context_compaction.get("last_pack_tokens", 0) if sm else 0,
+            "last_context_window_usage": context_compaction.get("last_window_usage", {}) if sm else {},
             "auto_exported": stale,
         },
         warnings=warnings,

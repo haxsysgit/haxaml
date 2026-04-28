@@ -232,3 +232,18 @@ properties:
       last_pack_tokens:
         type: integer
         minimum: 0
+      last_window_usage:
+        type: object
+        properties:
+          pct_4000:
+            type: number
+            minimum: 0
+          pct_8000:
+            type: number
+            minimum: 0
+          pct_32000:
+            type: number
+            minimum: 0
+          pct_128000:
+            type: number
+            minimum: 0

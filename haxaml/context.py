@@ -95,23 +95,23 @@ def build_context_pack(
     limits = _pack_limits(pack, policy)
 
     essential_facts = {
-        "project": (facts.get("identity") or {}).get("name", "unknown"),
-        "purpose": (facts.get("goal") or {}).get("purpose", ""),
-        "scope": (facts.get("goal") or {}).get("scope", ""),
+        "project": _clean_str((facts.get("identity") or {}).get("name", "unknown"), "unknown"),
+        "purpose": _clean_str((facts.get("goal") or {}).get("purpose", "")),
+        "scope": _clean_str((facts.get("goal") or {}).get("scope", "")),
         "stack": facts.get("stack", {}),
         "architecture": {
-            "pattern": (facts.get("architecture") or {}).get("pattern", ""),
+            "pattern": _clean_str((facts.get("architecture") or {}).get("pattern", "")),
             "boundaries": (facts.get("architecture") or {}).get("boundaries", []),
         },
-        "database": (facts.get("database") or {}).get("type", ""),
+        "database": _clean_str((facts.get("database") or {}).get("type", "")),
     }
 
     relevant_rules = {
-        "read_first": ((rules.get("before_task") or {}).get("read_first", []) or []),
-        "checks": ((rules.get("before_task") or {}).get("check", []) or []),
-        "boundaries": ((rules.get("boundaries") or {}).get("rules", []) or []),
-        "forbidden": (rules.get("forbidden", []) or []),
-        "after_verify": ((rules.get("after_task") or {}).get("verify", []) or []),
+        "read_first": _clean_str_list(((rules.get("before_task") or {}).get("read_first", []) or [])),
+        "checks": _clean_str_list(((rules.get("before_task") or {}).get("check", []) or [])),
+        "boundaries": _clean_str_list(((rules.get("boundaries") or {}).get("rules", []) or [])),
+        "forbidden": _clean_str_list((rules.get("forbidden", []) or [])),
+        "after_verify": _clean_str_list(((rules.get("after_task") or {}).get("verify", []) or [])),
     }
 
     recent_decisions = _normalize_decisions(acts.get("decisions", []))
@@ -195,8 +195,10 @@ def build_context_pack(
     if omitted_sections:
         omitted_context.append(f"empty sections omitted: {', '.join(omitted_sections)}")
 
+    token_count = count_tokens(pack_text)
     pack_data["_meta"] = {
-        "token_count": count_tokens(pack_text),
+        "token_count": token_count,
+        "context_window_usage": _token_window_usage(token_count),
         "compaction_notes": notes,
         "included_sections": included_sections,
         "omitted_sections": omitted_sections,
@@ -342,6 +344,20 @@ def _normalize_decisions(items: list[Any]) -> list[str]:
     return out
 
 
+def _clean_str(value: Any, default: str = "") -> str:
+    text = str(value).strip() if value is not None else ""
+    return text if text else default
+
+
+def _clean_str_list(items: list[Any]) -> list[str]:
+    out: list[str] = []
+    for item in items:
+        text = _clean_str(item)
+        if text:
+            out.append(text)
+    return out
+
+
 def _detect_affected_modules(task: str, facts: dict[str, Any], rules: dict[str, Any], map_data: dict[str, Any]) -> list[str]:
     task_l = task.lower()
     candidates: list[str] = []
@@ -447,8 +463,9 @@ def _task_risks(task: str, rules: dict[str, Any], affected_modules: list[str]) -
     if len(affected_modules) >= 3:
         risks.append("Task appears to touch multiple modules; check cross-impact.")
 
-    forbidden = rules.get("forbidden", []) if isinstance(rules, dict) else []
-    if isinstance(forbidden, list) and forbidden:
+    forbidden_raw = rules.get("forbidden", []) if isinstance(rules, dict) else []
+    forbidden = _clean_str_list(forbidden_raw) if isinstance(forbidden_raw, list) else []
+    if forbidden:
         risks.append("Review forbidden rules before acting.")
 
     return risks
@@ -488,6 +505,11 @@ def _has_section_data(value: Any) -> bool:
     if isinstance(value, str):
         return bool(value.strip())
     return bool(value)
+
+
+def _token_window_usage(tokens: int) -> dict[str, float]:
+    budgets = [4000, 8000, 32000, 128000]
+    return {f"pct_{size}": round((tokens / size) * 100, 2) for size in budgets}
 
 
 def _format_facts_context(facts: dict) -> str:

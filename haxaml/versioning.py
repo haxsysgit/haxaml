@@ -1,7 +1,7 @@
 """Runtime version helpers.
 
 Single source of truth for package version is pyproject metadata.
-Runtime reads installed package metadata first, then falls back to pyproject.toml.
+Runtime prefers local pyproject.toml when present, then falls back to installed package metadata.
 Release checks are centralized here so CI and runtime use the same logic.
 """
 
@@ -41,12 +41,12 @@ def mcp_launcher_version() -> str:
 @lru_cache(maxsize=1)
 def get_version() -> str:
     """Return runtime package version from a single authoritative source."""
+    if PROJECT_PYPROJECT.exists():
+        return project_version()
     try:
         return pkg_version(PACKAGE_NAME)
     except PackageNotFoundError:
-        if PROJECT_PYPROJECT.exists():
-            return project_version()
-    return "0.0.0"
+        return "0.0.0"
 
 
 def version_spec(package: str, target_version: str | None = None) -> str:

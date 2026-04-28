@@ -91,7 +91,7 @@ Expected signals:
 - Step 1: `data.status`, `data.required_questions`, `data.recommended_packs`.
 - Step 2: `data.session_id`, `data.required_reads`.
 - Step 3: `data.plan`, `data.verification_expectations`.
-- Step 4 (short default): `data.tokens`, `data.included_sections`, `data.omitted_sections`, `data.omitted_context`.
+- Step 4 (short default): `data.tokens`, `data.context_window_usage`, `data.included_sections`, `data.omitted_sections`, `data.omitted_context`.
 - Step 4 (full): `data.context_pack` is included.
 - Step 5: `data.verdict` should be `pass` or `pass_with_risks` before recording `success`/`partial`.
 - Step 6: `data.run_id` on success; gate failures return `error.code`.
@@ -177,6 +177,9 @@ Note:
 
 - Default short:
   - `haxaml_context_pack(task="implement auth module", pack="balanced", include_state=True)`
+- Token/window tracking:
+  - `data.tokens` gives pack token count.
+  - `data.context_window_usage` gives percentage usage for `4k`, `8k`, `32k`, and `128k` windows.
 - Full for one call:
   - `haxaml_context_pack(task="implement auth module", pack="balanced", include_state=True, detail="full")`
 - Invalid value:

@@ -40,6 +40,7 @@ from haxaml.mcp_server import (
     resource_context,
     mcp_app,
 )
+from haxaml.versioning import get_version
 
 
 def _msg(result):
@@ -158,6 +159,20 @@ class TestInit:
         assert result["ok"] is True
         assert "already exists" in _msg(result)
 
+    def test_syncs_rules_governance_version_for_existing_project(self, fresh_project):
+        rules_path = fresh_project / ".haxaml" / "rules.yaml"
+        rules = yaml.safe_load(rules_path.read_text())
+        rules["governance"]["version"] = "0.0.1"
+        rules_path.write_text(yaml.dump(rules, default_flow_style=False, sort_keys=False))
+
+        result = haxaml_init(str(fresh_project))
+        assert result["ok"] is True
+        assert "already exists" in _msg(result)
+        assert "Synced .haxaml/rules.yaml governance.version" in _msg(result)
+
+        synced = yaml.safe_load(rules_path.read_text())
+        assert synced["governance"]["version"] == get_version()
+
     def test_scaffolds_validate(self, fresh_project):
         result = haxaml_validate(str(fresh_project))
         assert result["ok"] is True
@@ -262,6 +277,7 @@ class TestContext:
         assert "included_sections" in data
         assert "omitted_sections" in data
         assert "omitted_context" in data
+        assert "context_window_usage" in data
         assert "context_pack" not in data
 
     def test_context_pack_full_detail_keeps_structured_payload(self, governed_project):
@@ -275,6 +291,7 @@ class TestContext:
         assert result["ok"] is True
         data = result["data"]
         assert data["pack"] == "balanced"
+        assert "context_window_usage" in data["context_pack"]["_meta"]
         assert "essential_facts" in data["context_pack"]
         assert "relevant_rules" in data["context_pack"]
 
@@ -289,6 +306,20 @@ class TestContext:
         assert result["ok"] is True
         assert result["data"]["pack"] == "balanced"
         assert result["data"]["context_pack"]["pack"] == "balanced"
+
+    def test_scaffold_context_pack_avoids_blank_rule_entries(self, fresh_project):
+        result = haxaml_context_pack(
+            task="scaffold smoke check",
+            project_dir=str(fresh_project),
+            pack="balanced",
+            include_state=True,
+            detail="full",
+        )
+        assert result["ok"] is True
+        rules = result["data"]["context_pack"]["relevant_rules"]
+        for key in ("checks", "boundaries", "forbidden", "after_verify"):
+            values = rules.get(key, [])
+            assert all(isinstance(v, str) and v.strip() for v in values)
 
 
 class TestDetailMode:
@@ -418,6 +449,8 @@ class TestSessionLifecycle:
         )
         assert record["ok"] is True
         assert record["data"]["run_id"].startswith("run-")
+        assert "last_pack_tokens" in record["data"]
+        assert "last_context_window_usage" in record["data"]
 
     def test_session_record_requires_verification_for_success(self, governed_project):
         started = haxaml_session_start(
@@ -437,6 +470,26 @@ class TestSessionLifecycle:
         )
         assert record["ok"] is False
         assert record["error"]["code"] == "verification_required"
+
+    def test_session_plan_filters_blank_verify_expectations(self, governed_project):
+        rules_path = governed_project / ".haxaml" / "rules.yaml"
+        rules = yaml.safe_load(rules_path.read_text())
+        rules["after_task"]["verify"] = ["", "Run unit tests"]
+        rules_path.write_text(yaml.dump(rules, default_flow_style=False, sort_keys=False))
+
+        started = haxaml_session_start(
+            task="test verify filtering",
+            description="verify list cleanup",
+            project_dir=str(governed_project),
+        )
+        assert started["ok"] is True
+
+        planned = haxaml_session_plan(
+            session_id=started["data"]["session_id"],
+            project_dir=str(governed_project),
+        )
+        assert planned["ok"] is True
+        assert planned["data"]["verification_expectations"] == ["Run unit tests"]
 
     def test_session_record_blocks_success_when_derivation_conflicts_exist(self, governed_project):
         map_data = {
