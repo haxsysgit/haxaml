@@ -121,7 +121,7 @@ Use this as the default MCP config:
   "mcpServers": {
     "haxaml": {
       "command": "uvx",
-      "args": ["haxaml-mcp"],
+      "args": ["--from", "haxaml", "haxaml-mcp"],
       "env": {
         "HAXAML_PROJECT_DIR": "/path/to/your/project"
       }
@@ -131,6 +131,8 @@ Use this as the default MCP config:
 ```
 
 The MCP server exposes tools for init, validation, context, run tracking, state compaction, exports, adoption, needs checks, impact checks, and benchmarks.
+
+Why the `--from haxaml` bit matters: the package is named `haxaml`, while `haxaml-mcp` is the command installed by that package.
 
 If you prefer a stable local install, use:
 

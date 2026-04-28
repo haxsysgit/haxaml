@@ -136,7 +136,7 @@ haxaml benchmark --dir .
 Start the MCP server:
 
 ```bash
-uvx haxaml-mcp
+uvx --from haxaml haxaml-mcp
 haxaml mcp
 haxaml-mcp
 ```
@@ -154,7 +154,7 @@ Default config:
   "mcpServers": {
     "haxaml": {
       "command": "uvx",
-      "args": ["haxaml-mcp"],
+      "args": ["--from", "haxaml", "haxaml-mcp"],
       "env": {
         "HAXAML_PROJECT_DIR": "/path/to/project"
       }
@@ -162,6 +162,8 @@ Default config:
   }
 }
 ```
+
+`uvx haxaml-mcp` is not enough because `uvx` will look for a package named `haxaml-mcp`. Use `--from haxaml` so it installs the `haxaml` package and runs the `haxaml-mcp` console script.
 
 If you want a persistent local install instead:
 
