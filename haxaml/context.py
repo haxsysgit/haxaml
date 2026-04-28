@@ -90,6 +90,8 @@ def build_context_pack(
     map_data = frame.get("map") or {}
 
     policy = _context_policy(rules)
+    default_pack = _resolve_pack_name(str(policy.get("default_pack", "balanced")))
+    resolved_pack = _resolve_pack_name(pack, default_pack)
     limits = _pack_limits(pack, policy)
 
     essential_facts = {
@@ -165,7 +167,7 @@ def build_context_pack(
 
     pack_data: dict[str, Any] = {
         "task": task,
-        "pack": pack,
+        "pack": resolved_pack,
         "essential_facts": essential_facts,
         "relevant_rules": relevant_rules,
         "recent_decisions": recent_decisions if include_state else [],
@@ -176,11 +178,33 @@ def build_context_pack(
     }
 
     pack_text = format_context_pack(pack_data)
+    section_order = [
+        "essential_facts",
+        "relevant_rules",
+        "recent_decisions",
+        "affected_modules",
+        "expectations",
+        "unresolved",
+        "task_risks",
+    ]
+    included_sections = [name for name in section_order if _has_section_data(pack_data.get(name))]
+    omitted_sections = [name for name in section_order if name not in included_sections]
+    omitted_context = list(notes)
+    if not include_state:
+        omitted_context.append("recent_decisions: omitted (include_state=False)")
+    if omitted_sections:
+        omitted_context.append(f"empty sections omitted: {', '.join(omitted_sections)}")
+
     pack_data["_meta"] = {
         "token_count": count_tokens(pack_text),
         "compaction_notes": notes,
+        "included_sections": included_sections,
+        "omitted_sections": omitted_sections,
+        "omitted_context": omitted_context,
         "limits": limits,
         "state_included": include_state,
+        "requested_pack": pack,
+        "resolved_pack": resolved_pack,
     }
 
     return pack_data
@@ -272,9 +296,22 @@ def _context_policy(rules: dict[str, Any]) -> dict[str, Any]:
     return policy
 
 
+def _resolve_pack_name(pack: str, default: str = "balanced") -> str:
+    """Normalize pack aliases and fallback to a safe default."""
+    normalized = str(pack or "").strip().lower()
+    if normalized == "standard":
+        normalized = "balanced"
+    if normalized in {"minimal", "balanced", "full"}:
+        return normalized
+    fallback = str(default or "balanced").strip().lower()
+    if fallback == "standard":
+        fallback = "balanced"
+    return fallback if fallback in {"minimal", "balanced", "full"} else "balanced"
+
+
 def _pack_limits(pack: str, policy: dict[str, Any]) -> dict[str, int]:
-    default_pack = str(policy.get("default_pack", "balanced"))
-    resolved = pack if pack in {"minimal", "balanced", "full"} else default_pack
+    default_pack = _resolve_pack_name(str(policy.get("default_pack", "balanced")))
+    resolved = _resolve_pack_name(pack, default_pack)
     max_items = policy.get("max_items_per_section", 5)
     max_chars = policy.get("max_chars_per_item", 240)
 
@@ -441,6 +478,16 @@ def _limit_list(items: list[Any], max_items: int, max_chars: int) -> tuple[list[
         notes.append(f"truncated {truncated_items} item(s)")
 
     return trimmed, "; ".join(notes)
+
+
+def _has_section_data(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any(_has_section_data(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_has_section_data(v) for v in value)
+    if isinstance(value, str):
+        return bool(value.strip())
+    return bool(value)
 
 
 def _format_facts_context(facts: dict) -> str:

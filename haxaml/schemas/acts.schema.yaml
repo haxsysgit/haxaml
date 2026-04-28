@@ -228,7 +228,7 @@ properties:
         minimum: 0
       default_pack:
         type: string
-        enum: [balanced, minimal, full]
+        enum: [balanced, standard, minimal, full]
       last_pack_tokens:
         type: integer
         minimum: 0

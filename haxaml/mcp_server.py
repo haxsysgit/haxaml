@@ -61,14 +61,25 @@ mcp_app = FastMCP(
     ),
 )
 
+DETAIL_SHORT = "short"
+DETAIL_FULL = "full"
+DETAIL_MODES = {DETAIL_SHORT, DETAIL_FULL}
+
 
 def _project() -> Path:
     """Resolve the project directory from HAXAML_PROJECT_DIR env or CWD."""
     return Path(os.environ.get("HAXAML_PROJECT_DIR", ".")).resolve()
 
 
-def _ok(tool: str, data: Optional[dict] = None, warnings: Optional[list[str]] = None) -> dict:
+def _ok(
+    tool: str,
+    data: Optional[dict] = None,
+    warnings: Optional[list[str]] = None,
+    detail: str = DETAIL_SHORT,
+) -> dict:
     payload = data or {}
+    if detail == DETAIL_SHORT:
+        payload = _compact_success(tool, payload)
     return {
         "ok": True,
         "tool": tool,
@@ -96,6 +107,153 @@ def _err(
             "details": details or {},
         },
     }
+
+
+def _normalize_detail(tool: str, detail: str) -> tuple[str, Optional[dict]]:
+    normalized = str(detail or DETAIL_SHORT).strip().lower()
+    if normalized not in DETAIL_MODES:
+        return "", _err(
+            tool,
+            "invalid_detail",
+            "Invalid detail mode. Use 'short' or 'full'.",
+            {"received": detail, "allowed": [DETAIL_SHORT, DETAIL_FULL]},
+        )
+    return normalized, None
+
+
+def _pick_fields(payload: dict, keys: list[str]) -> dict:
+    return {key: payload[key] for key in keys if key in payload}
+
+
+def _reconcile_summary(report: Any) -> dict:
+    if not isinstance(report, dict):
+        return {}
+    summary = {
+        "human_summary": report.get("human_summary", ""),
+        "severity_totals": report.get("severity_totals", {}),
+        "conflict_counts": report.get("conflict_counts", {}),
+        "warning_counts": report.get("warning_counts", {}),
+        "gate_reasons": report.get("gate_reasons", []),
+    }
+    if "deferred_map_canonical_checks" in report:
+        summary["deferred_map_canonical_checks"] = report.get("deferred_map_canonical_checks")
+    return summary
+
+
+def _compact_context_pack_payload(payload: dict) -> dict:
+    pack_data = payload.get("context_pack", {})
+    meta = pack_data.get("_meta", {}) if isinstance(pack_data, dict) else {}
+    resolved_pack = str(meta.get("resolved_pack", payload.get("pack", "balanced")))
+    requested_pack = str(meta.get("requested_pack", payload.get("pack", resolved_pack)))
+    tokens = int(payload.get("tokens", meta.get("token_count", 0)) or 0)
+    message = payload.get("message", f"Context pack ready ({resolved_pack}, {tokens} tokens).")
+    return {
+        "message": message,
+        "pack": resolved_pack,
+        "requested_pack": requested_pack,
+        "tokens": tokens,
+        "included_sections": meta.get("included_sections", []),
+        "omitted_sections": meta.get("omitted_sections", []),
+        "omitted_context": meta.get("omitted_context", meta.get("compaction_notes", [])),
+        "state_included": bool(meta.get("state_included", True)),
+        "limits": meta.get("limits", {}),
+    }
+
+
+def _compact_success(tool: str, payload: dict) -> dict:
+    if not isinstance(payload, dict):
+        return {}
+
+    if tool == "haxaml_context_pack":
+        return _compact_context_pack_payload(payload)
+
+    if tool == "haxaml_context":
+        return _pick_fields(payload, ["message", "tokens", "include_state", "deprecation"])
+
+    if tool == "haxaml_guidance":
+        return _pick_fields(
+            payload,
+            ["message", "status", "task_type", "risk_level", "required_questions", "recommended_packs"],
+        )
+
+    if tool == "haxaml_session_start":
+        return _pick_fields(
+            payload,
+            [
+                "message",
+                "session_id",
+                "status",
+                "risk_level",
+                "task_type",
+                "required_reads",
+                "required_questions",
+                "recommended_context_packs",
+            ],
+        )
+
+    if tool == "haxaml_session_plan":
+        return _pick_fields(
+            payload,
+            ["message", "session_id", "status", "risk_level", "plan", "verification_expectations"],
+        )
+
+    if tool == "haxaml_session_verify":
+        return _pick_fields(
+            payload,
+            [
+                "message",
+                "verification_id",
+                "session_id",
+                "task",
+                "verdict",
+                "risky_paths",
+                "unresolved_questions",
+                "follow_ups",
+            ],
+        )
+
+    if tool == "haxaml_session_record":
+        compact = _pick_fields(
+            payload,
+            [
+                "message",
+                "session_id",
+                "run_id",
+                "verification_id",
+                "verification_verdict",
+                "gate_reasons",
+                "auto_exported",
+            ],
+        )
+        compact["reconcile"] = _reconcile_summary(payload.get("reconcile"))
+        return compact
+
+    if tool == "haxaml_validate":
+        compact = _pick_fields(payload, ["message", "valid"])
+        compact["reconcile"] = _reconcile_summary(payload.get("reconcile"))
+        return compact
+
+    if tool == "haxaml_reconcile":
+        compact = _pick_fields(payload, ["message"])
+        compact.update(_reconcile_summary(payload))
+        return compact
+
+    if tool == "haxaml_health":
+        report = payload.get("report", {}) if isinstance(payload.get("report"), dict) else {}
+        compact = _pick_fields(payload, ["message"])
+        compact["summary"] = {
+            "ready": report.get("ready"),
+            "facts_valid": report.get("facts_valid"),
+            "acts_valid": report.get("acts_valid"),
+            "facts_complete": report.get("facts_complete"),
+            "context_tokens": report.get("context_tokens"),
+        }
+        return compact
+
+    if tool == "haxaml_doctor":
+        return _pick_fields(payload, ["message", "has_recommendations", "recommendations", "errors"])
+
+    return payload
 
 
 def _resolve_export_target(
@@ -505,12 +663,16 @@ def _has_conflict_stop_reason(changes: str, decisions: str, risks: str) -> bool:
 
 
 @mcp_app.tool()
-def haxaml_init(directory: str = ".") -> dict:
+def haxaml_init(directory: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Initialize FRAME governance files in a project directory.
 
     Creates .haxaml/ with template facts.yaml, rules.yaml, acts.yaml,
     and expect.yaml. The AI agent should fill these in before building.
     """
+    detail_mode, detail_err = _normalize_detail("haxaml_init", detail)
+    if detail_err:
+        return detail_err
+
     project_dir = Path(directory).resolve()
     project_dir.mkdir(parents=True, exist_ok=True)
     haxaml_root = frame_dir(project_dir)
@@ -525,6 +687,7 @@ def haxaml_init(directory: str = ".") -> dict:
                 "project_dir": str(project_dir),
                 "created": False,
             },
+            detail=detail_mode,
         )
 
     write_init_templates(project_dir)
@@ -550,16 +713,21 @@ def haxaml_init(directory: str = ".") -> dict:
             "created": True,
             "auto_exported": stale,
         },
+        detail=detail_mode,
     )
 
 
 @mcp_app.tool()
-def haxaml_validate(project_dir: str = ".") -> dict:
+def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Validate all FRAME files against schemas.
 
     Checks facts.yaml, rules.yaml, acts.yaml, expect.yaml, and map.yaml.
     Returns validation results for each file.
     """
+    detail_mode, detail_err = _normalize_detail("haxaml_validate", detail)
+    if detail_err:
+        return detail_err
+
     p = Path(project_dir).resolve()
     lines = []
     all_valid = True
@@ -646,6 +814,7 @@ def haxaml_validate(project_dir: str = ".") -> dict:
                 "valid": True,
                 "reconcile": reconcile,
             },
+            detail=detail_mode,
         )
     error_code = "derivation_conflicts" if reconcile["severity_totals"]["blocking"] > 0 else "validation_failed"
     return _err(
@@ -660,12 +829,20 @@ def haxaml_validate(project_dir: str = ".") -> dict:
 
 
 @mcp_app.tool()
-def haxaml_context(project_dir: str = ".", include_state: bool = True) -> dict:
+def haxaml_context(
+    project_dir: str = ".",
+    include_state: bool = True,
+    detail: str = DETAIL_SHORT,
+) -> dict:
     """Get the current project context for the AI agent.
 
     Returns a compact summary of facts, rules, acts, and expect.
     This is what the agent reads to understand the project.
     """
+    detail_mode, detail_err = _normalize_detail("haxaml_context", detail)
+    if detail_err:
+        return detail_err
+
     frame = load_frame_data(project_dir)
     if not frame.get("facts"):
         return _err("haxaml_context", "missing_facts", "facts.yaml not found")
@@ -693,15 +870,20 @@ def haxaml_context(project_dir: str = ".", include_state: bool = True) -> dict:
             "deprecation": dep,
         },
         warnings=[dep["message"]],
+        detail=detail_mode,
     )
 
 
 @mcp_app.tool()
-def haxaml_health(project_dir: str = ".") -> dict:
+def haxaml_health(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Get project health report.
 
     Shows validation status, state summary, token count, errors and warnings.
     """
+    detail_mode, detail_err = _normalize_detail("haxaml_health", detail)
+    if detail_err:
+        return detail_err
+
     try:
         runner = ExecutionRunner(project_dir)
     except FileNotFoundError as e:
@@ -766,16 +948,20 @@ def haxaml_health(project_dir: str = ".") -> dict:
 
     message = "\n".join(lines)
     if report["ready"]:
-        return _ok("haxaml_health", {"message": message, "report": report})
+        return _ok("haxaml_health", {"message": message, "report": report}, detail=detail_mode)
     return _err("haxaml_health", "not_ready", "Project health has errors.", {"message": message, "report": report})
 
 
 @mcp_app.tool()
-def haxaml_doctor(project_dir: str = ".") -> dict:
+def haxaml_doctor(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Check facts completeness beyond schema validation.
 
     Finds missing recommended fields and blocking unresolved items.
     """
+    detail_mode, detail_err = _normalize_detail("haxaml_doctor", detail)
+    if detail_err:
+        return detail_err
+
     p = Path(project_dir).resolve()
     facts_path = resolve_frame_file(p, "facts.yaml", "brain.yaml")
     if not facts_path:
@@ -801,17 +987,23 @@ def haxaml_doctor(project_dir: str = ".") -> dict:
         return _ok(
             "haxaml_doctor",
             {"message": "\n".join(lines), "recommendations": missing, "has_recommendations": True},
+            detail=detail_mode,
         )
 
     return _ok(
         "haxaml_doctor",
         {"message": "✓ facts.yaml is complete — no recommendations", "has_recommendations": False},
+        detail=detail_mode,
     )
 
 
 @mcp_app.tool()
-def haxaml_guidance(task: str, project_dir: str = ".") -> dict:
+def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Generate structured task guidance and clarification needs for agent execution."""
+    detail_mode, detail_err = _normalize_detail("haxaml_guidance", detail)
+    if detail_err:
+        return detail_err
+
     frame = load_frame_data(project_dir)
     if not frame.get("facts"):
         return _err("haxaml_guidance", "missing_facts", "facts.yaml not found")
@@ -842,12 +1034,21 @@ def haxaml_guidance(task: str, project_dir: str = ".") -> dict:
         "safer_path": guidance["safer_path"],
         "recommended_packs": guidance["recommended_packs"],
     }
-    return _ok("haxaml_guidance", payload)
+    return _ok("haxaml_guidance", payload, detail=detail_mode)
 
 
 @mcp_app.tool()
-def haxaml_session_start(task: str, description: str = "", project_dir: str = ".") -> dict:
+def haxaml_session_start(
+    task: str,
+    description: str = "",
+    project_dir: str = ".",
+    detail: str = DETAIL_SHORT,
+) -> dict:
     """Start a governed agent session with guidance and read policy checks."""
+    detail_mode, detail_err = _normalize_detail("haxaml_session_start", detail)
+    if detail_err:
+        return detail_err
+
     frame = load_frame_data(project_dir)
     if not frame.get("facts"):
         return _err("haxaml_session_start", "missing_facts", "facts.yaml not found")
@@ -931,15 +1132,20 @@ def haxaml_session_start(task: str, description: str = "", project_dir: str = ".
             "onboarding_full_reads": read_policy["onboarding_full_reads"],
         },
     }
-    return _ok("haxaml_session_start", payload, warnings=warnings)
+    return _ok("haxaml_session_start", payload, warnings=warnings, detail=detail_mode)
 
 
 @mcp_app.tool()
 def haxaml_session_plan(
     session_id: str,
     project_dir: str = ".",
+    detail: str = DETAIL_SHORT,
 ) -> dict:
     """Generate a short execution plan and risk check for a started session."""
+    detail_mode, detail_err = _normalize_detail("haxaml_session_plan", detail)
+    if detail_err:
+        return detail_err
+
     sm, _ = _get_state_manager(project_dir)
     if not sm:
         return _err("haxaml_session_plan", "missing_acts", "acts.yaml not found")
@@ -989,6 +1195,7 @@ def haxaml_session_plan(
             "verification_expectations": verify_expect,
         },
         warnings=warnings,
+        detail=detail_mode,
     )
 
 
@@ -998,8 +1205,13 @@ def haxaml_context_pack(
     project_dir: str = ".",
     pack: str = "balanced",
     include_state: bool = True,
+    detail: str = DETAIL_SHORT,
 ) -> dict:
     """Build compact task-specific context packs for token-efficient agent runs."""
+    detail_mode, detail_err = _normalize_detail("haxaml_context_pack", detail)
+    if detail_err:
+        return detail_err
+
     frame = load_frame_data(project_dir)
     if not frame.get("facts"):
         return _err("haxaml_context_pack", "missing_facts", "facts.yaml not found")
@@ -1016,8 +1228,9 @@ def haxaml_context_pack(
         if not isinstance(compaction, dict):
             compaction = {}
         compaction["last_pack_tokens"] = tokens
-        if pack in ("minimal", "balanced", "full"):
-            compaction["default_pack"] = pack
+        resolved_pack = pack_data.get("_meta", {}).get("resolved_pack", pack)
+        if resolved_pack in ("minimal", "balanced", "full"):
+            compaction["default_pack"] = resolved_pack
         state["context_compaction"] = compaction
         err = _persist_state(sm, state)
         if err:
@@ -1029,9 +1242,10 @@ def haxaml_context_pack(
             "message": text,
             "context_pack": pack_data,
             "tokens": tokens,
-            "pack": pack,
+            "pack": pack_data.get("_meta", {}).get("resolved_pack", pack),
         },
         warnings=warnings,
+        detail=detail_mode,
     )
 
 
@@ -1045,8 +1259,13 @@ def haxaml_session_verify(
     unresolved_questions: Optional[list[str]] = None,
     assumptions: Optional[list[str]] = None,
     summary: str = "",
+    detail: str = DETAIL_SHORT,
 ) -> dict:
     """Run reflective verification checks and store evidence in acts.yaml."""
+    detail_mode, detail_err = _normalize_detail("haxaml_session_verify", detail)
+    if detail_err:
+        return detail_err
+
     frame = load_frame_data(project_dir)
     if not frame.get("facts"):
         return _err("haxaml_session_verify", "missing_facts", "facts.yaml not found")
@@ -1169,6 +1388,7 @@ def haxaml_session_verify(
             "follow_ups": guidance["required_questions"] if verdict in ("fail", "needs_clarification") else [],
         },
         warnings=warnings,
+        detail=detail_mode,
     )
 
 
@@ -1181,8 +1401,13 @@ def haxaml_session_record(
     changes: str = "",
     decisions: str = "",
     risks: str = "",
+    detail: str = DETAIL_SHORT,
 ) -> dict:
     """Record a session result; enforces verification gate before success/partial record."""
+    detail_mode, detail_err = _normalize_detail("haxaml_session_record", detail)
+    if detail_err:
+        return detail_err
+
     if result not in ("success", "partial", "failed"):
         return _err("haxaml_session_record", "invalid_result", f"Invalid result: {result}")
 
@@ -1299,17 +1524,27 @@ def haxaml_session_record(
             "auto_exported": stale,
         },
         warnings=warnings,
+        detail=detail_mode,
     )
 
 
 @mcp_app.tool()
-def haxaml_run(task: str, description: str = "", project_dir: str = ".") -> dict:
+def haxaml_run(
+    task: str,
+    description: str = "",
+    project_dir: str = ".",
+    detail: str = DETAIL_SHORT,
+) -> dict:
     """Start a governed execution run.
 
     Sets the active task in acts.yaml and runs preflight validation.
     Call this before starting work on a task.
     """
-    started = haxaml_session_start(task=task, description=description, project_dir=project_dir)
+    detail_mode, detail_err = _normalize_detail("haxaml_run", detail)
+    if detail_err:
+        return detail_err
+
+    started = haxaml_session_start(task=task, description=description, project_dir=project_dir, detail=detail_mode)
     dep = _wrapper_deprecation("haxaml_run", ["haxaml_session_start"])
     if not started.get("ok"):
         return _err(
@@ -1335,6 +1570,7 @@ def haxaml_run(task: str, description: str = "", project_dir: str = ".") -> dict
             "deprecation": dep,
         },
         warnings=[dep["message"]],
+        detail=detail_mode,
     )
 
 
@@ -1346,6 +1582,7 @@ def haxaml_done(
     decisions: str = "",
     risks: str = "",
     project_dir: str = ".",
+    detail: str = DETAIL_SHORT,
 ) -> dict:
     """Record task completion in the project diary (acts.yaml).
 
@@ -1358,6 +1595,10 @@ def haxaml_done(
         decisions: Key decisions made during this task
         risks: Any risks or concerns identified
     """
+    detail_mode, detail_err = _normalize_detail("haxaml_done", detail)
+    if detail_err:
+        return detail_err
+
     verify = haxaml_session_verify(
         task=task,
         project_dir=project_dir,
@@ -1365,6 +1606,7 @@ def haxaml_done(
         changed_files=[],
         unresolved_questions=[],
         assumptions=[],
+        detail=detail_mode,
     )
     if not verify.get("ok"):
         dep = _wrapper_deprecation("haxaml_done", ["haxaml_session_verify", "haxaml_session_record"])
@@ -1383,6 +1625,7 @@ def haxaml_done(
         changes=changes,
         decisions=decisions,
         risks=risks,
+        detail=detail_mode,
     )
     if not record.get("ok"):
         dep = _wrapper_deprecation("haxaml_done", ["haxaml_session_verify", "haxaml_session_record"])
@@ -1402,6 +1645,7 @@ def haxaml_done(
         "haxaml_done",
         payload,
         warnings=[dep["message"]],
+        detail=detail_mode,
     )
 
 
@@ -1414,6 +1658,7 @@ def haxaml_export(
     diff_preview: bool = False,
     override_native: bool = False,
     overwrite_existing: bool = False,
+    detail: str = DETAIL_SHORT,
 ) -> dict:
     """Export FRAME to an agent-native markdown file.
 
@@ -1423,6 +1668,10 @@ def haxaml_export(
 
     Supported agents: claude, codex, cursor, windsurf, copilot, gemini, generic
     """
+    detail_mode, detail_err = _normalize_detail("haxaml_export", detail)
+    if detail_err:
+        return detail_err
+
     target_path = (target or "").strip() or None
 
     if agent == "all":
@@ -1452,6 +1701,7 @@ def haxaml_export(
         return _ok(
             "haxaml_export",
             {"message": "\n".join(lines), "exports": exported},
+            detail=detail_mode,
         )
 
     if agent not in AGENT_CONFIGS:
@@ -1495,6 +1745,7 @@ def haxaml_export(
                 "diff": diff,
                 "summary": summary,
             },
+            detail=detail_mode,
         )
 
     try:
@@ -1517,6 +1768,7 @@ def haxaml_export(
                 "diff": diff if diff_preview else "",
                 "summary": summary if diff_preview else {"changed": True, "added_lines": 0, "removed_lines": 0},
             },
+            detail=detail_mode,
         )
     except FileExistsError as e:
         return _err("haxaml_export", "protected_existing_file", str(e))
@@ -1527,8 +1779,13 @@ def haxaml_upgrade(
     target_version: Optional[str] = None,
     include_mcp: bool = True,
     dry_run: bool = False,
+    detail: str = DETAIL_SHORT,
 ) -> dict:
     """Upgrade haxaml (and optionally haxaml-mcp) using uv tool management."""
+    detail_mode, detail_err = _normalize_detail("haxaml_upgrade", detail)
+    if detail_err:
+        return detail_err
+
     if not shutil.which("uv"):
         return _err(
             "haxaml_upgrade",
@@ -1550,6 +1807,7 @@ def haxaml_upgrade(
                 "target_version": target_version or "latest",
                 "include_mcp": include_mcp,
             },
+            detail=detail_mode,
         )
 
     primary = subprocess.run(upgrade_cmd, capture_output=True, text=True)
@@ -1564,6 +1822,7 @@ def haxaml_upgrade(
                 "include_mcp": include_mcp,
                 "target_version": target_version or "latest",
             },
+            detail=detail_mode,
         )
 
     failures = []
@@ -1604,6 +1863,7 @@ def haxaml_upgrade(
             "target_version": target_version or "latest",
             "executed": executed,
         },
+        detail=detail_mode,
     )
 
 
@@ -1614,8 +1874,13 @@ def haxaml_mcp_bootstrap(
     mode: str = "both",
     uvx: bool = True,
     overwrite: bool = False,
+    detail: str = DETAIL_SHORT,
 ) -> dict:
     """Generate and optionally write MCP config snippets for common editors."""
+    detail_mode, detail_err = _normalize_detail("haxaml_mcp_bootstrap", detail)
+    if detail_err:
+        return detail_err
+
     valid_modes = {"snippets", "write", "both"}
     if mode not in valid_modes:
         return _err(
@@ -1695,12 +1960,17 @@ def haxaml_mcp_bootstrap(
                 "For Copilot CLI global setup, see ~/.copilot/mcp-config.json docs path.",
             ],
         },
+        detail=detail_mode,
     )
 
 
 @mcp_app.tool()
-def haxaml_adopt_plan(project_dir: str = ".") -> dict:
+def haxaml_adopt_plan(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Inventory native instruction files and return non-destructive adoption plan."""
+    detail_mode, detail_err = _normalize_detail("haxaml_adopt_plan", detail)
+    if detail_err:
+        return detail_err
+
     payload, warnings = _adoption_plan_payload(project_dir)
     return _ok(
         "haxaml_adopt_plan",
@@ -1709,12 +1979,17 @@ def haxaml_adopt_plan(project_dir: str = ".") -> dict:
             **payload,
         },
         warnings=warnings,
+        detail=detail_mode,
     )
 
 
 @mcp_app.tool()
-def haxaml_reconcile(project_dir: str = ".") -> dict:
+def haxaml_reconcile(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Return structured derivation-boundary conflict report."""
+    detail_mode, detail_err = _normalize_detail("haxaml_reconcile", detail)
+    if detail_err:
+        return detail_err
+
     report = reconcile_derivation(project_dir)
     if report["severity_totals"]["blocking"] > 0:
         return _err(
@@ -1729,6 +2004,7 @@ def haxaml_reconcile(project_dir: str = ".") -> dict:
             "message": report["human_summary"],
             **report,
         },
+        detail=detail_mode,
     )
 
 
@@ -1737,6 +2013,7 @@ def haxaml_adopt(
     project_dir: str = ".",
     write: bool = False,
     force: bool = False,
+    detail: str = DETAIL_SHORT,
 ) -> dict:
     """Adopt an existing project into FRAME governance.
 
@@ -1746,6 +2023,10 @@ def haxaml_adopt(
     With write=False (default): shows the adoption report (dry run).
     With write=True: creates .haxaml/ADOPTION.md and scaffold FRAME files.
     """
+    detail_mode, detail_err = _normalize_detail("haxaml_adopt", detail)
+    if detail_err:
+        return detail_err
+
     plan = scan_native_sources(project_dir)
     plan_payload, plan_warnings = _adoption_plan_payload(project_dir, plan=plan)
 
@@ -1763,6 +2044,7 @@ def haxaml_adopt(
                 "Prefer haxaml_adopt_plan for non-destructive inventory and migration planning.",
                 *plan_warnings,
             ],
+            detail=detail_mode,
         )
 
     written = write_adoption_scaffold(plan, force=force)
@@ -1788,6 +2070,7 @@ def haxaml_adopt(
                 "Use haxaml_reconcile after edits to detect map-canonical derivation conflicts.",
                 *plan_warnings,
             ],
+            detail=detail_mode,
         )
 
     return _ok(
@@ -1802,39 +2085,52 @@ def haxaml_adopt(
             "Use haxaml_adopt_plan for non-destructive planning before forceful writes.",
             *plan_warnings,
         ],
+        detail=detail_mode,
     )
 
 
 @mcp_app.tool()
-def haxaml_needs(project_dir: str = ".") -> dict:
+def haxaml_needs(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """List what the user still needs to provide.
 
     Checks for blocking unresolved items in facts.yaml,
     blocking dependencies in acts.yaml, active run requirements
     in expect.yaml, and blocking open questions.
     """
+    detail_mode, detail_err = _normalize_detail("haxaml_needs", detail)
+    if detail_err:
+        return detail_err
+
     message = render_needs(project_dir)
     if message.startswith("✗"):
         return _err("haxaml_needs", "missing_frame", message)
-    return _ok("haxaml_needs", {"message": message})
+    return _ok("haxaml_needs", {"message": message}, detail=detail_mode)
 
 
 @mcp_app.tool()
-def haxaml_impact(module: str, project_dir: str = ".") -> dict:
+def haxaml_impact(module: str, project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Check what's affected by changing a module.
 
     Reads map.yaml to show module ownership, dependencies, and impact rules.
     This prevents the "fix kitchen, break bathroom" problem.
     """
+    detail_mode, detail_err = _normalize_detail("haxaml_impact", detail)
+    if detail_err:
+        return detail_err
+
     message = render_impact(module, project_dir)
     if message.startswith("✗"):
         return _err("haxaml_impact", "impact_unavailable", message)
-    return _ok("haxaml_impact", {"message": message, "module": module})
+    return _ok("haxaml_impact", {"message": message, "module": module}, detail=detail_mode)
 
 
 @mcp_app.tool()
-def haxaml_state_show(project_dir: str = ".") -> dict:
+def haxaml_state_show(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Show current project diary (acts.yaml) summary."""
+    detail_mode, detail_err = _normalize_detail("haxaml_state_show", detail)
+    if detail_err:
+        return detail_err
+
     p = Path(project_dir).resolve()
     acts_path = resolve_frame_file(p, "acts.yaml", "state.yaml")
     if not acts_path:
@@ -1856,15 +2152,23 @@ def haxaml_state_show(project_dir: str = ".") -> dict:
         f"Runs:       {stats['run_count']} (+ {stats['total_runs_compacted']} compacted)\n"
         f"File size:  {stats['file_size_bytes']} bytes"
     )
-    return _ok("haxaml_state_show", {"message": message, "stats": stats})
+    return _ok("haxaml_state_show", {"message": message, "stats": stats}, detail=detail_mode)
 
 
 @mcp_app.tool()
-def haxaml_state_compact(project_dir: str = ".", keep_recent: int = 5) -> dict:
+def haxaml_state_compact(
+    project_dir: str = ".",
+    keep_recent: int = 5,
+    detail: str = DETAIL_SHORT,
+) -> dict:
     """Compact old runs in acts.yaml to save context tokens.
 
     Summarizes old runs and keeps only the most recent ones.
     """
+    detail_mode, detail_err = _normalize_detail("haxaml_state_compact", detail)
+    if detail_err:
+        return detail_err
+
     p = Path(project_dir).resolve()
     acts_path = resolve_frame_file(p, "acts.yaml", "state.yaml")
     if not acts_path:
@@ -1877,12 +2181,16 @@ def haxaml_state_compact(project_dir: str = ".", keep_recent: int = 5) -> dict:
         return _err("haxaml_state_compact", "state_error", str(e))
 
     message = f"✓ Compacted {result['compacted']} runs, kept {result['kept']}"
-    return _ok("haxaml_state_compact", {"message": message, "result": result})
+    return _ok("haxaml_state_compact", {"message": message, "result": result}, detail=detail_mode)
 
 
 @mcp_app.tool()
-def haxaml_benchmark(project_dir: str = ".") -> dict:
+def haxaml_benchmark(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Run token efficiency benchmarks on FRAME files."""
+    detail_mode, detail_err = _normalize_detail("haxaml_benchmark", detail)
+    if detail_err:
+        return detail_err
+
     from haxaml.benchmarks import format_benchmark_report
 
     p = Path(project_dir).resolve()
@@ -1891,7 +2199,7 @@ def haxaml_benchmark(project_dir: str = ".") -> dict:
         return _err("haxaml_benchmark", "missing_facts", "facts.yaml not found")
 
     report = format_benchmark_report(str(facts_path), project_dir)
-    return _ok("haxaml_benchmark", {"message": report})
+    return _ok("haxaml_benchmark", {"message": report}, detail=detail_mode)
 
 
 # ─── Resources ───────────────────────────────────────────────────────────────

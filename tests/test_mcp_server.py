@@ -259,8 +259,59 @@ class TestContext:
         data = result["data"]
         assert data["pack"] == "balanced"
         assert data["tokens"] > 0
+        assert "included_sections" in data
+        assert "omitted_sections" in data
+        assert "omitted_context" in data
+        assert "context_pack" not in data
+
+    def test_context_pack_full_detail_keeps_structured_payload(self, governed_project):
+        result = haxaml_context_pack(
+            task="implement auth module",
+            project_dir=str(governed_project),
+            pack="balanced",
+            include_state=True,
+            detail="full",
+        )
+        assert result["ok"] is True
+        data = result["data"]
+        assert data["pack"] == "balanced"
         assert "essential_facts" in data["context_pack"]
         assert "relevant_rules" in data["context_pack"]
+
+    def test_context_pack_accepts_standard_alias(self, governed_project):
+        result = haxaml_context_pack(
+            task="implement auth module",
+            project_dir=str(governed_project),
+            pack="standard",
+            include_state=True,
+            detail="full",
+        )
+        assert result["ok"] is True
+        assert result["data"]["pack"] == "balanced"
+        assert result["data"]["context_pack"]["pack"] == "balanced"
+
+
+class TestDetailMode:
+    def test_invalid_detail_returns_error(self, governed_project):
+        result = haxaml_guidance(
+            task="implement auth module",
+            project_dir=str(governed_project),
+            detail="verbose",
+        )
+        assert result["ok"] is False
+        assert result["error"]["code"] == "invalid_detail"
+
+    def test_guidance_full_detail_includes_extended_fields(self, governed_project):
+        short_result = haxaml_guidance(task="implement auth module", project_dir=str(governed_project))
+        full_result = haxaml_guidance(
+            task="implement auth module",
+            project_dir=str(governed_project),
+            detail="full",
+        )
+        assert short_result["ok"] is True
+        assert full_result["ok"] is True
+        assert "missing_context" not in short_result["data"]
+        assert "missing_context" in full_result["data"]
 
 
 # ─── Health ──────────────────────────────────────────────────────────────────

@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.5 - 2026-04-28
+
+### Added
+
+- Optional `detail` mode across MCP tools: `short` (default) and `full`.
+- `invalid_detail` error for unsupported detail values.
+- `standard` context-pack alias, normalized to `balanced`.
+- Context-pack metadata for compaction visibility:
+  - `included_sections`
+  - `omitted_sections`
+  - `omitted_context`
+  - `requested_pack`
+  - `resolved_pack`
+
+### Changed
+
+- Success responses are short by default for MCP tools, while failures keep rich error details.
+- `haxaml_context_pack` short mode now returns context text plus compact metadata (without full duplicated structured payload).
+- `haxaml_context` short mode now avoids duplicating full context payload fields.
+- CLI `context-pack --pack` now accepts `standard`.
+- `rules.schema` now allows `context_policy.default_pack: standard`.
+- `haxaml` and `haxaml-mcp` versions are aligned at `0.4.5`.
+
 ## 0.4.2 - 2026-04-28
 
 ### Added

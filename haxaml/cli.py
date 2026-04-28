@@ -374,7 +374,7 @@ def session_plan(project_dir, session_id):
 @cli.command("context-pack")
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 @click.option("--task", required=True, help="Task to build context for")
-@click.option("--pack", default="balanced", type=click.Choice(["minimal", "balanced", "full"]), help="Pack detail level")
+@click.option("--pack", default="balanced", type=click.Choice(["minimal", "balanced", "standard", "full"]), help="Pack detail level")
 @click.option("--no-state", is_flag=True, help="Exclude acts state from the pack")
 def context_pack(project_dir, task, pack, no_state):
     """Build token-efficient task-specific context pack."""

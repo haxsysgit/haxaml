@@ -324,7 +324,7 @@ wheels = [
 
 [[package]]
 name = "haxaml"
-version = "0.4.2"
+version = "0.4.5"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

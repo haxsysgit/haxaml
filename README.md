@@ -57,6 +57,8 @@ haxaml reconcile --dir .
 haxaml validate --dir .
 ```
 
+For the practical lifecycle flow and failure recovery path, use `MCP.md` sections: `Quick Start MCP Flow`, `Demo Walkthrough`, `Top 5 Troubleshooting`, and `Detail Mode Quick Examples`.
+
 ## Startup Prompt For Agent Files
 
 Paste this at the top of your native agent file (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, etc.):
@@ -94,7 +96,7 @@ Safety rule:
 
 ## Docs
 
-- [MCP.md](MCP.md) - MCP tool contracts and response shapes
-- [ADVANCED.md](ADVANCED.md) - deeper command and export behavior
-- [LONGTERM.md](LONGTERM.md) - roadmap direction
+- [MCP.md](https://github.com/haxsysgit/haxaml/blob/main/MCP.md) - MCP-first operator guide with bootstrap-aligned config examples, Quick Start MCP Flow, demo walkthroughs, bad/good usage pairs, and troubleshooting
+- [ADVANCED.md](https://github.com/haxsysgit/haxaml/blob/main/ADVANCED.md) - deeper command and export behavior
+- [LONGTERM.md](https://github.com/haxsysgit/haxaml/blob/main/LONGTERM.md) - roadmap direction
 - `CHANGELOG.md` - release notes
