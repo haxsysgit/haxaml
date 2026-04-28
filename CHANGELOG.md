@@ -23,6 +23,11 @@
 - `rules.schema` now allows `context_policy.default_pack: standard`.
 - `haxaml` and `haxaml-mcp` versions are aligned at `0.4.5`.
 
+### Notes
+
+- `0.4.3` and `0.4.4` were internal roadmap milestones and were not published as tagged releases.
+- Official tagged releases moved from `v0.4.2` directly to `v0.4.5`.
+
 ## 0.4.2 - 2026-04-28
 
 ### Added
