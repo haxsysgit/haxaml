@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.4.2 - 2026-04-28
+
+### Added
+
+- `haxaml_adopt_plan` now returns structured `instruction_analysis` metadata:
+  - `conflicts` (warning-level, metadata-first)
+  - `duplicates`
+  - `precedence_decision_required`
+  - `precedence_candidates`
+  - deterministic analysis counts
+- README agent-section scanning for adoption analysis (agent/instruction sections only).
+- Top-level MCP `warnings` for adopt-plan conflict/duplicate awareness, with full structure kept in `data`.
+- PyPI publish workflow guardrail that hard-fails when:
+  - tag version does not match package versions
+  - `haxaml` and `haxaml-mcp` versions are out of sync
+  - `haxaml-mcp` dependency floor is not aligned with the tag version
+
+### Changed
+
+- Expanded native rule-directory detection for adoption:
+  - `.cursor/rules/*`
+  - `.windsurf/rules/*`
+- Adoption report now includes compact instruction-analysis summaries.
+- `haxaml` and `haxaml-mcp` versions are aligned at `0.4.2`.
+
+### Notes
+
+- No automatic precedence winner is selected when instruction conflicts are detected.
+- Adoption analysis remains non-destructive and compact (no raw content snippets).
+
 ## 0.4.0 - 2026-04-28
 
 ### Added

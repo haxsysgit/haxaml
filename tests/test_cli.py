@@ -106,6 +106,10 @@ def test_adopt_write_creates_valid_frame_scaffold_and_report():
         discipline = rules.get("while_coding", {}).get("discipline", [])
         assert COMMIT_STYLE_DISCIPLINE in discipline
 
+        with open(".haxaml/ADOPTION.md", "r") as f:
+            report = f.read()
+        assert "## Instruction Analysis" in report
+
 
 def test_adopt_write_preserves_existing_frame_without_force():
     runner = CliRunner()

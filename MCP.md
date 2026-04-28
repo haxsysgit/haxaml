@@ -1,4 +1,4 @@
-# MCP: Haxaml Agent Contract (0.4.0)
+# MCP: Haxaml Agent Contract (0.4.2)
 
 Haxaml is MCP first.
 Use MCP tools for lifecycle, adoption, and reconciliation gates.
@@ -82,6 +82,16 @@ Recommended sequence:
 
 `haxaml_adopt_plan` never writes files.
 `haxaml_adopt` preserves existing files unless forced.
+
+Adoption analysis model:
+
+- `haxaml_adopt_plan.data.instruction_analysis` includes deterministic metadata for:
+  - `conflicts` (`severity=warning`)
+  - `duplicates`
+  - `precedence_decision_required`
+  - `precedence_candidates`
+- top-level `warnings` contains concise awareness messages; structured details stay under `data`.
+- no raw instruction snippets are emitted in the analysis payload.
 
 ## Example Responses
 

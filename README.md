@@ -120,7 +120,7 @@ haxaml upgrade
 Pin a specific version:
 
 ```bash
-haxaml upgrade --to 0.4.0
+haxaml upgrade --to 0.4.2
 ```
 
 ## Why FRAME even when markdown can be smaller?

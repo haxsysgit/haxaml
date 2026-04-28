@@ -17,6 +17,42 @@ jobs:
       - name: Check out repo
         uses: actions/checkout@v4
 
+      - name: Validate tag and package versions
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          ref = os.environ.get("GITHUB_REF_NAME", "")
+          if not ref.startswith("v"):
+              raise SystemExit(f"Expected tag ref like vX.Y.Z, got: {ref}")
+          tag_version = ref[1:]
+
+          root = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          mcp = tomllib.loads(Path("packages/haxaml-mcp/pyproject.toml").read_text(encoding="utf-8"))
+
+          root_version = str(root["project"]["version"])
+          mcp_version = str(mcp["project"]["version"])
+          if root_version != mcp_version:
+              raise SystemExit(
+                  f"Version mismatch: haxaml={root_version} vs haxaml-mcp={mcp_version}"
+              )
+          if root_version != tag_version:
+              raise SystemExit(
+                  f"Tag/version mismatch: tag={tag_version} vs pyproject={root_version}"
+              )
+
+          deps = mcp["project"].get("dependencies", [])
+          expected_prefix = f"haxaml>={tag_version}"
+          if not any(str(dep).startswith(expected_prefix) for dep in deps):
+              raise SystemExit(
+                  f"haxaml-mcp dependency must start with '{expected_prefix}', got: {deps}"
+              )
+
+          print(f"Version checks passed for {tag_version}.")
+          PY
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 

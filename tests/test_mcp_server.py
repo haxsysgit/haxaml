@@ -626,8 +626,57 @@ class TestAdoptPlan:
         data = result["data"]
         assert data["non_destructive"] is True
         assert data["counts"]["native_files"] >= 1
+        assert "instruction_analysis" in data
+        assert data["instruction_analysis"]["counts"]["sources_scanned"] >= 1
         assert "human_summary" in data
         assert (tmp_path / ".haxaml").exists() is False
+
+    def test_reports_conflicts_and_duplicates_with_warnings(self, tmp_path):
+        (tmp_path / "CLAUDE.md").write_text(
+            "# Claude Rules\n- Always run tests before commit.\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "AGENTS.md").write_text(
+            "# Codex Rules\n- Do not run tests before commit.\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "README.md").write_text(
+            "# Project\n\n## Agent Instructions\n- Always run tests before commit.\n",
+            encoding="utf-8",
+        )
+
+        result = haxaml_adopt_plan(str(tmp_path))
+        assert result["ok"] is True
+        assert result["warnings"]
+
+        data = result["data"]
+        analysis = data["instruction_analysis"]
+        assert analysis["counts"]["conflicts"] >= 1
+        assert analysis["counts"]["duplicates"] >= 1
+        assert analysis["precedence_decision_required"] is True
+        assert analysis["counts"]["readme_sections_scanned"] >= 1
+        assert analysis["precedence_candidates"]
+
+        first_conflict = analysis["conflicts"][0]
+        assert first_conflict["severity"] == "warning"
+        assert first_conflict["category"] in ("precedence_conflict", "cross_source_rule_conflict")
+        assert first_conflict["requires_user_choice"] is True
+        assert first_conflict["recommended_next_action"] == "decide_authoritative_source_then_update_frame"
+        assert all("snippet" not in src["scope"].lower() for src in first_conflict["sources"])
+
+        first_duplicate = analysis["duplicates"][0]
+        assert first_duplicate["sources"]
+        assert all("snippet" not in src["scope"].lower() for src in first_duplicate["sources"])
+
+    def test_detects_cursor_rules_directory_files(self, tmp_path):
+        rules_dir = tmp_path / ".cursor" / "rules"
+        rules_dir.mkdir(parents=True)
+        (rules_dir / "policy.txt").write_text("- Always document changes.\n", encoding="utf-8")
+
+        result = haxaml_adopt_plan(str(tmp_path))
+        assert result["ok"] is True
+        paths = [item["path"] for item in result["data"]["native_files"]]
+        assert ".cursor/rules/policy.txt" in paths
 
 
 class TestReconcile:

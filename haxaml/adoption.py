@@ -5,6 +5,7 @@ files and creates a governed place for an AI agent to derive FRAME from them.
 """
 
 from dataclasses import dataclass
+import re
 from pathlib import Path
 from typing import Iterable
 
@@ -21,8 +22,8 @@ NATIVE_FILE_SPECS = (
     ("claude", "Claude Code", ("CLAUDE.md",)),
     ("codex", "OpenAI Codex", ("AGENTS.md",)),
     ("copilot", "GitHub Copilot", (".github/copilot-instructions.md",)),
-    ("cursor", "Cursor", (".cursor/rules/*.mdc", ".cursorrules")),
-    ("windsurf", "Windsurf / Cascade", (".windsurf/rules/*.md", ".windsurfrules")),
+    ("cursor", "Cursor", (".cursor/rules/*", ".cursorrules")),
+    ("windsurf", "Windsurf / Cascade", (".windsurf/rules/*", ".windsurfrules")),
     ("gemini", "Gemini CLI", ("GEMINI.md",)),
 )
 
@@ -35,6 +36,30 @@ CONTEXT_FILE_SPECS = (
     ("Cargo.toml",),
     ("go.mod",),
 )
+
+_DIRECTIVE_MARKERS = (
+    "must",
+    "should",
+    "do not",
+    "don't",
+    "never",
+    "always",
+    "only",
+    "must not",
+)
+_NEGATION_MARKERS = ("do not", "don't", "never", "must not", "cannot", "can't", "no ")
+_README_AGENT_HEADING_MARKERS = (
+    "agent",
+    "ai",
+    "instruction",
+    "copilot",
+    "claude",
+    "codex",
+    "cursor",
+    "windsurf",
+    "gemini",
+)
+_RECOMMENDED_NEXT_ACTION = "decide_authoritative_source_then_update_frame"
 
 
 @dataclass(frozen=True)
@@ -62,6 +87,93 @@ class AdoptionPlan:
     @property
     def has_existing_frame(self) -> bool:
         return bool(self.existing_frame_files)
+
+
+@dataclass(frozen=True)
+class InstructionDirective:
+    normalized: str
+    topic: str
+    polarity: str
+    source: FoundFile
+    scope: str
+
+
+def analyze_adoption_instructions(plan: AdoptionPlan) -> dict:
+    """Return deterministic metadata-only instruction analysis for adoption."""
+    directives = _collect_directives(plan)
+    groups: dict[str, list[InstructionDirective]] = {}
+    for item in directives:
+        groups.setdefault(item.normalized, []).append(item)
+
+    duplicates = []
+    dup_counter = 0
+    for normalized in sorted(groups):
+        items = groups[normalized]
+        unique_sources = {_source_key(d.source, d.scope) for d in items}
+        if len(unique_sources) < 2:
+            continue
+        dup_counter += 1
+        duplicates.append(
+            {
+                "id": f"adopt-duplicate-{dup_counter:03d}",
+                "rule_summary": normalized,
+                "sources": _sorted_source_refs(items),
+            }
+        )
+
+    topic_groups: dict[str, list[InstructionDirective]] = {}
+    for item in directives:
+        if item.topic:
+            topic_groups.setdefault(item.topic, []).append(item)
+
+    conflicts = []
+    conflict_counter = 0
+    for topic in sorted(topic_groups):
+        items = topic_groups[topic]
+        polarities = {item.polarity for item in items}
+        if len(polarities) < 2:
+            continue
+        unique_sources = {_source_key(d.source, d.scope) for d in items}
+        if len(unique_sources) < 2:
+            continue
+        conflict_counter += 1
+        conflicts.append(
+            {
+                "id": f"adopt-conflict-{conflict_counter:03d}",
+                "category": "precedence_conflict",
+                "severity": "warning",
+                "rule_summary": topic,
+                "sources": _sorted_source_refs(items),
+                "requires_user_choice": True,
+                "why_it_matters": "Conflicting instruction sources can cause inconsistent agent behavior unless one source is chosen as authoritative.",
+                "recommended_next_action": _RECOMMENDED_NEXT_ACTION,
+            }
+        )
+
+    precedence_candidates = []
+    seen = set()
+    for conflict in conflicts:
+        for source in conflict["sources"]:
+            key = (source["kind"], source["path"], source["scope"])
+            if key in seen:
+                continue
+            seen.add(key)
+            precedence_candidates.append(source)
+
+    readme_sections_scanned = len(_readme_agent_sections(plan.project_dir))
+    sources_scanned = len(plan.native_files) + readme_sections_scanned
+    return {
+        "conflicts": conflicts,
+        "duplicates": duplicates,
+        "precedence_decision_required": bool(conflicts),
+        "precedence_candidates": precedence_candidates,
+        "counts": {
+            "conflicts": len(conflicts),
+            "duplicates": len(duplicates),
+            "sources_scanned": sources_scanned,
+            "readme_sections_scanned": readme_sections_scanned,
+        },
+    }
 
 
 def scan_native_sources(project_dir: str | Path) -> AdoptionPlan:
@@ -128,6 +240,7 @@ def write_adoption_scaffold(plan: AdoptionPlan, force: bool = False) -> list[Pat
 
 def render_adoption_report(plan: AdoptionPlan) -> str:
     """Render a human-readable adoption report."""
+    analysis = analyze_adoption_instructions(plan)
     lines = [
         "# Haxaml Adoption Report",
         "",
@@ -150,6 +263,33 @@ def render_adoption_report(plan: AdoptionPlan) -> str:
     else:
         lines.append("- None found.")
 
+    lines.extend(["", "## Instruction Analysis", ""])
+    counts = analysis["counts"]
+    lines.append(
+        f"- Conflicts: {counts['conflicts']} | Duplicates: {counts['duplicates']} | "
+        f"Sources scanned: {counts['sources_scanned']}"
+    )
+    if analysis["precedence_decision_required"]:
+        lines.append("- Precedence decision required: yes")
+    else:
+        lines.append("- Precedence decision required: no")
+    if analysis["conflicts"]:
+        lines.append("")
+        lines.append("Conflicts:")
+        for conflict in analysis["conflicts"]:
+            sources = ", ".join(
+                f"{source['path']} ({source['scope']})" for source in conflict["sources"]
+            )
+            lines.append(f"- [{conflict['id']}] {conflict['rule_summary']} -> {sources}")
+    if analysis["duplicates"]:
+        lines.append("")
+        lines.append("Duplicates:")
+        for duplicate in analysis["duplicates"]:
+            sources = ", ".join(
+                f"{source['path']} ({source['scope']})" for source in duplicate["sources"]
+            )
+            lines.append(f"- [{duplicate['id']}] {duplicate['rule_summary']} -> {sources}")
+
     lines.extend(["", "## Existing FRAME Files", ""])
     if plan.existing_frame_files:
         for filename in plan.existing_frame_files:
@@ -164,7 +304,7 @@ def render_adoption_report(plan: AdoptionPlan) -> str:
             "",
             "1. AI agent reads the native files and repo context listed above.",
             "2. AI agent derives real FRAME facts, rules, acts, and expectations from the evidence.",
-        "3. Haxaml validates the FRAME files with `haxaml validate --dir .`.",
+            "3. Haxaml validates the FRAME files with `haxaml validate --dir .`.",
             "4. Haxaml exports a neutral shared file with `haxaml export` and optionally per-agent files when explicitly requested.",
             "",
             "## Guardrail",
@@ -187,6 +327,141 @@ def _find_patterns(project: Path, patterns: Iterable[str]) -> list[Path]:
         if path.is_file():
             found.append(path)
     return found
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return ""
+
+
+def _readme_agent_sections(project: Path) -> list[tuple[str, str]]:
+    readme = project / "README.md"
+    if not readme.is_file():
+        return []
+    content = _read_text(readme)
+    if not content:
+        return []
+
+    sections = []
+    current_heading = ""
+    current_lines: list[str] = []
+
+    def _flush() -> None:
+        nonlocal current_heading, current_lines
+        heading = current_heading.strip()
+        if heading and _is_agent_heading(heading):
+            scope = f"README.md#{_slugify(heading)}"
+            sections.append((scope, "\n".join(current_lines).strip()))
+        current_lines = []
+
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            _flush()
+            current_heading = stripped.lstrip("#").strip()
+            continue
+        current_lines.append(line)
+    _flush()
+    return sections
+
+
+def _is_agent_heading(heading: str) -> bool:
+    lowered = heading.lower()
+    return any(marker in lowered for marker in _README_AGENT_HEADING_MARKERS)
+
+
+def _slugify(text: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    return slug or "section"
+
+
+def _collect_directives(plan: AdoptionPlan) -> list[InstructionDirective]:
+    directives: list[InstructionDirective] = []
+    project = plan.project_dir
+    for found in plan.native_files:
+        content = _read_text(project / found.path)
+        if not content:
+            continue
+        for directive in _extract_directives(content):
+            directives.append(
+                InstructionDirective(
+                    normalized=directive["normalized"],
+                    topic=directive["topic"],
+                    polarity=directive["polarity"],
+                    source=found,
+                    scope="file",
+                )
+            )
+
+    for scope, content in _readme_agent_sections(project):
+        source = FoundFile("context", "Repository context", "README.md")
+        for directive in _extract_directives(content):
+            directives.append(
+                InstructionDirective(
+                    normalized=directive["normalized"],
+                    topic=directive["topic"],
+                    polarity=directive["polarity"],
+                    source=source,
+                    scope=scope,
+                )
+            )
+    return directives
+
+
+def _extract_directives(content: str) -> list[dict[str, str]]:
+    out = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        cleaned = re.sub(r"^([-*+]\s+|\d+\.\s+|\[[ xX]\]\s+)", "", stripped).strip()
+        lowered = cleaned.lower()
+        if not any(marker in lowered for marker in _DIRECTIVE_MARKERS):
+            continue
+        normalized = _normalize_rule(cleaned)
+        if len(normalized) < 8:
+            continue
+        topic = _normalize_rule(_topic_from_rule(normalized))
+        polarity = "negative" if _is_negative(normalized) else "positive"
+        out.append({"normalized": normalized, "topic": topic, "polarity": polarity})
+    return out
+
+
+def _normalize_rule(text: str) -> str:
+    norm = text.lower().replace("`", "")
+    norm = re.sub(r"\s+", " ", norm).strip()
+    norm = norm.strip(" .;,:")
+    return norm
+
+
+def _is_negative(text: str) -> bool:
+    return any(marker in text for marker in _NEGATION_MARKERS)
+
+
+def _topic_from_rule(rule: str) -> str:
+    topic = rule
+    topic = re.sub(r"\b(do not|don't|never|must not|cannot|can't|must|should|always|only)\b", "", topic)
+    topic = re.sub(r"\s+", " ", topic).strip(" .;,:")
+    return topic or rule
+
+
+def _source_key(source: FoundFile, scope: str) -> tuple[str, str, str]:
+    return source.kind, source.path, scope
+
+
+def _sorted_source_refs(items: list[InstructionDirective]) -> list[dict[str, str]]:
+    refs = {}
+    for item in items:
+        key = _source_key(item.source, item.scope)
+        refs[key] = {
+            "kind": item.source.kind,
+            "label": item.source.label,
+            "path": item.source.path,
+            "scope": item.scope,
+        }
+    return [refs[key] for key in sorted(refs)]
 
 
 def _relative(project: Path, path: Path) -> str:

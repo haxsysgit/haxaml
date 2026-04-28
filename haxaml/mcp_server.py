@@ -43,7 +43,7 @@ from haxaml.runner import ExecutionRunner
 from haxaml.state_manager import StateManager, StateError
 from haxaml.supervision import render_impact, render_needs
 from haxaml.adoption import (
-    scan_native_sources, render_adoption_report, write_adoption_scaffold,
+    scan_native_sources, render_adoption_report, write_adoption_scaffold, analyze_adoption_instructions,
 )
 from haxaml.export_engine import (
     export_to_file, list_agents, AGENT_CONFIGS, export_frame_to_markdown,
@@ -422,8 +422,9 @@ def _wrapper_deprecation(tool: str, replacement: list[str]) -> dict[str, Any]:
     }
 
 
-def _adoption_plan_payload(project_dir: str, plan: Any = None) -> dict[str, Any]:
+def _adoption_plan_payload(project_dir: str, plan: Any = None) -> tuple[dict[str, Any], list[str]]:
     plan = plan or scan_native_sources(project_dir)
+    analysis = analyze_adoption_instructions(plan)
     native_files = [{"kind": f.kind, "label": f.label, "path": f.path} for f in plan.native_files]
     context_files = [{"kind": f.kind, "label": f.label, "path": f.path} for f in plan.context_files]
     risks = []
@@ -433,6 +434,8 @@ def _adoption_plan_payload(project_dir: str, plan: Any = None) -> dict[str, Any]
         risks.append("Existing FRAME files detected; preserve unless explicit overwrite is requested.")
     if not native_files and not context_files:
         risks.append("No known native/context files were discovered; adoption may require manual context capture.")
+    if analysis["counts"]["conflicts"] > 0:
+        risks.append("Instruction conflicts detected; explicit precedence decision is required before FRAME derivation.")
 
     migration_steps = [
         "Run haxaml_reconcile to detect derivation boundary conflicts.",
@@ -443,13 +446,29 @@ def _adoption_plan_payload(project_dir: str, plan: Any = None) -> dict[str, Any]
     next_actions = [
         "Call haxaml_reconcile(project_dir='.')",
         "Resolve blocking conflicts from reconcile report.",
+        "Choose authoritative instruction source(s) where adoption conflicts exist.",
         "Call haxaml_validate(project_dir='.')",
     ]
+    conflict_count = analysis["counts"]["conflicts"]
+    duplicate_count = analysis["counts"]["duplicates"]
+    precedence_required = analysis["precedence_decision_required"]
     human_summary = (
         f"Inventory complete: {len(native_files)} native file(s), "
-        f"{len(context_files)} context file(s), {len(plan.existing_frame_files)} existing FRAME file(s)."
+        f"{len(context_files)} context file(s), {len(plan.existing_frame_files)} existing FRAME file(s). "
+        f"Instruction analysis: {conflict_count} conflict(s), {duplicate_count} duplicate rule group(s), "
+        f"precedence decision required: {'yes' if precedence_required else 'no'}."
     )
-    return {
+    warnings = []
+    if conflict_count:
+        warnings.append(
+            f"Adoption instruction conflicts detected ({conflict_count}); choose authoritative source before deriving FRAME."
+        )
+    if duplicate_count:
+        warnings.append(
+            f"Adoption duplicate rule groups detected ({duplicate_count}); consolidate to reduce instruction drift."
+        )
+
+    payload = {
         "project_dir": str(plan.project_dir),
         "native_files": native_files,
         "context_files": context_files,
@@ -459,12 +478,14 @@ def _adoption_plan_payload(project_dir: str, plan: Any = None) -> dict[str, Any]
             "context_files": len(context_files),
             "existing_frame_files": len(plan.existing_frame_files),
         },
+        "instruction_analysis": analysis,
         "migration_plan": migration_steps,
         "risk_notes": risks,
         "next_actions": next_actions,
         "non_destructive": True,
         "human_summary": human_summary,
     }
+    return payload, warnings
 
 
 def _has_conflict_stop_reason(changes: str, decisions: str, risks: str) -> bool:
@@ -1680,13 +1701,14 @@ def haxaml_mcp_bootstrap(
 @mcp_app.tool()
 def haxaml_adopt_plan(project_dir: str = ".") -> dict:
     """Inventory native instruction files and return non-destructive adoption plan."""
-    payload = _adoption_plan_payload(project_dir)
+    payload, warnings = _adoption_plan_payload(project_dir)
     return _ok(
         "haxaml_adopt_plan",
         {
             "message": payload["human_summary"],
             **payload,
         },
+        warnings=warnings,
     )
 
 
@@ -1725,7 +1747,7 @@ def haxaml_adopt(
     With write=True: creates .haxaml/ADOPTION.md and scaffold FRAME files.
     """
     plan = scan_native_sources(project_dir)
-    plan_payload = _adoption_plan_payload(project_dir, plan=plan)
+    plan_payload, plan_warnings = _adoption_plan_payload(project_dir, plan=plan)
 
     if not write:
         report = render_adoption_report(plan)
@@ -1737,7 +1759,10 @@ def haxaml_adopt(
                 "dry_run": True,
                 "adoption_plan": plan_payload,
             },
-            warnings=["Prefer haxaml_adopt_plan for non-destructive inventory and migration planning."],
+            warnings=[
+                "Prefer haxaml_adopt_plan for non-destructive inventory and migration planning.",
+                *plan_warnings,
+            ],
         )
 
     written = write_adoption_scaffold(plan, force=force)
@@ -1759,7 +1784,10 @@ def haxaml_adopt(
                 "dry_run": False,
                 "adoption_plan": plan_payload,
             },
-            warnings=["Use haxaml_reconcile after edits to detect map-canonical derivation conflicts."],
+            warnings=[
+                "Use haxaml_reconcile after edits to detect map-canonical derivation conflicts.",
+                *plan_warnings,
+            ],
         )
 
     return _ok(
@@ -1770,7 +1798,10 @@ def haxaml_adopt(
             "dry_run": False,
             "adoption_plan": plan_payload,
         },
-        warnings=["Use haxaml_adopt_plan for non-destructive planning before forceful writes."],
+        warnings=[
+            "Use haxaml_adopt_plan for non-destructive planning before forceful writes.",
+            *plan_warnings,
+        ],
     )
 
 
