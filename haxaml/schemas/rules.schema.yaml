@@ -23,6 +23,95 @@ properties:
       version:
         type: string
 
+  lifecycle:
+    type: object
+    description: "Session lifecycle policy for MCP-first execution."
+    additionalProperties: false
+    properties:
+      onboarding_full_reads:
+        type: integer
+        minimum: 1
+        maximum: 20
+      enforce_verify_before_record:
+        type: boolean
+      phases:
+        type: array
+        items:
+          type: string
+          enum: [start, plan, act, verify, record, export]
+
+  context_policy:
+    type: object
+    description: "Policy for compact task-specific context pack generation."
+    additionalProperties: false
+    properties:
+      default_pack:
+        type: string
+        enum: [balanced, minimal, full]
+      max_items_per_section:
+        type: integer
+        minimum: 1
+        maximum: 50
+      max_chars_per_item:
+        type: integer
+        minimum: 40
+        maximum: 2000
+
+  clarification_policy:
+    type: object
+    description: "Policy controlling when agent should ask clarifying questions before acting."
+    additionalProperties: false
+    properties:
+      mode:
+        type: string
+        enum: [risk_gated_soft_block, warn_only, hard_block]
+      high_risk_keywords:
+        type: array
+        items:
+          type: string
+      min_task_chars:
+        type: integer
+        minimum: 1
+        maximum: 500
+
+  verification_policy:
+    type: object
+    description: "Reflective verification policy and required checks."
+    additionalProperties: false
+    properties:
+      require_checks:
+        type: array
+        minItems: 1
+        items:
+          type: string
+          enum:
+            - understood_task
+            - inspected_context
+            - changed_right_files
+            - risky_or_unrelated_touch
+            - followed_rules
+            - updated_journal
+            - unresolved_logged
+            - explained_changes
+      allow_pass_with_risks:
+        type: boolean
+
+  guidance_policy:
+    type: object
+    description: "Prompt and guidance behavior for classifying tasks and asking better questions."
+    additionalProperties: false
+    properties:
+      task_type_hints:
+        type: object
+        additionalProperties:
+          type: array
+          items:
+            type: string
+      safer_path_templates:
+        type: array
+        items:
+          type: string
+
   agent_profile:
     type: object
     description: "Optional deterministic prompt profile for high-quality exports."

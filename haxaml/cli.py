@@ -319,6 +319,109 @@ def benchmark(facts_path, project_dir):
 
 @cli.command()
 @click.option("--dir", "project_dir", default=".", help="Project directory")
+@click.option("--task", required=True, help="Task description")
+def guidance(project_dir, task):
+    """Generate structured task guidance and clarification needs."""
+    result = _mcp_tools().haxaml_guidance(task=task, project_dir=project_dir)
+    click.echo(_result_text(result))
+    if _is_failure(result):
+        sys.exit(1)
+
+
+@cli.command("session-start")
+@click.option("--dir", "project_dir", default=".", help="Project directory")
+@click.option("--task", required=True, help="Task to execute")
+@click.option("--description", default="", help="Task description")
+def session_start(project_dir, task, description):
+    """Start MCP-first lifecycle session."""
+    result = _mcp_tools().haxaml_session_start(task=task, description=description, project_dir=project_dir)
+    click.echo(_result_text(result))
+    if _is_failure(result):
+        sys.exit(1)
+
+
+@cli.command("session-plan")
+@click.option("--dir", "project_dir", default=".", help="Project directory")
+@click.option("--session-id", required=True, help="Session ID from session-start")
+def session_plan(project_dir, session_id):
+    """Generate short execution plan and risk checks for a session."""
+    result = _mcp_tools().haxaml_session_plan(session_id=session_id, project_dir=project_dir)
+    click.echo(_result_text(result))
+    if _is_failure(result):
+        sys.exit(1)
+
+
+@cli.command("context-pack")
+@click.option("--dir", "project_dir", default=".", help="Project directory")
+@click.option("--task", required=True, help="Task to build context for")
+@click.option("--pack", default="balanced", type=click.Choice(["minimal", "balanced", "full"]), help="Pack detail level")
+@click.option("--no-state", is_flag=True, help="Exclude acts state from the pack")
+def context_pack(project_dir, task, pack, no_state):
+    """Build token-efficient task-specific context pack."""
+    result = _mcp_tools().haxaml_context_pack(
+        task=task,
+        project_dir=project_dir,
+        pack=pack,
+        include_state=not no_state,
+    )
+    click.echo(_result_text(result))
+    if _is_failure(result):
+        sys.exit(1)
+
+
+@cli.command("verify")
+@click.option("--dir", "project_dir", default=".", help="Project directory")
+@click.option("--task", required=True, help="Task that was worked on")
+@click.option("--session-id", default="", help="Session ID (optional)")
+@click.option("--summary", default="", help="Change summary for verification evidence")
+@click.option("--inspected-context", "inspected_context", multiple=True, help="Context files you inspected")
+@click.option("--changed-file", "changed_files", multiple=True, help="Changed file path (repeatable)")
+@click.option("--unresolved", "unresolved_questions", multiple=True, help="Unresolved question (repeatable)")
+@click.option("--assumption", "assumptions", multiple=True, help="Assumption made (repeatable)")
+def verify(project_dir, task, session_id, summary, inspected_context, changed_files, unresolved_questions, assumptions):
+    """Run reflective verification before recording completion."""
+    result = _mcp_tools().haxaml_session_verify(
+        task=task,
+        project_dir=project_dir,
+        session_id=session_id,
+        inspected_context=list(inspected_context),
+        changed_files=list(changed_files),
+        unresolved_questions=list(unresolved_questions),
+        assumptions=list(assumptions),
+        summary=summary,
+    )
+    click.echo(_result_text(result))
+    if _is_failure(result):
+        sys.exit(1)
+
+
+@cli.command("session-record")
+@click.option("--dir", "project_dir", default=".", help="Project directory")
+@click.option("--task", required=True, help="Task that was completed")
+@click.option("--result", "run_result", default="success",
+              type=click.Choice(["success", "partial", "failed"]))
+@click.option("--session-id", default="", help="Session ID (optional)")
+@click.option("--changes", default="", help="Summary of changes")
+@click.option("--decisions", default="", help="Key decisions made")
+@click.option("--risks", default="", help="Identified risks")
+def session_record(project_dir, task, run_result, session_id, changes, decisions, risks):
+    """Record session completion (verification gate enforced)."""
+    result = _mcp_tools().haxaml_session_record(
+        task=task,
+        result=run_result,
+        project_dir=project_dir,
+        session_id=session_id,
+        changes=changes,
+        decisions=decisions,
+        risks=risks,
+    )
+    click.echo(_result_text(result))
+    if _is_failure(result):
+        sys.exit(1)
+
+
+@cli.command()
+@click.option("--dir", "project_dir", default=".", help="Project directory")
 @click.option("--task", required=True, help="Task to execute")
 @click.option("--description", default="", help="Task description")
 def run(project_dir, task, description):

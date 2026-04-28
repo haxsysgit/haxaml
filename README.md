@@ -51,6 +51,17 @@ haxaml export
 
 Default export writes `HAXAML.md`.
 
+MCP-first lifecycle flow:
+
+```bash
+haxaml guidance --task "implement auth module"
+haxaml session-start --task "implement auth module"
+haxaml session-plan --session-id <id>
+haxaml context-pack --task "implement auth module"
+haxaml verify --task "implement auth module" --summary "what changed"
+haxaml session-record --task "implement auth module" --result success
+```
+
 Optional agent-specific exports:
 
 ```bash
@@ -101,7 +112,7 @@ haxaml upgrade
 Pin a specific version:
 
 ```bash
-haxaml upgrade --to 0.2.0
+haxaml upgrade --to 0.3.0
 ```
 
 ## Why FRAME even when markdown can be smaller?
@@ -119,4 +130,6 @@ The value is deterministic governance:
 
 ## Docs
 
-- [ADVANCED.md](ADVANCED.md) for full command reference, MCP tool contract, export behavior, and roadmap notes.
+- [MCP.md](MCP.md) for MCP tool contracts, lifecycle, and structured response shapes.
+- [ADVANCED.md](ADVANCED.md) for deeper command reference and export behavior.
+- [LONGTERM.md](LONGTERM.md) for roadmap and major-version direction.

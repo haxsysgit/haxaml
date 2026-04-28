@@ -12,8 +12,14 @@ from haxaml.mcp_server import (
     haxaml_init,
     haxaml_validate,
     haxaml_context,
+    haxaml_context_pack,
     haxaml_health,
     haxaml_doctor,
+    haxaml_guidance,
+    haxaml_session_start,
+    haxaml_session_plan,
+    haxaml_session_verify,
+    haxaml_session_record,
     haxaml_run,
     haxaml_done,
     haxaml_export,
@@ -213,6 +219,20 @@ class TestContext:
         assert "Project Facts" in text
         assert "Current Acts" not in text
 
+    def test_context_pack_contains_expected_sections(self, governed_project):
+        result = haxaml_context_pack(
+            task="implement auth module",
+            project_dir=str(governed_project),
+            pack="balanced",
+            include_state=True,
+        )
+        assert result["ok"] is True
+        data = result["data"]
+        assert data["pack"] == "balanced"
+        assert data["tokens"] > 0
+        assert "essential_facts" in data["context_pack"]
+        assert "relevant_rules" in data["context_pack"]
+
 
 # ─── Health ──────────────────────────────────────────────────────────────────
 
@@ -264,8 +284,7 @@ class TestRunDone:
         )
         text = _msg(result)
         assert result["ok"] is True
-        assert "✓ Run" in text
-        assert "recorded (success)" in text
+        assert "Session record complete" in text
 
     def test_run_fails_without_facts(self, tmp_path):
         result = haxaml_run("task", project_dir=str(tmp_path))
@@ -274,6 +293,70 @@ class TestRunDone:
     def test_done_fails_without_facts(self, tmp_path):
         result = haxaml_done("task", project_dir=str(tmp_path))
         assert result["ok"] is False
+
+
+class TestSessionLifecycle:
+    def test_guidance_classifies_and_scores_risk(self, governed_project):
+        result = haxaml_guidance(task="migrate auth database", project_dir=str(governed_project))
+        assert result["ok"] is True
+        assert result["data"]["task_type"] in ("implementation", "debug", "design", "strategy", "outcome")
+        assert result["data"]["risk_level"] in ("low", "medium", "high")
+
+    def test_session_flow_start_plan_verify_record(self, governed_project):
+        started = haxaml_session_start(
+            task="implement auth module",
+            description="add login endpoint",
+            project_dir=str(governed_project),
+        )
+        assert started["ok"] is True
+        session_id = started["data"]["session_id"]
+
+        planned = haxaml_session_plan(session_id=session_id, project_dir=str(governed_project))
+        assert planned["ok"] is True
+        assert len(planned["data"]["plan"]) > 0
+
+        verify = haxaml_session_verify(
+            task="implement auth module",
+            project_dir=str(governed_project),
+            session_id=session_id,
+            inspected_context=[".haxaml/facts.yaml", ".haxaml/rules.yaml"],
+            changed_files=["src/auth.py"],
+            summary="Implemented login flow and validation checks.",
+        )
+        assert verify["ok"] is True
+        assert verify["data"]["verification_id"].startswith("verify-")
+        assert verify["data"]["verdict"] in ("pass", "pass_with_risks")
+
+        record = haxaml_session_record(
+            task="implement auth module",
+            result="success",
+            session_id=session_id,
+            project_dir=str(governed_project),
+            changes="Added auth endpoints",
+            decisions="Used existing token signer",
+            risks="Needs extra load test",
+        )
+        assert record["ok"] is True
+        assert record["data"]["run_id"].startswith("run-")
+
+    def test_session_record_requires_verification_for_success(self, governed_project):
+        started = haxaml_session_start(
+            task="add billing flow",
+            description="payment integration",
+            project_dir=str(governed_project),
+        )
+        assert started["ok"] is True
+        session_id = started["data"]["session_id"]
+
+        record = haxaml_session_record(
+            task="add billing flow",
+            result="success",
+            session_id=session_id,
+            project_dir=str(governed_project),
+            changes="Added billing handlers",
+        )
+        assert record["ok"] is False
+        assert record["error"]["code"] == "verification_required"
 
 
 # ─── Export ──────────────────────────────────────────────────────────────────
@@ -551,7 +634,7 @@ class TestResources:
 class TestServerRegistration:
     def test_tool_count(self):
         tools = mcp_app._tool_manager._tools
-        assert len(tools) == 16
+        assert len(tools) >= 22
 
     def test_expected_tools_registered(self):
         tools = mcp_app._tool_manager._tools
@@ -561,6 +644,9 @@ class TestServerRegistration:
             "haxaml_upgrade", "haxaml_mcp_bootstrap",
             "haxaml_adopt", "haxaml_needs", "haxaml_impact", "haxaml_state_show",
             "haxaml_state_compact", "haxaml_benchmark",
+            "haxaml_context_pack", "haxaml_guidance",
+            "haxaml_session_start", "haxaml_session_plan",
+            "haxaml_session_verify", "haxaml_session_record",
         ]
         for name in expected:
             assert name in tools, f"Tool {name} not registered"

@@ -1,53 +1,446 @@
-"""Context builder — produces minimal context for AI agent consumption."""
+"""Context builder — minimal and task-scoped context for AI agent consumption."""
+
+from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 from haxaml.paths import resolve_frame_file
 
 
-def build_context(project_dir: str, include_state: bool = True) -> str:
-    """Build minimal context string from FRAME files.
+def load_frame_data(project_dir: str) -> dict[str, Any]:
+    """Load available FRAME files into a dict."""
+    project = Path(project_dir)
 
-    This is what gets loaded at the start of an agent task.
-    Loads: facts + rules + acts (+ expect if present).
-    """
+    def _load(new_name: str, old_name: str | None = None) -> dict[str, Any] | None:
+        path = resolve_frame_file(project, new_name, old_name)
+        if not path:
+            return None
+        with open(path, encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+
+    return {
+        "facts": _load("facts.yaml", "brain.yaml"),
+        "rules": _load("rules.yaml", "mind.yaml"),
+        "acts": _load("acts.yaml", "state.yaml"),
+        "expect": _load("expect.yaml"),
+        "map": _load("map.yaml"),
+    }
+
+
+def build_context(project_dir: str, include_state: bool = True) -> str:
+    """Build legacy compact context string from FRAME files."""
     project = Path(project_dir)
     parts = []
 
-    # F — Facts
     facts_path = resolve_frame_file(project, "facts.yaml", "brain.yaml")
     if facts_path:
-        with open(facts_path) as f:
+        with open(facts_path, encoding="utf-8") as f:
             facts = yaml.safe_load(f)
         parts.append(_format_facts_context(facts))
     else:
         parts.append("⚠ facts.yaml not found — project facts are missing.")
 
-    # R — Rules
     rules_path = resolve_frame_file(project, "rules.yaml", "mind.yaml")
     if rules_path:
-        with open(rules_path) as f:
+        with open(rules_path, encoding="utf-8") as f:
             rules = yaml.safe_load(f)
         parts.append(_format_rules_context(rules))
 
-    # A — Acts
     if include_state:
         acts_path = resolve_frame_file(project, "acts.yaml", "state.yaml")
         if acts_path:
-            with open(acts_path) as f:
+            with open(acts_path, encoding="utf-8") as f:
                 acts = yaml.safe_load(f)
             parts.append(_format_acts_context(acts))
 
-    # E — Expect
     expect_path = resolve_frame_file(project, "expect.yaml")
     if expect_path:
-        with open(expect_path) as f:
+        with open(expect_path, encoding="utf-8") as f:
             expect = yaml.safe_load(f)
         parts.append(_format_expect_context(expect))
 
     return "\n\n---\n\n".join(parts)
+
+
+def build_context_pack(
+    project_dir: str,
+    task: str,
+    pack: str = "balanced",
+    include_state: bool = True,
+) -> dict[str, Any]:
+    """Build a deterministic task-specific context pack.
+
+    Packs include:
+    - essential facts
+    - relevant rules
+    - recent decisions
+    - affected modules
+    - current expectations
+    - unresolved questions/dependencies
+    - task risks
+    """
+    frame = load_frame_data(project_dir)
+    facts = frame.get("facts") or {}
+    rules = frame.get("rules") or {}
+    acts = frame.get("acts") or {}
+    expect = frame.get("expect") or {}
+    map_data = frame.get("map") or {}
+
+    policy = _context_policy(rules)
+    limits = _pack_limits(pack, policy)
+
+    essential_facts = {
+        "project": (facts.get("identity") or {}).get("name", "unknown"),
+        "purpose": (facts.get("goal") or {}).get("purpose", ""),
+        "scope": (facts.get("goal") or {}).get("scope", ""),
+        "stack": facts.get("stack", {}),
+        "architecture": {
+            "pattern": (facts.get("architecture") or {}).get("pattern", ""),
+            "boundaries": (facts.get("architecture") or {}).get("boundaries", []),
+        },
+        "database": (facts.get("database") or {}).get("type", ""),
+    }
+
+    relevant_rules = {
+        "read_first": ((rules.get("before_task") or {}).get("read_first", []) or []),
+        "checks": ((rules.get("before_task") or {}).get("check", []) or []),
+        "boundaries": ((rules.get("boundaries") or {}).get("rules", []) or []),
+        "forbidden": (rules.get("forbidden", []) or []),
+        "after_verify": ((rules.get("after_task") or {}).get("verify", []) or []),
+    }
+
+    recent_decisions = _normalize_decisions(acts.get("decisions", []))
+    affected_modules = _detect_affected_modules(task, facts, rules, map_data)
+
+    expectations = {
+        "goal": ((expect.get("planning") or {}).get("goal", "")),
+        "active_phase": _active_phase(expect),
+        "active_runs": _active_runs(expect.get("runbook", [])),
+    }
+
+    unresolved = {
+        "facts": _normalize_unresolved_facts(facts.get("unresolved", [])),
+        "acts": _normalize_unresolved_acts(acts.get("unresolved_dependencies", [])),
+        "expect": _normalize_open_questions(expect.get("open_questions", [])),
+    }
+
+    task_risks = _task_risks(task, rules, affected_modules)
+
+    # Deterministic compaction
+    notes: list[str] = []
+    recent_decisions, note = _limit_list(recent_decisions, limits["max_items"], limits["max_chars"])
+    if note:
+        notes.append(f"recent_decisions: {note}")
+
+    relevant_rules["checks"], note = _limit_list(relevant_rules["checks"], limits["max_items"], limits["max_chars"])
+    if note:
+        notes.append(f"rules.checks: {note}")
+
+    relevant_rules["boundaries"], note = _limit_list(relevant_rules["boundaries"], limits["max_items"], limits["max_chars"])
+    if note:
+        notes.append(f"rules.boundaries: {note}")
+
+    relevant_rules["forbidden"], note = _limit_list(relevant_rules["forbidden"], limits["max_items"], limits["max_chars"])
+    if note:
+        notes.append(f"rules.forbidden: {note}")
+
+    affected_modules, note = _limit_list(affected_modules, limits["max_items"], limits["max_chars"])
+    if note:
+        notes.append(f"affected_modules: {note}")
+
+    unresolved["facts"], note = _limit_list(unresolved["facts"], limits["max_items"], limits["max_chars"])
+    if note:
+        notes.append(f"unresolved.facts: {note}")
+
+    unresolved["acts"], note = _limit_list(unresolved["acts"], limits["max_items"], limits["max_chars"])
+    if note:
+        notes.append(f"unresolved.acts: {note}")
+
+    unresolved["expect"], note = _limit_list(unresolved["expect"], limits["max_items"], limits["max_chars"])
+    if note:
+        notes.append(f"unresolved.expect: {note}")
+
+    pack_data: dict[str, Any] = {
+        "task": task,
+        "pack": pack,
+        "essential_facts": essential_facts,
+        "relevant_rules": relevant_rules,
+        "recent_decisions": recent_decisions if include_state else [],
+        "affected_modules": affected_modules,
+        "expectations": expectations,
+        "unresolved": unresolved,
+        "task_risks": task_risks,
+    }
+
+    pack_text = format_context_pack(pack_data)
+    pack_data["_meta"] = {
+        "token_count": count_tokens(pack_text),
+        "compaction_notes": notes,
+        "limits": limits,
+        "state_included": include_state,
+    }
+
+    return pack_data
+
+
+def format_context_pack(pack_data: dict[str, Any]) -> str:
+    """Render a context pack to compact markdown text."""
+    lines: list[str] = ["## Context Pack"]
+    lines.append(f"Task: {pack_data.get('task', '')}")
+    lines.append(f"Pack: {pack_data.get('pack', 'balanced')}")
+
+    facts = pack_data.get("essential_facts", {})
+    lines.append("\n### Essential Facts")
+    lines.append(f"Project: {facts.get('project', 'unknown')}")
+    lines.append(f"Purpose: {facts.get('purpose', '')}")
+    if facts.get("scope"):
+        lines.append(f"Scope: {facts.get('scope')}")
+
+    stack = facts.get("stack", {})
+    if isinstance(stack, dict) and stack:
+        stack_text = ", ".join(f"{k}: {v}" for k, v in stack.items() if v)
+        if stack_text:
+            lines.append(f"Stack: {stack_text}")
+
+    lines.append("\n### Relevant Rules")
+    rules = pack_data.get("relevant_rules", {})
+    for label, values in (
+        ("Read first", rules.get("read_first", [])),
+        ("Checks", rules.get("checks", [])),
+        ("Boundary", rules.get("boundaries", [])),
+        ("Forbidden", rules.get("forbidden", [])),
+        ("After verify", rules.get("after_verify", [])),
+    ):
+        if values:
+            lines.append(f"{label}:")
+            for item in values:
+                lines.append(f"- {item}")
+
+    decisions = pack_data.get("recent_decisions", [])
+    if decisions:
+        lines.append("\n### Recent Decisions")
+        for item in decisions:
+            lines.append(f"- {item}")
+
+    modules = pack_data.get("affected_modules", [])
+    if modules:
+        lines.append("\n### Affected Modules")
+        for item in modules:
+            lines.append(f"- {item}")
+
+    lines.append("\n### Expectations")
+    expect = pack_data.get("expectations", {})
+    if expect.get("goal"):
+        lines.append(f"Goal: {expect['goal']}")
+    if expect.get("active_phase"):
+        lines.append(f"Active phase: {expect['active_phase']}")
+    for run in expect.get("active_runs", []):
+        lines.append(f"- Run {run.get('run', '?')} [{run.get('status', '?')}]: {run.get('goal', '')}")
+
+    unresolved = pack_data.get("unresolved", {})
+    if any(unresolved.values()):
+        lines.append("\n### Unresolved")
+        for label, items in (("Facts", unresolved.get("facts", [])), ("Acts", unresolved.get("acts", [])), ("Expect", unresolved.get("expect", []))):
+            if items:
+                lines.append(f"{label}:")
+                for item in items:
+                    lines.append(f"- {item}")
+
+    risks = pack_data.get("task_risks", [])
+    if risks:
+        lines.append("\n### Task Risks")
+        for risk in risks:
+            lines.append(f"- {risk}")
+
+    meta = pack_data.get("_meta", {})
+    notes = meta.get("compaction_notes", [])
+    if notes:
+        lines.append("\n### Compaction")
+        for note in notes:
+            lines.append(f"- {note}")
+
+    return "\n".join(lines)
+
+
+def _context_policy(rules: dict[str, Any]) -> dict[str, Any]:
+    policy = (rules.get("context_policy") or {}) if isinstance(rules, dict) else {}
+    if not isinstance(policy, dict):
+        return {}
+    return policy
+
+
+def _pack_limits(pack: str, policy: dict[str, Any]) -> dict[str, int]:
+    default_pack = str(policy.get("default_pack", "balanced"))
+    resolved = pack if pack in {"minimal", "balanced", "full"} else default_pack
+    max_items = policy.get("max_items_per_section", 5)
+    max_chars = policy.get("max_chars_per_item", 240)
+
+    if not isinstance(max_items, int) or max_items < 1:
+        max_items = 5
+    if not isinstance(max_chars, int) or max_chars < 40:
+        max_chars = 240
+
+    if resolved == "minimal":
+        return {"max_items": min(max_items, 3), "max_chars": min(max_chars, 180)}
+    if resolved == "full":
+        return {"max_items": max(max_items, 8), "max_chars": max(max_chars, 420)}
+    return {"max_items": max_items, "max_chars": max_chars}
+
+
+def _normalize_decisions(items: list[Any]) -> list[str]:
+    out: list[str] = []
+    for item in items[-8:]:
+        if isinstance(item, dict):
+            decision = str(item.get("decision", "")).strip()
+            reasoning = str(item.get("reasoning", "")).strip()
+            if decision and reasoning:
+                out.append(f"{decision} — {reasoning}")
+            elif decision:
+                out.append(decision)
+        elif isinstance(item, str) and item.strip():
+            out.append(item.strip())
+    return out
+
+
+def _detect_affected_modules(task: str, facts: dict[str, Any], rules: dict[str, Any], map_data: dict[str, Any]) -> list[str]:
+    task_l = task.lower()
+    candidates: list[str] = []
+
+    boundaries = (facts.get("architecture") or {}).get("boundaries", [])
+    if isinstance(boundaries, list):
+        for item in boundaries:
+            if isinstance(item, str) and item.strip():
+                candidates.append(item.strip())
+
+    rule_modules = (rules.get("boundaries") or {}).get("modules", {})
+    if isinstance(rule_modules, dict):
+        candidates.extend(str(k).strip() for k in rule_modules.keys() if str(k).strip())
+
+    map_modules = map_data.get("modules", [])
+    if isinstance(map_modules, list):
+        for mod in map_modules:
+            if isinstance(mod, dict) and str(mod.get("name", "")).strip():
+                candidates.append(str(mod.get("name")).strip())
+
+    seen = set()
+    unique = []
+    for name in candidates:
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(name)
+
+    matched = [name for name in unique if name.lower() in task_l]
+    return matched if matched else unique[:5]
+
+
+def _active_phase(expect: dict[str, Any]) -> str:
+    phases = expect.get("phases", []) if isinstance(expect, dict) else []
+    if not isinstance(phases, list):
+        return ""
+    for phase in phases:
+        if isinstance(phase, dict) and phase.get("status") == "active":
+            return str(phase.get("name", ""))
+    return ""
+
+
+def _active_runs(runbook: list[Any]) -> list[dict[str, Any]]:
+    if not isinstance(runbook, list):
+        return []
+    out = []
+    for run in runbook:
+        if not isinstance(run, dict):
+            continue
+        if run.get("status") in ("active", "planned", "blocked"):
+            out.append({
+                "run": run.get("run"),
+                "status": run.get("status"),
+                "goal": run.get("goal", ""),
+            })
+    return out[:4]
+
+
+def _normalize_unresolved_facts(items: list[Any]) -> list[str]:
+    out = []
+    for item in items:
+        if isinstance(item, dict):
+            label = str(item.get("item", "")).strip()
+            reason = str(item.get("reason", "")).strip()
+            if label:
+                out.append(f"{label}: {reason}".strip(": "))
+    return out
+
+
+def _normalize_unresolved_acts(items: list[Any]) -> list[str]:
+    out = []
+    for item in items:
+        if isinstance(item, dict):
+            label = str(item.get("item", "")).strip()
+            owner = str(item.get("owner", "")).strip()
+            if label:
+                suffix = f" (owner: {owner})" if owner else ""
+                out.append(f"{label}{suffix}")
+    return out
+
+
+def _normalize_open_questions(items: list[Any]) -> list[str]:
+    out = []
+    for item in items:
+        if isinstance(item, dict):
+            question = str(item.get("question", "")).strip()
+            if question:
+                out.append(question)
+    return out
+
+
+def _task_risks(task: str, rules: dict[str, Any], affected_modules: list[str]) -> list[str]:
+    risks = []
+    task_l = task.lower()
+
+    high_risk_words = [
+        "delete", "drop", "migrate", "auth", "security", "payment", "billing", "database", "schema", "prod"
+    ]
+    if any(word in task_l for word in high_risk_words):
+        risks.append("Task includes high-impact domain keywords.")
+
+    if len(affected_modules) >= 3:
+        risks.append("Task appears to touch multiple modules; check cross-impact.")
+
+    forbidden = rules.get("forbidden", []) if isinstance(rules, dict) else []
+    if isinstance(forbidden, list) and forbidden:
+        risks.append("Review forbidden rules before acting.")
+
+    return risks
+
+
+def _limit_list(items: list[Any], max_items: int, max_chars: int) -> tuple[list[Any], str]:
+    trimmed = []
+    truncated_items = 0
+
+    for idx, item in enumerate(items):
+        if idx >= max_items:
+            break
+        if isinstance(item, str):
+            if len(item) > max_chars:
+                trimmed.append(item[: max_chars - 1].rstrip() + "…")
+                truncated_items += 1
+            else:
+                trimmed.append(item)
+        else:
+            trimmed.append(item)
+
+    omitted = max(0, len(items) - len(trimmed))
+    notes = []
+    if omitted:
+        notes.append(f"omitted {omitted} item(s)")
+    if truncated_items:
+        notes.append(f"truncated {truncated_items} item(s)")
+
+    return trimmed, "; ".join(notes)
 
 
 def _format_facts_context(facts: dict) -> str:
@@ -216,7 +609,8 @@ def count_tokens(text: str, model: str = "cl100k_base") -> int:
     """Count tokens in a string using tiktoken."""
     try:
         import tiktoken
+
         enc = tiktoken.get_encoding(model)
         return len(enc.encode(text))
     except ImportError:
-        return len(text.split())  # rough fallback
+        return len(text.split())

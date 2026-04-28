@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -35,19 +34,18 @@ jobs:
       - name: Build Haxaml package
         run: uv build
 
-      - name: Check Haxaml package metadata
-        run: uv run twine check dist/*
+      - name: Build Haxaml MCP launcher package
+        run: uv build --project packages/haxaml-mcp --out-dir packages/haxaml-mcp/dist
+
+      - name: Check package metadata
+        run: |
+          uv run twine check dist/*
+          uv run twine check packages/haxaml-mcp/dist/*
 
       - name: Publish Haxaml to PyPI
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: uv publish --token "$PYPI_TOKEN"
-
-      - name: Build Haxaml MCP launcher package
-        run: uv build --project packages/haxaml-mcp --out-dir packages/haxaml-mcp/dist
-
-      - name: Check Haxaml MCP launcher metadata
-        run: uv run twine check packages/haxaml-mcp/dist/*
+        run: uv publish --token "$PYPI_TOKEN" dist/*
 
       - name: Publish Haxaml MCP launcher to PyPI
         env:

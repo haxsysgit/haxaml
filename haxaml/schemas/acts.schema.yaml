@@ -126,3 +126,109 @@ properties:
         type: integer
       summary:
         type: string
+
+  sessions:
+    type: array
+    description: "Agent session lifecycle entries."
+    items:
+      type: object
+      required: [id, task, status, started]
+      properties:
+        id:
+          type: string
+        task:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [started, planned, acting, verified, recorded, failed]
+        phase:
+          type: string
+          enum: [start, plan, act, verify, record, export]
+        risk_level:
+          type: string
+          enum: [low, medium, high]
+        guidance_status:
+          type: string
+          enum: [proceed, action_required]
+        started:
+          type: string
+          format: date-time
+        updated:
+          type: string
+          format: date-time
+        ended:
+          type: string
+          format: date-time
+        plan:
+          type: array
+          items:
+            type: string
+
+  verifications:
+    type: array
+    description: "Reflective verification reports linked to sessions/tasks."
+    items:
+      type: object
+      required: [id, verdict, timestamp]
+      properties:
+        id:
+          type: string
+        session_id:
+          type: string
+        task:
+          type: string
+        verdict:
+          type: string
+          enum: [pass, pass_with_risks, fail, needs_clarification]
+        summary:
+          type: string
+        unresolved_questions:
+          type: array
+          items:
+            type: string
+        assumptions:
+          type: array
+          items:
+            type: string
+        follow_ups:
+          type: array
+          items:
+            type: string
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, passed]
+            properties:
+              name:
+                type: string
+              passed:
+                type: boolean
+              details:
+                type: string
+        evidence_refs:
+          type: array
+          items:
+            type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  context_compaction:
+    type: object
+    description: "Context pack usage and onboarding-read counters."
+    properties:
+      sessions_started:
+        type: integer
+        minimum: 0
+      full_reads_completed:
+        type: integer
+        minimum: 0
+      default_pack:
+        type: string
+        enum: [balanced, minimal, full]
+      last_pack_tokens:
+        type: integer
+        minimum: 0

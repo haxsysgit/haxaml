@@ -101,6 +101,48 @@ escalation:
     - ""
   ask_first:
     - ""
+
+lifecycle:
+  onboarding_full_reads: 5
+  enforce_verify_before_record: true
+  phases:
+    - start
+    - plan
+    - act
+    - verify
+    - record
+    - export
+
+context_policy:
+  default_pack: balanced
+  max_items_per_section: 5
+  max_chars_per_item: 240
+
+clarification_policy:
+  mode: risk_gated_soft_block
+  min_task_chars: 16
+  high_risk_keywords:
+    - migrate
+    - delete
+    - auth
+    - security
+    - payment
+
+verification_policy:
+  require_checks:
+    - understood_task
+    - inspected_context
+    - changed_right_files
+    - risky_or_unrelated_touch
+    - followed_rules
+    - updated_journal
+    - unresolved_logged
+    - explained_changes
+  allow_pass_with_risks: true
+
+guidance_policy:
+  task_type_hints: {}
+  safer_path_templates: []
 """
 
 ACTS_TEMPLATE = """\
@@ -117,11 +159,19 @@ blocked_tasks: []
 decisions: []
 unresolved_dependencies: []
 runs: []
+sessions: []
+verifications: []
 
 compaction:
   last_compacted: null
   total_runs_compacted: 0
   summary: ""
+
+context_compaction:
+  sessions_started: 0
+  full_reads_completed: 0
+  default_pack: balanced
+  last_pack_tokens: 0
 """
 
 EXPECT_TEMPLATE = """\

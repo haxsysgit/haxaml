@@ -216,3 +216,102 @@ class TestRulesValidation:
         path = _write_yaml(str(tmp_path), "rules.yaml", rules)
         errors = validate_rules(path)
         assert errors == [], f"Expected no errors, got: {errors}"
+
+    def test_rules_lifecycle_and_policy_extensions_validate(self, tmp_path):
+        rules = {
+            "before_task": {"read_first": [".haxaml/facts.yaml"]},
+            "boundaries": {"rules": ["Stay within scope"]},
+            "after_task": {"report": ["what changed"], "update": [".haxaml/acts.yaml"]},
+            "forbidden": ["Do not guess missing project facts"],
+            "lifecycle": {
+                "onboarding_full_reads": 5,
+                "enforce_verify_before_record": True,
+                "phases": ["start", "plan", "act", "verify", "record", "export"],
+            },
+            "context_policy": {
+                "default_pack": "balanced",
+                "max_items_per_section": 6,
+                "max_chars_per_item": 280,
+            },
+            "clarification_policy": {
+                "mode": "risk_gated_soft_block",
+                "min_task_chars": 16,
+                "high_risk_keywords": ["migrate", "delete", "auth"],
+            },
+            "verification_policy": {
+                "require_checks": [
+                    "understood_task",
+                    "inspected_context",
+                    "changed_right_files",
+                    "risky_or_unrelated_touch",
+                    "followed_rules",
+                    "updated_journal",
+                    "unresolved_logged",
+                    "explained_changes",
+                ],
+                "allow_pass_with_risks": True,
+            },
+            "guidance_policy": {
+                "task_type_hints": {"debug": ["bug", "fix"]},
+                "safer_path_templates": ["Ask for rollout constraints first."],
+            },
+        }
+        path = _write_yaml(str(tmp_path), "rules.yaml", rules)
+        errors = validate_rules(path)
+        assert errors == [], f"Expected no errors, got: {errors}"
+
+    def test_rules_invalid_policy_values_are_reported(self, tmp_path):
+        rules = {
+            "before_task": {"read_first": [".haxaml/facts.yaml"]},
+            "boundaries": {"rules": ["Stay within scope"]},
+            "after_task": {"report": ["what changed"], "update": [".haxaml/acts.yaml"]},
+            "forbidden": ["Do not guess missing project facts"],
+            "clarification_policy": {"mode": "bad_mode"},
+            "context_policy": {"default_pack": "super_full"},
+        }
+        path = _write_yaml(str(tmp_path), "rules.yaml", rules)
+        errors = validate_rules(path)
+        assert errors
+        assert any("[clarification_policy.mode]" in err for err in errors)
+        assert any("[context_policy.default_pack]" in err for err in errors)
+
+
+class TestActsLifecycleValidation:
+
+    def test_acts_session_and_verification_extensions_validate(self, tmp_path):
+        acts = {
+            "current_phase": "Phase 1",
+            "active_task": {"name": "session task"},
+            "sessions": [
+                {
+                    "id": "session-abc",
+                    "task": "implement auth",
+                    "status": "started",
+                    "phase": "start",
+                    "risk_level": "high",
+                    "guidance_status": "action_required",
+                    "started": "2026-04-28T12:00:00Z",
+                    "updated": "2026-04-28T12:01:00Z",
+                }
+            ],
+            "verifications": [
+                {
+                    "id": "verify-abc",
+                    "session_id": "session-abc",
+                    "task": "implement auth",
+                    "verdict": "pass_with_risks",
+                    "checks": [{"name": "understood_task", "passed": True}],
+                    "evidence_refs": [".haxaml/facts.yaml", "src/auth.py"],
+                    "timestamp": "2026-04-28T12:02:00Z",
+                }
+            ],
+            "context_compaction": {
+                "sessions_started": 3,
+                "full_reads_completed": 2,
+                "default_pack": "balanced",
+                "last_pack_tokens": 640,
+            },
+        }
+        path = _write_yaml(str(tmp_path), "acts.yaml", acts)
+        errors = validate_acts(path)
+        assert errors == [], f"Expected no errors, got: {errors}"

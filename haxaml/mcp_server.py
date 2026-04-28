@@ -14,6 +14,8 @@ import json
 import difflib
 import shutil
 import subprocess
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -24,7 +26,13 @@ from haxaml.validator import (
     validate_facts, validate_rules, validate_acts, validate_expect,
     validate_map, detect_missing_facts_fields,
 )
-from haxaml.context import build_context, count_tokens
+from haxaml.context import (
+    build_context,
+    build_context_pack,
+    count_tokens,
+    format_context_pack,
+    load_frame_data,
+)
 from haxaml.map_policy import (
     evaluate_map_complexity,
     map_complexity_issues,
@@ -189,6 +197,220 @@ def _write_bootstrap_config(
     return "written", f"Wrote MCP config at {path}"
 
 
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _rules_policy(rules: dict[str, Any], key: str, default: dict[str, Any]) -> dict[str, Any]:
+    value = rules.get(key, {})
+    if isinstance(value, dict):
+        merged = dict(default)
+        merged.update(value)
+        return merged
+    return dict(default)
+
+
+def _classify_task_type(task: str, rules: dict[str, Any]) -> str:
+    task_l = task.lower()
+    guidance_policy = _rules_policy(rules, "guidance_policy", {})
+    hints = guidance_policy.get("task_type_hints", {})
+    if isinstance(hints, dict):
+        for task_type, words in hints.items():
+            if not isinstance(words, list):
+                continue
+            for word in words:
+                if isinstance(word, str) and word.lower() in task_l:
+                    return task_type
+
+    if any(k in task_l for k in ("debug", "bug", "fix", "error", "trace")):
+        return "debug"
+    if any(k in task_l for k in ("design", "architecture", "approach", "tradeoff")):
+        return "design"
+    if any(k in task_l for k in ("strategy", "roadmap", "position", "plan")):
+        return "strategy"
+    if any(k in task_l for k in ("build", "implement", "add", "create", "refactor", "update")):
+        return "implementation"
+    return "outcome"
+
+
+def _guidance_eval(task: str, frame: dict[str, Any]) -> dict[str, Any]:
+    facts = frame.get("facts") or {}
+    rules = frame.get("rules") or {}
+    acts = frame.get("acts") or {}
+    expect = frame.get("expect") or {}
+
+    clarification = _rules_policy(
+        rules,
+        "clarification_policy",
+        {
+            "mode": "risk_gated_soft_block",
+            "min_task_chars": 16,
+            "high_risk_keywords": [
+                "delete",
+                "drop",
+                "migrate",
+                "auth",
+                "security",
+                "payment",
+                "billing",
+                "database",
+                "schema",
+                "production",
+                "infra",
+            ],
+        },
+    )
+    mode = str(clarification.get("mode", "risk_gated_soft_block"))
+    min_task_chars = clarification.get("min_task_chars", 16)
+    if not isinstance(min_task_chars, int) or min_task_chars < 1:
+        min_task_chars = 16
+    high_risk_words = clarification.get("high_risk_keywords", [])
+    if not isinstance(high_risk_words, list):
+        high_risk_words = []
+
+    task_l = task.lower().strip()
+    missing_context: list[str] = []
+    assumptions: list[str] = []
+    required_questions: list[str] = []
+    suggested_questions: list[str] = []
+
+    unresolved_facts = [
+        item for item in (facts.get("unresolved", []) or [])
+        if isinstance(item, dict) and item.get("blocking")
+    ]
+    unresolved_acts = [
+        item for item in (acts.get("unresolved_dependencies", []) or [])
+        if isinstance(item, dict) and item.get("blocking")
+    ]
+    unresolved_expect = [
+        item for item in (expect.get("open_questions", []) or [])
+        if isinstance(item, dict) and item.get("blocking")
+    ]
+    if unresolved_facts:
+        missing_context.append("Blocking unresolved items exist in facts.yaml")
+    if unresolved_acts:
+        missing_context.append("Blocking unresolved dependencies exist in acts.yaml")
+    if unresolved_expect:
+        missing_context.append("Blocking open questions exist in expect.yaml")
+
+    risky_keyword_hits = sorted(
+        {w for w in high_risk_words if isinstance(w, str) and w.lower() in task_l}
+    )
+    very_short = len(task.strip()) < min_task_chars
+    if very_short:
+        assumptions.append("Task statement is short; intent may be underspecified.")
+    if risky_keyword_hits:
+        assumptions.append(f"Task includes high-impact domain keywords: {', '.join(risky_keyword_hits)}.")
+
+    task_type = _classify_task_type(task, rules)
+    if very_short:
+        required_questions.append("What exact outcome should be delivered for this task?")
+        suggested_questions.append("Which files/modules are expected to be touched?")
+    if risky_keyword_hits:
+        required_questions.append("Should this proceed now, or wait for explicit approval due to risk?")
+        suggested_questions.append("What rollback path or safety checks are required?")
+    if missing_context:
+        required_questions.append("Which unresolved/blocking items should be resolved first?")
+
+    if risky_keyword_hits or missing_context:
+        risk_level = "high"
+    elif very_short:
+        risk_level = "medium"
+    else:
+        risk_level = "low"
+
+    status = "proceed"
+    if mode == "hard_block" and (required_questions or missing_context):
+        status = "action_required"
+    elif mode == "risk_gated_soft_block" and risk_level == "high" and required_questions:
+        status = "action_required"
+
+    safer_path = []
+    if status == "action_required":
+        safer_path.append("Resolve required clarification questions before code changes.")
+        safer_path.append("Use `haxaml_context_pack` to gather only task-relevant context.")
+    else:
+        safer_path.append("Proceed with a minimal plan and verify against FRAME before record.")
+
+    return {
+        "status": status,
+        "task_type": task_type,
+        "risk_level": risk_level,
+        "missing_context": missing_context,
+        "assumptions": assumptions,
+        "required_questions": required_questions,
+        "suggested_questions": suggested_questions,
+        "safer_path": safer_path,
+        "recommended_packs": ["balanced", "minimal"] if risk_level == "low" else ["balanced", "full"],
+    }
+
+
+def _session_read_policy(frame: dict[str, Any]) -> dict[str, Any]:
+    rules = frame.get("rules") or {}
+    acts = frame.get("acts") or {}
+    lifecycle = _rules_policy(
+        rules,
+        "lifecycle",
+        {
+            "onboarding_full_reads": 5,
+            "enforce_verify_before_record": True,
+        },
+    )
+    onboarding = lifecycle.get("onboarding_full_reads", 5)
+    if not isinstance(onboarding, int) or onboarding < 1:
+        onboarding = 5
+
+    context_compaction = acts.get("context_compaction", {}) if isinstance(acts, dict) else {}
+    sessions_started = context_compaction.get("sessions_started", 0)
+    if not isinstance(sessions_started, int) or sessions_started < 0:
+        sessions_started = 0
+
+    canonical = [".haxaml/facts.yaml", ".haxaml/rules.yaml", ".haxaml/acts.yaml", ".haxaml/expect.yaml"]
+    if frame.get("map"):
+        canonical.append(".haxaml/map.yaml")
+
+    needs_full_reads = sessions_started < onboarding
+    required_reads = canonical if needs_full_reads else [".haxaml/facts.yaml", ".haxaml/rules.yaml"]
+    return {
+        "needs_full_reads": needs_full_reads,
+        "required_reads": required_reads,
+        "sessions_started": sessions_started,
+        "onboarding_full_reads": onboarding,
+        "enforce_verify_before_record": bool(lifecycle.get("enforce_verify_before_record", True)),
+    }
+
+
+def _get_state_manager(project_dir: str) -> tuple[Optional[StateManager], Optional[Path]]:
+    p = Path(project_dir).resolve()
+    acts_path = resolve_frame_file(p, "acts.yaml", "state.yaml")
+    if not acts_path:
+        return None, None
+    try:
+        return StateManager(str(acts_path)), acts_path
+    except StateError:
+        return None, acts_path
+
+
+def _persist_state(sm: Optional[StateManager], state: dict[str, Any]) -> Optional[str]:
+    if not sm:
+        return "acts.yaml not available"
+    try:
+        sm.write(state)
+    except StateError as exc:
+        return str(exc)
+    return None
+
+
+def _find_session(state: dict[str, Any], session_id: str) -> Optional[dict[str, Any]]:
+    sessions = state.get("sessions", [])
+    if not isinstance(sessions, list):
+        return None
+    for session in sessions:
+        if isinstance(session, dict) and session.get("id") == session_id:
+            return session
+    return None
+
+
 # ─── Tools ───────────────────────────────────────────────────────────────────
 
 
@@ -334,8 +556,20 @@ def haxaml_context(project_dir: str = ".", include_state: bool = True) -> dict:
     Returns a compact summary of facts, rules, acts, and expect.
     This is what the agent reads to understand the project.
     """
-    ctx = build_context(project_dir, include_state=include_state)
-    tokens = count_tokens(ctx)
+    frame = load_frame_data(project_dir)
+    if not frame.get("facts"):
+        return _err("haxaml_context", "missing_facts", "facts.yaml not found")
+    rules = frame.get("rules") or {}
+    context_policy = _rules_policy(rules, "context_policy", {"default_pack": "balanced"})
+    default_pack = str(context_policy.get("default_pack", "balanced"))
+    pack_data = build_context_pack(
+        project_dir,
+        task="General project context",
+        pack=default_pack,
+        include_state=include_state,
+    )
+    ctx = "## Project Facts\n\n" + format_context_pack(pack_data)
+    tokens = pack_data.get("_meta", {}).get("token_count", count_tokens(ctx))
     message = f"{ctx}\n\n--- Token count: {tokens} ---"
     return _ok(
         "haxaml_context",
@@ -343,8 +577,10 @@ def haxaml_context(project_dir: str = ".", include_state: bool = True) -> dict:
             "message": message,
             "context": ctx,
             "tokens": tokens,
+            "context_pack": pack_data,
             "include_state": include_state,
         },
+        warnings=["Compatibility wrapper: prefer haxaml_context_pack for task-scoped context."],
     )
 
 
@@ -462,41 +698,499 @@ def haxaml_doctor(project_dir: str = ".") -> dict:
 
 
 @mcp_app.tool()
+def haxaml_guidance(task: str, project_dir: str = ".") -> dict:
+    """Generate structured task guidance and clarification needs for agent execution."""
+    frame = load_frame_data(project_dir)
+    if not frame.get("facts"):
+        return _err("haxaml_guidance", "missing_facts", "facts.yaml not found")
+
+    guidance = _guidance_eval(task, frame)
+    status = guidance["status"]
+    msg_lines = [
+        f"Task type: {guidance['task_type']}",
+        f"Risk: {guidance['risk_level']}",
+        f"Status: {status}",
+    ]
+    if guidance["required_questions"]:
+        msg_lines.append("Required clarification:")
+        msg_lines.extend([f"  - {q}" for q in guidance["required_questions"]])
+    if guidance["missing_context"]:
+        msg_lines.append("Missing context:")
+        msg_lines.extend([f"  - {m}" for m in guidance["missing_context"]])
+
+    payload = {
+        "message": "\n".join(msg_lines),
+        "status": status,
+        "task_type": guidance["task_type"],
+        "risk_level": guidance["risk_level"],
+        "missing_context": guidance["missing_context"],
+        "assumptions": guidance["assumptions"],
+        "required_questions": guidance["required_questions"],
+        "suggested_questions": guidance["suggested_questions"],
+        "safer_path": guidance["safer_path"],
+        "recommended_packs": guidance["recommended_packs"],
+    }
+    return _ok("haxaml_guidance", payload)
+
+
+@mcp_app.tool()
+def haxaml_session_start(task: str, description: str = "", project_dir: str = ".") -> dict:
+    """Start a governed agent session with guidance and read policy checks."""
+    frame = load_frame_data(project_dir)
+    if not frame.get("facts"):
+        return _err("haxaml_session_start", "missing_facts", "facts.yaml not found")
+
+    try:
+        runner = ExecutionRunner(project_dir)
+        pre = runner.start_run(task=task, description=description)
+        if pre.result == "failed":
+            return _err(
+                "haxaml_session_start",
+                "preflight_failed",
+                "Session failed preflight.",
+                {"errors": pre.errors},
+            )
+    except FileNotFoundError as e:
+        return _err("haxaml_session_start", "missing_frame", str(e))
+
+    guidance = _guidance_eval(task, frame)
+    read_policy = _session_read_policy(frame)
+    session_id = f"session-{uuid.uuid4().hex[:10]}"
+    now = _now_iso()
+
+    sm, _ = _get_state_manager(project_dir)
+    warnings = []
+    if sm:
+        state = sm.read()
+        sessions = state.get("sessions", [])
+        if not isinstance(sessions, list):
+            sessions = []
+        sessions.append(
+            {
+                "id": session_id,
+                "task": task,
+                "description": description,
+                "status": "started",
+                "phase": "start",
+                "risk_level": guidance["risk_level"],
+                "guidance_status": guidance["status"],
+                "started": now,
+                "updated": now,
+            }
+        )
+        state["sessions"] = sessions
+        state["active_task"] = {
+            "name": task,
+            "description": description,
+            "started": now,
+            "assignee": "agent",
+        }
+        compaction = state.get("context_compaction", {})
+        if not isinstance(compaction, dict):
+            compaction = {}
+        started = compaction.get("sessions_started", 0)
+        if not isinstance(started, int) or started < 0:
+            started = 0
+        compaction["sessions_started"] = started + 1
+        state["context_compaction"] = compaction
+        err = _persist_state(sm, state)
+        if err:
+            warnings.append(f"Could not persist session state: {err}")
+    else:
+        warnings.append("acts.yaml not found; session was not persisted.")
+
+    payload = {
+        "message": (
+            f"Session started: {session_id}\n"
+            f"Status: {guidance['status']}\n"
+            f"Risk: {guidance['risk_level']}\n"
+            f"Required reads: {', '.join(read_policy['required_reads'])}"
+        ),
+        "session_id": session_id,
+        "status": guidance["status"],
+        "risk_level": guidance["risk_level"],
+        "task_type": guidance["task_type"],
+        "required_questions": guidance["required_questions"],
+        "required_reads": read_policy["required_reads"],
+        "recommended_context_packs": guidance["recommended_packs"],
+        "onboarding": {
+            "needs_full_reads": read_policy["needs_full_reads"],
+            "sessions_started": read_policy["sessions_started"],
+            "onboarding_full_reads": read_policy["onboarding_full_reads"],
+        },
+    }
+    return _ok("haxaml_session_start", payload, warnings=warnings)
+
+
+@mcp_app.tool()
+def haxaml_session_plan(
+    session_id: str,
+    project_dir: str = ".",
+) -> dict:
+    """Generate a short execution plan and risk check for a started session."""
+    sm, _ = _get_state_manager(project_dir)
+    if not sm:
+        return _err("haxaml_session_plan", "missing_acts", "acts.yaml not found")
+
+    state = sm.read()
+    session = _find_session(state, session_id)
+    if not session:
+        return _err("haxaml_session_plan", "unknown_session", f"Session not found: {session_id}")
+
+    task = str(session.get("task", ""))
+    frame = load_frame_data(project_dir)
+    guidance = _guidance_eval(task, frame)
+    rules = frame.get("rules") or {}
+    verify_expect = ((rules.get("after_task") or {}).get("verify", []) or [])
+    if not verify_expect:
+        verify_expect = [
+            "Confirm changes satisfy task scope.",
+            "Run relevant validation/tests.",
+            "Record unresolved risks and follow-ups.",
+        ]
+
+    plan = [
+        "Inspect context pack and required rules for this task.",
+        "Apply smallest logical change set in scoped files.",
+        "Run validations/tests for touched behavior.",
+        "Run reflective verification before record.",
+    ]
+    if guidance["status"] == "action_required":
+        plan.insert(0, "Resolve required clarification questions before code changes.")
+
+    session["phase"] = "plan"
+    session["status"] = "planned"
+    session["updated"] = _now_iso()
+    session["plan"] = plan
+    err = _persist_state(sm, state)
+    warnings = [f"Could not persist session plan: {err}"] if err else []
+
+    return _ok(
+        "haxaml_session_plan",
+        {
+            "message": f"Session plan prepared for {session_id}",
+            "session_id": session_id,
+            "status": guidance["status"],
+            "risk_level": guidance["risk_level"],
+            "plan": plan,
+            "risk_checks": guidance["assumptions"] + guidance["missing_context"],
+            "verification_expectations": verify_expect,
+        },
+        warnings=warnings,
+    )
+
+
+@mcp_app.tool()
+def haxaml_context_pack(
+    task: str,
+    project_dir: str = ".",
+    pack: str = "balanced",
+    include_state: bool = True,
+) -> dict:
+    """Build compact task-specific context packs for token-efficient agent runs."""
+    frame = load_frame_data(project_dir)
+    if not frame.get("facts"):
+        return _err("haxaml_context_pack", "missing_facts", "facts.yaml not found")
+
+    pack_data = build_context_pack(project_dir, task=task, pack=pack, include_state=include_state)
+    text = format_context_pack(pack_data)
+    tokens = count_tokens(text)
+
+    sm, _ = _get_state_manager(project_dir)
+    warnings = []
+    if sm:
+        state = sm.read()
+        compaction = state.get("context_compaction", {})
+        if not isinstance(compaction, dict):
+            compaction = {}
+        compaction["last_pack_tokens"] = tokens
+        if pack in ("minimal", "balanced", "full"):
+            compaction["default_pack"] = pack
+        state["context_compaction"] = compaction
+        err = _persist_state(sm, state)
+        if err:
+            warnings.append(f"Could not persist context compaction stats: {err}")
+
+    return _ok(
+        "haxaml_context_pack",
+        {
+            "message": text,
+            "context_pack": pack_data,
+            "tokens": tokens,
+            "pack": pack,
+        },
+        warnings=warnings,
+    )
+
+
+@mcp_app.tool()
+def haxaml_session_verify(
+    task: str,
+    project_dir: str = ".",
+    session_id: str = "",
+    inspected_context: Optional[list[str]] = None,
+    changed_files: Optional[list[str]] = None,
+    unresolved_questions: Optional[list[str]] = None,
+    assumptions: Optional[list[str]] = None,
+    summary: str = "",
+) -> dict:
+    """Run reflective verification checks and store evidence in acts.yaml."""
+    frame = load_frame_data(project_dir)
+    if not frame.get("facts"):
+        return _err("haxaml_session_verify", "missing_facts", "facts.yaml not found")
+
+    rules = frame.get("rules") or {}
+    guidance = _guidance_eval(task, frame)
+    inspected_context = inspected_context or []
+    changed_files = changed_files or []
+    unresolved_questions = unresolved_questions or []
+    assumptions = assumptions or []
+
+    required_reads = ((rules.get("before_task") or {}).get("read_first", []) or [])
+    required_checks = _rules_policy(
+        rules,
+        "verification_policy",
+        {
+            "require_checks": [
+                "understood_task",
+                "inspected_context",
+                "changed_right_files",
+                "risky_or_unrelated_touch",
+                "followed_rules",
+                "updated_journal",
+                "unresolved_logged",
+                "explained_changes",
+            ],
+            "allow_pass_with_risks": True,
+        },
+    )["require_checks"]
+
+    risky_paths = [p for p in changed_files if any(x in p for x in (".env", "secrets", ".pem", "credentials"))]
+    has_summary = bool(summary.strip())
+    inspected_ok = all(path in inspected_context for path in required_reads) if required_reads else bool(inspected_context)
+    unresolved_logged = bool(unresolved_questions) or guidance["status"] != "action_required"
+    rule_follow_ok = not risky_paths
+
+    checks = {
+        "understood_task": (bool(task.strip()), "Task text was provided."),
+        "inspected_context": (inspected_ok, "Inspected context includes required reads."),
+        "changed_right_files": (bool(changed_files) or has_summary, "Changed files or summary evidence was provided."),
+        "risky_or_unrelated_touch": (not risky_paths, "No risky file patterns were reported."),
+        "followed_rules": (rule_follow_ok, "No forbidden risky path was reported."),
+        "updated_journal": (True, "Journal update is enforced at session_record stage."),
+        "unresolved_logged": (unresolved_logged, "Unresolved items were explicitly captured or not required."),
+        "explained_changes": (has_summary, "Summary explains what changed and why."),
+    }
+
+    failures = [name for name in required_checks if name in checks and not checks[name][0]]
+    if guidance["status"] == "action_required" and not unresolved_questions and not inspected_ok:
+        verdict = "needs_clarification"
+    elif not failures:
+        verdict = "pass"
+    elif len(failures) <= 2 and _rules_policy(rules, "verification_policy", {"allow_pass_with_risks": True}).get("allow_pass_with_risks", True):
+        verdict = "pass_with_risks"
+    else:
+        verdict = "fail"
+
+    check_rows = [
+        {"name": name, "passed": checks[name][0], "details": checks[name][1]}
+        for name in required_checks
+        if name in checks
+    ]
+
+    evidence_refs = [".haxaml/facts.yaml", ".haxaml/rules.yaml", ".haxaml/acts.yaml"] + changed_files
+    verification_id = f"verify-{uuid.uuid4().hex[:10]}"
+    timestamp = _now_iso()
+
+    sm, _ = _get_state_manager(project_dir)
+    warnings = []
+    if sm:
+        state = sm.read()
+        verifications = state.get("verifications", [])
+        if not isinstance(verifications, list):
+            verifications = []
+        verifications.append(
+            {
+                "id": verification_id,
+                "session_id": session_id or "",
+                "task": task,
+                "verdict": verdict,
+                "summary": summary,
+                "unresolved_questions": unresolved_questions,
+                "assumptions": assumptions,
+                "follow_ups": guidance["required_questions"] if verdict in ("fail", "needs_clarification") else [],
+                "checks": check_rows,
+                "evidence_refs": evidence_refs,
+                "timestamp": timestamp,
+            }
+        )
+        state["verifications"] = verifications
+        if session_id:
+            session = _find_session(state, session_id)
+            if session:
+                session["phase"] = "verify"
+                session["status"] = "verified" if verdict in ("pass", "pass_with_risks") else "failed"
+                session["updated"] = timestamp
+        err = _persist_state(sm, state)
+        if err:
+            warnings.append(f"Could not persist verification report: {err}")
+
+    message = f"Verification {verification_id}: {verdict}"
+    if failures:
+        message += f" ({len(failures)} failed check(s))"
+    if guidance["status"] == "action_required":
+        message += " — clarification needed before confident execution."
+
+    return _ok(
+        "haxaml_session_verify",
+        {
+            "message": message,
+            "verification_id": verification_id,
+            "session_id": session_id or "",
+            "task": task,
+            "verdict": verdict,
+            "checks": check_rows,
+            "evidence_refs": evidence_refs,
+            "risky_paths": risky_paths,
+            "unresolved_questions": unresolved_questions,
+            "assumptions": assumptions,
+            "follow_ups": guidance["required_questions"] if verdict in ("fail", "needs_clarification") else [],
+        },
+        warnings=warnings,
+    )
+
+
+@mcp_app.tool()
+def haxaml_session_record(
+    task: str,
+    result: str = "success",
+    project_dir: str = ".",
+    session_id: str = "",
+    changes: str = "",
+    decisions: str = "",
+    risks: str = "",
+) -> dict:
+    """Record a session result; enforces verification gate before success/partial record."""
+    if result not in ("success", "partial", "failed"):
+        return _err("haxaml_session_record", "invalid_result", f"Invalid result: {result}")
+
+    try:
+        runner = ExecutionRunner(project_dir)
+    except FileNotFoundError as e:
+        return _err("haxaml_session_record", "missing_frame", str(e))
+
+    frame = load_frame_data(project_dir)
+    rules = frame.get("rules") or {}
+    lifecycle = _rules_policy(rules, "lifecycle", {"enforce_verify_before_record": True})
+    enforce_verify = bool(lifecycle.get("enforce_verify_before_record", True))
+
+    sm, _ = _get_state_manager(project_dir)
+    state = sm.read() if sm else {}
+    latest_verdict = None
+    latest_verification_id = ""
+    verifications = state.get("verifications", []) if isinstance(state, dict) else []
+    if isinstance(verifications, list):
+        for item in reversed(verifications):
+            if not isinstance(item, dict):
+                continue
+            if session_id and item.get("session_id") != session_id:
+                continue
+            if item.get("task") != task:
+                continue
+            latest_verdict = item.get("verdict")
+            latest_verification_id = str(item.get("id", ""))
+            break
+
+    if enforce_verify and result in ("success", "partial"):
+        if latest_verdict not in ("pass", "pass_with_risks"):
+            return _err(
+                "haxaml_session_record",
+                "verification_required",
+                "Verification is required before recording success/partial results.",
+                {
+                    "task": task,
+                    "session_id": session_id,
+                    "latest_verdict": latest_verdict,
+                    "allowed_verdicts": ["pass", "pass_with_risks"],
+                },
+            )
+
+    run_result = runner.finish_run(
+        task=task,
+        result=result,
+        changes=changes,
+        decisions=decisions,
+        risks=risks,
+    )
+    if run_result.errors:
+        return _err(
+            "haxaml_session_record",
+            "run_record_error",
+            "Run completed with errors.",
+            {"errors": run_result.errors, "warnings": run_result.warnings},
+        )
+
+    warnings = list(run_result.warnings)
+    if sm:
+        state = sm.read()
+        if session_id:
+            session = _find_session(state, session_id)
+            if session:
+                session["phase"] = "record"
+                session["status"] = "recorded"
+                session["updated"] = _now_iso()
+                session["ended"] = _now_iso()
+        err = _persist_state(sm, state)
+        if err:
+            warnings.append(f"Could not persist session close state: {err}")
+
+    stale = export_if_stale(project_dir, agents=["generic"])
+    return _ok(
+        "haxaml_session_record",
+        {
+            "message": f"✓ Session record complete (run {run_result.run_id}, result={result})",
+            "session_id": session_id,
+            "run_id": run_result.run_id,
+            "token_count": run_result.token_count,
+            "verification_id": latest_verification_id,
+            "verification_verdict": latest_verdict,
+            "auto_exported": stale,
+        },
+        warnings=warnings,
+    )
+
+
+@mcp_app.tool()
 def haxaml_run(task: str, description: str = "", project_dir: str = ".") -> dict:
     """Start a governed execution run.
 
     Sets the active task in acts.yaml and runs preflight validation.
     Call this before starting work on a task.
     """
-    try:
-        runner = ExecutionRunner(project_dir)
-    except FileNotFoundError as e:
-        return _err("haxaml_run", "missing_frame", str(e))
-
-    result = runner.start_run(task=task, description=description)
-    if result.result == "failed":
-        lines = ["✗ Run failed preflight:"]
-        for e in result.errors:
-            lines.append(f"  → {e}")
+    started = haxaml_session_start(task=task, description=description, project_dir=project_dir)
+    if not started.get("ok"):
         return _err(
             "haxaml_run",
-            "preflight_failed",
-            "Run failed preflight.",
-            {"message": "\n".join(lines), "errors": result.errors},
+            started.get("error", {}).get("code", "session_start_failed"),
+            started.get("error", {}).get("message", "Session start failed."),
+            started.get("error", {}).get("details", {}),
+            warnings=["Compatibility wrapper: prefer haxaml_session_start."],
         )
 
+    payload = started.get("data", {})
     lines = [f"✓ Run started: {task}"]
-    if result.warnings:
-        for w in result.warnings:
-            lines.append(f"  ⚠ {w}")
-    lines.append("  → Work on the task, then call haxaml_done to record results")
+    lines.append(f"  Session: {payload.get('session_id', '')}")
+    lines.append(f"  Status: {payload.get('status', 'proceed')}")
+    lines.append("  → Work on the task, then call haxaml_done (or haxaml_session_verify + haxaml_session_record)")
     return _ok(
         "haxaml_run",
         {
             "message": "\n".join(lines),
             "task": task,
-            "warnings": result.warnings,
+            "session_id": payload.get("session_id", ""),
+            "warnings": started.get("warnings", []),
         },
+        warnings=["Compatibility wrapper: prefer haxaml_session_start."],
     )
 
 
@@ -520,46 +1214,46 @@ def haxaml_done(
         decisions: Key decisions made during this task
         risks: Any risks or concerns identified
     """
-    try:
-        runner = ExecutionRunner(project_dir)
-    except FileNotFoundError as e:
-        return _err("haxaml_done", "missing_frame", str(e))
-
-    run_result = runner.finish_run(
-        task=task, result=result, changes=changes,
-        decisions=decisions, risks=risks,
+    verify = haxaml_session_verify(
+        task=task,
+        project_dir=project_dir,
+        summary=changes or decisions or risks or f"Completed task: {task}",
+        changed_files=[],
+        unresolved_questions=[],
+        assumptions=[],
     )
-
-    if run_result.errors:
-        lines = ["⚠ Run completed with errors:"]
-        for e in run_result.errors:
-            lines.append(f"  → {e}")
+    if not verify.get("ok"):
         return _err(
             "haxaml_done",
-            "run_record_error",
-            "Run completed with errors.",
-            {"message": "\n".join(lines), "errors": run_result.errors},
+            verify.get("error", {}).get("code", "verify_failed"),
+            verify.get("error", {}).get("message", "Verification failed."),
+            verify.get("error", {}).get("details", {}),
+            warnings=["Compatibility wrapper: prefer haxaml_session_verify + haxaml_session_record."],
         )
 
-    lines = [f"✓ Run {run_result.run_id} recorded ({result})"]
-    lines.append(f"  Context: {run_result.token_count} tokens")
-    if run_result.warnings:
-        for w in run_result.warnings:
-            lines.append(f"  ⚠ {w}")
+    record = haxaml_session_record(
+        task=task,
+        result=result,
+        project_dir=project_dir,
+        changes=changes,
+        decisions=decisions,
+        risks=risks,
+    )
+    if not record.get("ok"):
+        return _err(
+            "haxaml_done",
+            record.get("error", {}).get("code", "record_failed"),
+            record.get("error", {}).get("message", "Recording failed."),
+            record.get("error", {}).get("details", {}),
+            warnings=["Compatibility wrapper: prefer haxaml_session_verify + haxaml_session_record."],
+        )
 
-    stale = export_if_stale(project_dir, agents=["generic"])
-    if stale:
-        lines.append(f"  ↻ Auto re-exported {len(stale)} agent file(s)")
-
+    payload = record.get("data", {})
+    payload["message"] = f"{payload.get('message', '')}\n(verification: {verify.get('data', {}).get('verification_id', '')})"
     return _ok(
         "haxaml_done",
-        {
-            "message": "\n".join(lines),
-            "run_id": run_result.run_id,
-            "token_count": run_result.token_count,
-            "warnings": run_result.warnings,
-            "auto_exported": stale,
-        },
+        payload,
+        warnings=["Compatibility wrapper: prefer haxaml_session_verify + haxaml_session_record."],
     )
 
 
