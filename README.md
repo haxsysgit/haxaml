@@ -2,94 +2,38 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/haxaml.svg)](https://pypi.org/project/haxaml/)
 
-Haxaml is a deterministic project-governance framework for AI coding workflows.
+Haxaml is an LLM-first governance layer for coding agents.
 
-MCP first.
-CLI second.
+It gives agents one deterministic source of truth called **FRAME** and a strict MCP tool workflow so project context does not drift across sessions or tools.
 
-It gives agents one shared source of truth called **FRAME** so context does not drift across tools.
+## What Haxaml Is For
 
-## What it does
+Use Haxaml when an AI agent is doing implementation work and you want:
 
-- keeps project truth in structured FRAME files
-- validates that structure before work starts
-- tracks runs, decisions, risks, and completed work
-- exports clean agent-ready prompt files from FRAME
-- exposes MCP tools so IDE agents can call governance directly
+- explicit project facts and rules
+- deterministic context handoff
+- verify/record gates before claiming success
+- stable MCP-native workflows instead of ad-hoc prompting
 
-## FRAME at a glance
+## 5-Minute Start
 
-| File | Purpose |
-| --- | --- |
-| `.haxaml/facts.yaml` | project truth |
-| `.haxaml/rules.yaml` | how agents should work |
-| `.haxaml/acts.yaml` | task diary and decisions |
-| `.haxaml/expect.yaml` | expected next runs |
-| `.haxaml/map.yaml` | optional module ownership + impact map |
-
-## Install
+1. Install:
 
 ```bash
 pip install haxaml
-```
-
-or with uv tools:
-
-```bash
+# or
 uv tool install haxaml
 uv tool install haxaml-mcp
 ```
 
-## Quick start
+2. Initialize FRAME:
 
 ```bash
 haxaml init
 haxaml validate
-haxaml context --tokens
-haxaml export
 ```
 
-Default export writes `HAXAML.md`.
-
-MCP-first lifecycle flow:
-
-```bash
-haxaml guidance --task "implement auth module"
-haxaml session-start --task "implement auth module"
-haxaml session-plan --session-id <id>
-haxaml context-pack --task "implement auth module"
-haxaml verify --task "implement auth module" --summary "what changed"
-haxaml session-record --task "implement auth module" --result success
-```
-
-Adoption/reconcile flow for existing repos:
-
-```bash
-haxaml adopt-plan --dir .
-haxaml reconcile --dir .
-haxaml validate --dir .
-```
-
-Optional agent-specific exports:
-
-```bash
-haxaml export --agent claude
-haxaml export --agent codex
-haxaml export --agent copilot
-haxaml export --agent cursor
-haxaml export --agent windsurf
-haxaml export --agent gemini
-```
-
-Safe preview before writing:
-
-```bash
-haxaml export --dry-run --diff-preview --target CLAUDE.md
-```
-
-## MCP setup (recommended)
-
-Use `uvx` in your MCP client config:
+3. Configure MCP client:
 
 ```json
 {
@@ -105,40 +49,52 @@ Use `uvx` in your MCP client config:
 }
 ```
 
-You can also generate project-local bootstrap config with:
+4. For existing projects:
 
 ```bash
-haxaml mcp-bootstrap --mode write --editor generic
+haxaml adopt-plan --dir .
+haxaml reconcile --dir .
+haxaml validate --dir .
 ```
 
-## Upgrade
+## Startup Prompt For Agent Files
 
-```bash
-haxaml upgrade
+Paste this at the top of your native agent file (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, etc.):
+
+```md
+You are working in a repository governed by Haxaml.
+
+Haxaml is the project governance source of truth for LLM agents.
+Use Haxaml MCP tools directly instead of ad-hoc workflow decisions.
+
+Operational contract:
+1. Start with haxaml_guidance(task=...).
+2. Open a governed run with haxaml_session_start(task=..., description=...).
+3. Generate execution steps with haxaml_session_plan(session_id=...).
+4. Pull only task-relevant context with haxaml_context_pack(task=...).
+5. Before recording success/partial, run haxaml_session_verify(...).
+6. Record outcomes using haxaml_session_record(...).
+7. If boundary or derivation risk appears, run haxaml_reconcile(project_dir='.') and resolve conflicts first.
+
+Adoption rule:
+- For existing repos, run haxaml_adopt_plan(project_dir='.') first.
+- Do not overwrite existing governance files unless explicitly requested.
+
+Safety rule:
+- Do not claim success if validation/reconcile gates are unresolved.
 ```
 
-Pin a specific version:
+## Core FRAME Files
 
-```bash
-haxaml upgrade --to 0.4.2
-```
-
-## Why FRAME even when markdown can be smaller?
-
-In some fixtures, raw markdown is smaller than YAML.
-That is normal.
-
-Haxaml is not only about raw token count.
-The value is deterministic governance:
-
-- validation gates
-- compact compiled exports
-- explicit decisions and risks
-- stable multi-agent handoff
+- `.haxaml/facts.yaml` - project truth
+- `.haxaml/rules.yaml` - agent operating rules
+- `.haxaml/acts.yaml` - execution diary and decisions
+- `.haxaml/expect.yaml` - run plan and milestones
+- `.haxaml/map.yaml` - optional module ownership and impact map
 
 ## Docs
 
-- [MCP.md](MCP.md) for MCP tool contracts, lifecycle, and structured response shapes.
-- [ADVANCED.md](ADVANCED.md) for deeper command reference and export behavior.
-- [LONGTERM.md](LONGTERM.md) for roadmap and major-version direction.
-- `CHANGELOG.md` for release notes and migration notes.
+- [MCP.md](MCP.md) - MCP tool contracts and response shapes
+- [ADVANCED.md](ADVANCED.md) - deeper command and export behavior
+- [LONGTERM.md](LONGTERM.md) - roadmap direction
+- `CHANGELOG.md` - release notes
