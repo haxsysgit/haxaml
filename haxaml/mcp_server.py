@@ -38,6 +38,7 @@ from haxaml.map_policy import (
     map_complexity_issues,
     format_map_complexity_summary,
 )
+from haxaml.reconcile import reconcile_derivation
 from haxaml.runner import ExecutionRunner
 from haxaml.state_manager import StateManager, StateError
 from haxaml.supervision import render_impact, render_needs
@@ -411,6 +412,74 @@ def _find_session(state: dict[str, Any], session_id: str) -> Optional[dict[str, 
     return None
 
 
+def _wrapper_deprecation(tool: str, replacement: list[str]) -> dict[str, Any]:
+    return {
+        "tool": tool,
+        "status": "deprecated",
+        "replacement": replacement,
+        "removal_target": "0.5.0",
+        "message": f"{tool} is a compatibility wrapper and will be removed in 0.5.0.",
+    }
+
+
+def _adoption_plan_payload(project_dir: str, plan: Any = None) -> dict[str, Any]:
+    plan = plan or scan_native_sources(project_dir)
+    native_files = [{"kind": f.kind, "label": f.label, "path": f.path} for f in plan.native_files]
+    context_files = [{"kind": f.kind, "label": f.label, "path": f.path} for f in plan.context_files]
+    risks = []
+    if len(native_files) >= 3:
+        risks.append("Multiple native instruction sources detected; precedence conflicts are likely.")
+    if plan.existing_frame_files:
+        risks.append("Existing FRAME files detected; preserve unless explicit overwrite is requested.")
+    if not native_files and not context_files:
+        risks.append("No known native/context files were discovered; adoption may require manual context capture.")
+
+    migration_steps = [
+        "Run haxaml_reconcile to detect derivation boundary conflicts.",
+        "Decide precedence for conflicting native instructions before editing FRAME.",
+        "Fill/update FRAME files from evidence, then run haxaml_validate.",
+        "Export native files from FRAME only after validate passes.",
+    ]
+    next_actions = [
+        "Call haxaml_reconcile(project_dir='.')",
+        "Resolve blocking conflicts from reconcile report.",
+        "Call haxaml_validate(project_dir='.')",
+    ]
+    human_summary = (
+        f"Inventory complete: {len(native_files)} native file(s), "
+        f"{len(context_files)} context file(s), {len(plan.existing_frame_files)} existing FRAME file(s)."
+    )
+    return {
+        "project_dir": str(plan.project_dir),
+        "native_files": native_files,
+        "context_files": context_files,
+        "existing_frame_files": list(plan.existing_frame_files),
+        "counts": {
+            "native_files": len(native_files),
+            "context_files": len(context_files),
+            "existing_frame_files": len(plan.existing_frame_files),
+        },
+        "migration_plan": migration_steps,
+        "risk_notes": risks,
+        "next_actions": next_actions,
+        "non_destructive": True,
+        "human_summary": human_summary,
+    }
+
+
+def _has_conflict_stop_reason(changes: str, decisions: str, risks: str) -> bool:
+    text = f"{changes}\n{decisions}\n{risks}".lower()
+    keywords = (
+        "conflict",
+        "reconcile",
+        "derivation",
+        "map mismatch",
+        "boundary mismatch",
+        "gate reason",
+    )
+    return any(k in text for k in keywords)
+
+
 # ─── Tools ───────────────────────────────────────────────────────────────────
 
 
@@ -534,18 +603,38 @@ def haxaml_validate(project_dir: str = ".") -> dict:
         for warning in map_warnings:
             lines.append(f"⚠ map policy: {warning}")
 
+    reconcile = reconcile_derivation(p)
+    lines.append(f"• Reconcile: {reconcile['human_summary']}")
+    for conflict in reconcile["conflicts"]:
+        marker = "✗" if conflict["severity"] == "blocking" else "⚠"
+        lines.append(f"{marker} reconcile[{conflict['id']}]: {conflict['message']}")
+        lines.append(f"  → fix: {conflict['suggested_fix_action']}")
+    if reconcile["severity_totals"]["blocking"] > 0:
+        all_valid = False
+
     if all_valid:
         lines.append("\n✓ All FRAME files valid")
     else:
         lines.append("\n✗ Validation failed — fix errors above")
     message = "\n".join(lines)
     if all_valid:
-        return _ok("haxaml_validate", {"message": message, "valid": True})
+        return _ok(
+            "haxaml_validate",
+            {
+                "message": message,
+                "valid": True,
+                "reconcile": reconcile,
+            },
+        )
+    error_code = "derivation_conflicts" if reconcile["severity_totals"]["blocking"] > 0 else "validation_failed"
     return _err(
         "haxaml_validate",
-        "validation_failed",
+        error_code,
         "FRAME validation failed.",
-        {"message": message},
+        {
+            "message": message,
+            "reconcile": reconcile,
+        },
     )
 
 
@@ -571,6 +660,7 @@ def haxaml_context(project_dir: str = ".", include_state: bool = True) -> dict:
     ctx = "## Project Facts\n\n" + format_context_pack(pack_data)
     tokens = pack_data.get("_meta", {}).get("token_count", count_tokens(ctx))
     message = f"{ctx}\n\n--- Token count: {tokens} ---"
+    dep = _wrapper_deprecation("haxaml_context", ["haxaml_context_pack"])
     return _ok(
         "haxaml_context",
         {
@@ -579,8 +669,9 @@ def haxaml_context(project_dir: str = ".", include_state: bool = True) -> dict:
             "tokens": tokens,
             "context_pack": pack_data,
             "include_state": include_state,
+            "deprecation": dep,
         },
-        warnings=["Compatibility wrapper: prefer haxaml_context_pack for task-scoped context."],
+        warnings=[dep["message"]],
     )
 
 
@@ -1101,6 +1192,34 @@ def haxaml_session_record(
             latest_verification_id = str(item.get("id", ""))
             break
 
+    reconcile = reconcile_derivation(project_dir)
+    blocking_conflicts = reconcile["severity_totals"]["blocking"]
+    if result in ("success", "partial") and blocking_conflicts > 0:
+        return _err(
+            "haxaml_session_record",
+            "derivation_conflicts",
+            "Cannot record success/partial while blocking derivation conflicts exist.",
+            {
+                "task": task,
+                "session_id": session_id,
+                "gate_reasons": reconcile["gate_reasons"],
+                "reconcile": reconcile,
+            },
+        )
+    if result == "failed" and blocking_conflicts > 0 and not _has_conflict_stop_reason(changes, decisions, risks):
+        return _err(
+            "haxaml_session_record",
+            "conflict_reason_required",
+            "Recording failed is allowed only when unresolved conflicts are explicitly documented as the stop reason.",
+            {
+                "task": task,
+                "session_id": session_id,
+                "required_hint": "Mention conflict/reconcile/derivation mismatch in changes, decisions, or risks.",
+                "gate_reasons": reconcile["gate_reasons"],
+                "reconcile": reconcile,
+            },
+        )
+
     if enforce_verify and result in ("success", "partial"):
         if latest_verdict not in ("pass", "pass_with_risks"):
             return _err(
@@ -1154,6 +1273,8 @@ def haxaml_session_record(
             "token_count": run_result.token_count,
             "verification_id": latest_verification_id,
             "verification_verdict": latest_verdict,
+            "gate_reasons": reconcile["gate_reasons"],
+            "reconcile": reconcile,
             "auto_exported": stale,
         },
         warnings=warnings,
@@ -1168,13 +1289,14 @@ def haxaml_run(task: str, description: str = "", project_dir: str = ".") -> dict
     Call this before starting work on a task.
     """
     started = haxaml_session_start(task=task, description=description, project_dir=project_dir)
+    dep = _wrapper_deprecation("haxaml_run", ["haxaml_session_start"])
     if not started.get("ok"):
         return _err(
             "haxaml_run",
             started.get("error", {}).get("code", "session_start_failed"),
             started.get("error", {}).get("message", "Session start failed."),
             started.get("error", {}).get("details", {}),
-            warnings=["Compatibility wrapper: prefer haxaml_session_start."],
+            warnings=[dep["message"]],
         )
 
     payload = started.get("data", {})
@@ -1189,8 +1311,9 @@ def haxaml_run(task: str, description: str = "", project_dir: str = ".") -> dict
             "task": task,
             "session_id": payload.get("session_id", ""),
             "warnings": started.get("warnings", []),
+            "deprecation": dep,
         },
-        warnings=["Compatibility wrapper: prefer haxaml_session_start."],
+        warnings=[dep["message"]],
     )
 
 
@@ -1223,12 +1346,13 @@ def haxaml_done(
         assumptions=[],
     )
     if not verify.get("ok"):
+        dep = _wrapper_deprecation("haxaml_done", ["haxaml_session_verify", "haxaml_session_record"])
         return _err(
             "haxaml_done",
             verify.get("error", {}).get("code", "verify_failed"),
             verify.get("error", {}).get("message", "Verification failed."),
             verify.get("error", {}).get("details", {}),
-            warnings=["Compatibility wrapper: prefer haxaml_session_verify + haxaml_session_record."],
+            warnings=[dep["message"]],
         )
 
     record = haxaml_session_record(
@@ -1240,20 +1364,23 @@ def haxaml_done(
         risks=risks,
     )
     if not record.get("ok"):
+        dep = _wrapper_deprecation("haxaml_done", ["haxaml_session_verify", "haxaml_session_record"])
         return _err(
             "haxaml_done",
             record.get("error", {}).get("code", "record_failed"),
             record.get("error", {}).get("message", "Recording failed."),
             record.get("error", {}).get("details", {}),
-            warnings=["Compatibility wrapper: prefer haxaml_session_verify + haxaml_session_record."],
+            warnings=[dep["message"]],
         )
 
     payload = record.get("data", {})
+    dep = _wrapper_deprecation("haxaml_done", ["haxaml_session_verify", "haxaml_session_record"])
     payload["message"] = f"{payload.get('message', '')}\n(verification: {verify.get('data', {}).get('verification_id', '')})"
+    payload["deprecation"] = dep
     return _ok(
         "haxaml_done",
         payload,
-        warnings=["Compatibility wrapper: prefer haxaml_session_verify + haxaml_session_record."],
+        warnings=[dep["message"]],
     )
 
 
@@ -1551,6 +1678,39 @@ def haxaml_mcp_bootstrap(
 
 
 @mcp_app.tool()
+def haxaml_adopt_plan(project_dir: str = ".") -> dict:
+    """Inventory native instruction files and return non-destructive adoption plan."""
+    payload = _adoption_plan_payload(project_dir)
+    return _ok(
+        "haxaml_adopt_plan",
+        {
+            "message": payload["human_summary"],
+            **payload,
+        },
+    )
+
+
+@mcp_app.tool()
+def haxaml_reconcile(project_dir: str = ".") -> dict:
+    """Return structured derivation-boundary conflict report."""
+    report = reconcile_derivation(project_dir)
+    if report["severity_totals"]["blocking"] > 0:
+        return _err(
+            "haxaml_reconcile",
+            "derivation_conflicts",
+            report["human_summary"],
+            report,
+        )
+    return _ok(
+        "haxaml_reconcile",
+        {
+            "message": report["human_summary"],
+            **report,
+        },
+    )
+
+
+@mcp_app.tool()
 def haxaml_adopt(
     project_dir: str = ".",
     write: bool = False,
@@ -1565,6 +1725,7 @@ def haxaml_adopt(
     With write=True: creates .haxaml/ADOPTION.md and scaffold FRAME files.
     """
     plan = scan_native_sources(project_dir)
+    plan_payload = _adoption_plan_payload(project_dir, plan=plan)
 
     if not write:
         report = render_adoption_report(plan)
@@ -1574,7 +1735,9 @@ def haxaml_adopt(
                 "message": f"{report}\n---\nDry run. Call with write=True to create files.",
                 "written": [],
                 "dry_run": True,
+                "adoption_plan": plan_payload,
             },
+            warnings=["Prefer haxaml_adopt_plan for non-destructive inventory and migration planning."],
         )
 
     written = write_adoption_scaffold(plan, force=force)
@@ -1594,7 +1757,9 @@ def haxaml_adopt(
                 "message": "\n".join(lines),
                 "written": [str(path.relative_to(plan.project_dir)) for path in written],
                 "dry_run": False,
+                "adoption_plan": plan_payload,
             },
+            warnings=["Use haxaml_reconcile after edits to detect map-canonical derivation conflicts."],
         )
 
     return _ok(
@@ -1603,7 +1768,9 @@ def haxaml_adopt(
             "message": "No files written. Existing files preserved. Use force=True to overwrite.",
             "written": [],
             "dry_run": False,
+            "adoption_plan": plan_payload,
         },
+        warnings=["Use haxaml_adopt_plan for non-destructive planning before forceful writes."],
     )
 
 

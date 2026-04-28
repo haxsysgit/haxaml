@@ -1,12 +1,12 @@
-# MCP: Haxaml Agent Contract
+# MCP: Haxaml Agent Contract (0.4.0)
 
 Haxaml is MCP first.
-Use MCP tools as the primary interface for agent sessions.
-CLI commands are wrappers.
+Use MCP tools for lifecycle, adoption, and reconciliation gates.
+CLI mirrors these MCP tools as thin wrappers.
 
-## Response envelope
+## Response Envelope
 
-Every MCP tool returns:
+Every tool returns:
 
 - `ok`: boolean
 - `tool`: tool name
@@ -14,111 +14,106 @@ Every MCP tool returns:
 - `warnings`: non-fatal warnings
 - `error`: `{ code, message, details }` when `ok=false`
 
-## Session lifecycle (recommended)
+## Core 0.4.0 Tools
 
-1. `haxaml_guidance`
-2. `haxaml_session_start`
-3. `haxaml_session_plan`
-4. `haxaml_context_pack`
-5. implementation work
-6. `haxaml_session_verify`
-7. `haxaml_session_record`
-8. `haxaml_export` (if needed)
+- `haxaml_guidance`
+- `haxaml_session_start`
+- `haxaml_session_plan`
+- `haxaml_context_pack`
+- `haxaml_session_verify`
+- `haxaml_session_record`
+- `haxaml_validate`
+- `haxaml_reconcile` (new)
+- `haxaml_adopt_plan` (new)
 
-Compatibility wrappers:
+Compatibility wrappers (deprecated, still available in 0.4.0):
 
 - `haxaml_run` -> `haxaml_session_start`
 - `haxaml_done` -> `haxaml_session_verify` + `haxaml_session_record`
-- `haxaml_context` -> context-pack composition
+- `haxaml_context` -> `haxaml_context_pack`
 
-## Tool contracts
+Wrapper payloads now include explicit deprecation metadata and removal target.
 
-### `haxaml_guidance(task, project_dir='.')`
+## Derivation Boundary Model
 
-Returns:
+Canonical rule:
 
-- `status`: `proceed` or `action_required`
-- `task_type`: `outcome | design | implementation | debug | strategy`
-- `risk_level`: `low | medium | high`
-- `missing_context`, `assumptions`
-- `required_questions`, `suggested_questions`
-- `safer_path`, `recommended_packs`
+- when `.haxaml/map.yaml` exists, `map.modules`, `map.dependencies`, and `map.impact` are canonical.
 
-### `haxaml_session_start(task, description='', project_dir='.')`
+No-map rule:
 
-Returns:
+- if `map.yaml` is absent and map policy marks map optional, map-canonical checks are deferred.
 
-- `session_id`
-- `status`, `risk_level`, `task_type`
-- `required_questions`
-- `required_reads`
-- onboarding read policy snapshot
+Conflict model:
 
-### `haxaml_session_plan(session_id, project_dir='.')`
+- conflicts are structured objects with `canonical_path`, `derived_path`, `severity`, and `suggested_fix_action`.
+- unresolved `blocking` conflicts are gate blockers.
 
-Returns:
+Reconcile payload includes:
 
-- short deterministic plan
-- risk checks
-- verification expectations
+- `conflict_counts`
+- `warning_counts`
+- `severity_totals`
+- `gate_reasons`
+- `human_summary`
 
-### `haxaml_context_pack(task, project_dir='.', pack='balanced', include_state=True)`
+## Gate Behavior
 
-Returns compact sections:
+`haxaml_validate`:
 
-- `essential_facts`
-- `relevant_rules`
-- `recent_decisions`
-- `affected_modules`
-- `expectations`
-- `unresolved`
-- `task_risks`
-- `_meta` with token counts and compaction notes
+- schema + map policy + reconcile checks.
+- fails with `error.code=derivation_conflicts` when blocking reconcile conflicts exist.
 
-### `haxaml_session_verify(...)`
+`haxaml_session_record`:
 
-Reflective verification report for:
+- `success` and `partial` require verification pass/pass_with_risks.
+- `success` and `partial` are blocked if blocking derivation conflicts exist.
+- `failed` is allowed with conflicts only when conflict stop reason is explicitly recorded.
 
-- task understanding
-- context inspection
-- changed-file appropriateness
-- risky/unrelated touches
-- rule compliance
-- journal update path
-- unresolved assumptions/questions
-- change explanation quality
+## Adoption Flow (Non-Destructive First)
 
-Returns:
+Recommended sequence:
 
-- `verification_id`
-- `verdict`: `pass | pass_with_risks | fail | needs_clarification`
-- `checks[]` (name/passed/details)
-- `evidence_refs`
-- `follow_ups`
+1. `haxaml_adopt_plan(project_dir='.')`
+2. `haxaml_reconcile(project_dir='.')`
+3. edit FRAME files
+4. `haxaml_validate(project_dir='.')`
+5. optional `haxaml_adopt(write=True)` and export
 
-### `haxaml_session_record(task, result, ...)`
+`haxaml_adopt_plan` never writes files.
+`haxaml_adopt` preserves existing files unless forced.
 
-Verification gate:
+## Example Responses
 
-- `success` and `partial` require latest verify verdict `pass` or `pass_with_risks`.
+`haxaml_reconcile` success:
 
-Returns:
+```json
+{
+  "ok": true,
+  "tool": "haxaml_reconcile",
+  "data": {
+    "human_summary": "No derivation conflicts detected. Map-canonical boundaries are consistent.",
+    "severity_totals": {"blocking": 0, "warning": 0},
+    "conflict_counts": {"total": 0, "blocking": 0},
+    "warning_counts": {"total": 0},
+    "gate_reasons": []
+  }
+}
+```
 
-- `run_id`
-- `verification_id`
-- `verification_verdict`
-- `token_count`
-- auto-export details
+`haxaml_reconcile` conflict:
 
-## Clarification enforcement default
-
-Risk-gated soft block:
-
-- high-risk or blocked-context tasks return `action_required`
-- safe obvious tasks return `proceed`
-
-## Context-efficiency default
-
-- first onboarding sessions can require full FRAME reads
-- later sessions should use context packs by default
-- compaction metadata is tracked in `acts.context_compaction`
+```json
+{
+  "ok": false,
+  "tool": "haxaml_reconcile",
+  "error": {
+    "code": "derivation_conflicts",
+    "message": "Found 2 blocking and 1 warning derivation conflict(s).",
+    "details": {
+      "severity_totals": {"blocking": 2, "warning": 1},
+      "gate_reasons": ["Map module 'api' is missing in rules.boundaries.modules."]
+    }
+  }
+}
+```

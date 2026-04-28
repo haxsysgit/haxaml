@@ -62,6 +62,14 @@ haxaml verify --task "implement auth module" --summary "what changed"
 haxaml session-record --task "implement auth module" --result success
 ```
 
+Adoption/reconcile flow for existing repos:
+
+```bash
+haxaml adopt-plan --dir .
+haxaml reconcile --dir .
+haxaml validate --dir .
+```
+
 Optional agent-specific exports:
 
 ```bash
@@ -112,7 +120,7 @@ haxaml upgrade
 Pin a specific version:
 
 ```bash
-haxaml upgrade --to 0.3.0
+haxaml upgrade --to 0.4.0
 ```
 
 ## Why FRAME even when markdown can be smaller?
@@ -133,3 +141,4 @@ The value is deterministic governance:
 - [MCP.md](MCP.md) for MCP tool contracts, lifecycle, and structured response shapes.
 - [ADVANCED.md](ADVANCED.md) for deeper command reference and export behavior.
 - [LONGTERM.md](LONGTERM.md) for roadmap and major-version direction.
+- `CHANGELOG.md` for release notes and migration notes.

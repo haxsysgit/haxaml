@@ -38,12 +38,36 @@ Core MCP tools:
 - `haxaml_export`
 - `haxaml_mcp_bootstrap`
 - `haxaml_upgrade`
+- `haxaml_adopt_plan`
+- `haxaml_reconcile`
 - `haxaml_adopt`
 - `haxaml_needs`
 - `haxaml_impact`
 - `haxaml_state_show`
 - `haxaml_state_compact`
 - `haxaml_benchmark`
+
+## 0.4 migration playbook
+
+For existing repositories:
+
+1. call `haxaml_adopt_plan` for inventory (no writes)
+2. call `haxaml_reconcile` for map-canonical derivation conflicts
+3. resolve blocking conflicts
+4. call `haxaml_validate`
+5. proceed with lifecycle tools (`session_start` -> `session_plan` -> `context_pack` -> `session_verify` -> `session_record`)
+
+Strict gates in 0.4:
+
+- `haxaml_validate` fails on blocking derivation conflicts
+- `haxaml_session_record` blocks `success`/`partial` when conflicts are unresolved
+- `haxaml_session_record` allows `failed` only when the conflict stop reason is explicit
+
+Compatibility wrappers remain but are deprecated:
+
+- `haxaml_run`
+- `haxaml_done`
+- `haxaml_context`
 
 MCP tool responses are structured JSON envelopes:
 
@@ -109,7 +133,7 @@ Upgrade command:
 
 ```bash
 haxaml upgrade
-haxaml upgrade --to 0.3.0
+haxaml upgrade --to 0.4.0
 haxaml upgrade --no-include-mcp
 ```
 

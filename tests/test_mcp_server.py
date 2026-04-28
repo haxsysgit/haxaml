@@ -25,7 +25,9 @@ from haxaml.mcp_server import (
     haxaml_export,
     haxaml_upgrade,
     haxaml_mcp_bootstrap,
+    haxaml_adopt_plan,
     haxaml_adopt,
+    haxaml_reconcile,
     haxaml_needs,
     haxaml_impact,
     haxaml_state_show,
@@ -200,6 +202,24 @@ class TestValidate:
         assert "✗ map policy: map.yaml is required" in details
         assert "✗ Validation failed" in details
 
+    def test_fails_on_blocking_derivation_conflicts(self, governed_project):
+        map_data = {
+            "modules": [
+                {"name": "auth", "purpose": "Auth", "files": ["src/auth/"]},
+                {"name": "api", "purpose": "API", "files": ["src/api/"]},
+            ],
+            "dependencies": [{"from": "api", "to": "auth", "reason": "auth middleware"}],
+            "impact": [{"when": "auth", "check": ["api tests"]}],
+        }
+        (governed_project / ".haxaml" / "map.yaml").write_text(
+            yaml.dump(map_data, default_flow_style=False, sort_keys=False)
+        )
+
+        result = haxaml_validate(str(governed_project))
+        assert result["ok"] is False
+        assert result["error"]["code"] == "derivation_conflicts"
+        assert result["error"]["details"]["reconcile"]["severity_totals"]["blocking"] > 0
+
 
 # ─── Context ─────────────────────────────────────────────────────────────────
 
@@ -358,6 +378,98 @@ class TestSessionLifecycle:
         assert record["ok"] is False
         assert record["error"]["code"] == "verification_required"
 
+    def test_session_record_blocks_success_when_derivation_conflicts_exist(self, governed_project):
+        map_data = {
+            "modules": [
+                {"name": "auth", "purpose": "Auth", "files": ["src/auth/"]},
+                {"name": "api", "purpose": "API", "files": ["src/api/"]},
+            ],
+            "dependencies": [{"from": "api", "to": "auth", "reason": "auth middleware"}],
+            "impact": [{"when": "auth", "check": ["api tests"]}],
+        }
+        (governed_project / ".haxaml" / "map.yaml").write_text(
+            yaml.dump(map_data, default_flow_style=False, sort_keys=False)
+        )
+        expect_path = governed_project / ".haxaml" / "expect.yaml"
+        expect = yaml.safe_load(expect_path.read_text())
+        expect["planning"]["map_required"] = True
+        expect_path.write_text(yaml.dump(expect, default_flow_style=False, sort_keys=False))
+        started = haxaml_session_start(
+            task="implement auth module",
+            description="add login endpoint",
+            project_dir=str(governed_project),
+        )
+        assert started["ok"] is True
+        session_id = started["data"]["session_id"]
+
+        verify = haxaml_session_verify(
+            task="implement auth module",
+            project_dir=str(governed_project),
+            session_id=session_id,
+            inspected_context=[".haxaml/facts.yaml", ".haxaml/rules.yaml"],
+            changed_files=["src/auth.py"],
+            summary="Implemented login flow and validation checks.",
+        )
+        assert verify["ok"] is True
+
+        record = haxaml_session_record(
+            task="implement auth module",
+            result="success",
+            session_id=session_id,
+            project_dir=str(governed_project),
+            changes="Added auth endpoints",
+            decisions="Used existing token signer",
+            risks="Needs extra load test",
+        )
+        assert record["ok"] is False
+        assert record["error"]["code"] == "derivation_conflicts"
+
+    def test_session_record_failed_requires_explicit_conflict_reason(self, governed_project):
+        map_data = {
+            "modules": [
+                {"name": "auth", "purpose": "Auth", "files": ["src/auth/"]},
+                {"name": "api", "purpose": "API", "files": ["src/api/"]},
+            ],
+            "dependencies": [{"from": "api", "to": "auth", "reason": "auth middleware"}],
+            "impact": [{"when": "auth", "check": ["api tests"]}],
+        }
+        (governed_project / ".haxaml" / "map.yaml").write_text(
+            yaml.dump(map_data, default_flow_style=False, sort_keys=False)
+        )
+        expect_path = governed_project / ".haxaml" / "expect.yaml"
+        expect = yaml.safe_load(expect_path.read_text())
+        expect["planning"]["map_required"] = True
+        expect_path.write_text(yaml.dump(expect, default_flow_style=False, sort_keys=False))
+        started = haxaml_session_start(
+            task="implement auth module",
+            description="add login endpoint",
+            project_dir=str(governed_project),
+        )
+        assert started["ok"] is True
+
+        denied = haxaml_session_record(
+            task="implement auth module",
+            result="failed",
+            session_id=started["data"]["session_id"],
+            project_dir=str(governed_project),
+            changes="Stopped work",
+            decisions="Waiting",
+            risks="none",
+        )
+        assert denied["ok"] is False
+        assert denied["error"]["code"] == "conflict_reason_required"
+
+        allowed = haxaml_session_record(
+            task="implement auth module",
+            result="failed",
+            session_id=started["data"]["session_id"],
+            project_dir=str(governed_project),
+            changes="Stopped due to derivation conflict",
+            decisions="Reconcile required before continuing",
+            risks="map mismatch unresolved",
+        )
+        assert allowed["ok"] is True
+
 
 # ─── Export ──────────────────────────────────────────────────────────────────
 
@@ -494,6 +606,45 @@ class TestAdopt:
         assert result["ok"] is True
         assert "✓ wrote" in _msg(result)
         assert (tmp_path / ".haxaml" / "ADOPTION.md").exists()
+
+
+class TestAdoptPlan:
+    def test_returns_non_destructive_inventory(self, tmp_path):
+        (tmp_path / "CLAUDE.md").write_text("# Rules\nUse tests.\n")
+        (tmp_path / "README.md").write_text("# Project\n")
+        result = haxaml_adopt_plan(str(tmp_path))
+        assert result["ok"] is True
+        data = result["data"]
+        assert data["non_destructive"] is True
+        assert data["counts"]["native_files"] >= 1
+        assert "human_summary" in data
+        assert (tmp_path / ".haxaml").exists() is False
+
+
+class TestReconcile:
+    def test_optional_map_deferred_when_absent(self, governed_project):
+        result = haxaml_reconcile(str(governed_project))
+        assert result["ok"] is True
+        assert result["data"]["deferred_map_canonical_checks"] is True
+        assert result["data"]["conflict_counts"]["blocking"] == 0
+
+    def test_returns_blocking_conflicts_when_map_present_and_misaligned(self, governed_project):
+        map_data = {
+            "modules": [
+                {"name": "auth", "purpose": "Auth", "files": ["src/auth/"]},
+                {"name": "api", "purpose": "API", "files": ["src/api/"]},
+            ],
+            "dependencies": [{"from": "api", "to": "auth", "reason": "auth middleware"}],
+            "impact": [{"when": "auth", "check": ["api tests"]}],
+        }
+        (governed_project / ".haxaml" / "map.yaml").write_text(
+            yaml.dump(map_data, default_flow_style=False, sort_keys=False)
+        )
+
+        result = haxaml_reconcile(str(governed_project))
+        assert result["ok"] is False
+        assert result["error"]["code"] == "derivation_conflicts"
+        assert result["error"]["details"]["severity_totals"]["blocking"] > 0
 
 
 # ─── Needs ───────────────────────────────────────────────────────────────────
@@ -634,7 +785,7 @@ class TestResources:
 class TestServerRegistration:
     def test_tool_count(self):
         tools = mcp_app._tool_manager._tools
-        assert len(tools) >= 22
+        assert len(tools) >= 24
 
     def test_expected_tools_registered(self):
         tools = mcp_app._tool_manager._tools
@@ -642,7 +793,8 @@ class TestServerRegistration:
             "haxaml_init", "haxaml_validate", "haxaml_context", "haxaml_health",
             "haxaml_doctor", "haxaml_run", "haxaml_done", "haxaml_export",
             "haxaml_upgrade", "haxaml_mcp_bootstrap",
-            "haxaml_adopt", "haxaml_needs", "haxaml_impact", "haxaml_state_show",
+            "haxaml_adopt_plan", "haxaml_reconcile", "haxaml_adopt",
+            "haxaml_needs", "haxaml_impact", "haxaml_state_show",
             "haxaml_state_compact", "haxaml_benchmark",
             "haxaml_context_pack", "haxaml_guidance",
             "haxaml_session_start", "haxaml_session_plan",

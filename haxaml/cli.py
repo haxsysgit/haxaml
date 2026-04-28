@@ -200,6 +200,26 @@ def adopt(project_dir, from_native, write_files, force):
         sys.exit(1)
 
 
+@cli.command("adopt-plan")
+@click.option("--dir", "project_dir", default=".", help="Project directory")
+def adopt_plan(project_dir):
+    """Inventory native/context files and show non-destructive adoption plan."""
+    result = _mcp_tools().haxaml_adopt_plan(project_dir=project_dir)
+    click.echo(_result_text(result))
+    if _is_failure(result):
+        sys.exit(1)
+
+
+@cli.command()
+@click.option("--dir", "project_dir", default=".", help="Project directory")
+def reconcile(project_dir):
+    """Check derivation boundaries and return conflict report."""
+    result = _mcp_tools().haxaml_reconcile(project_dir=project_dir)
+    click.echo(_result_text(result))
+    if _is_failure(result):
+        sys.exit(1)
+
+
 @cli.command()
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 def needs(project_dir):

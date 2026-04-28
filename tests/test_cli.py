@@ -114,6 +114,27 @@ def test_adopt_write_preserves_existing_frame_without_force():
             assert f.read() == original_facts
 
 
+def test_adopt_plan_and_reconcile_commands():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        with open("CLAUDE.md", "w") as f:
+            f.write("Use tests.\n")
+        with open("README.md", "w") as f:
+            f.write("# Project\n")
+
+        plan = runner.invoke(cli, ["adopt-plan", "--dir", "."])
+        assert plan.exit_code == 0, plan.output
+        assert "Inventory complete" in plan.output
+
+        init = runner.invoke(cli, ["init", "."])
+        assert init.exit_code == 0, init.output
+
+        reconcile = runner.invoke(cli, ["reconcile", "--dir", "."])
+        assert reconcile.exit_code == 0, reconcile.output
+        assert "No map.yaml found" in reconcile.output or "No derivation conflicts detected" in reconcile.output
+
+
 def test_init_auto_reexports_agent_files():
     runner = CliRunner()
 
