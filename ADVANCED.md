@@ -151,3 +151,39 @@ uv build --project packages/haxaml-mcp --out-dir packages/haxaml-mcp/dist
 uv run twine check packages/haxaml-mcp/dist/*
 uv publish --token "$PYPI_TOKEN" packages/haxaml-mcp/dist/*
 ```
+
+## Version roadmap (saved context)
+
+### Core rule
+
+- Keep one version authority: package metadata in `pyproject.toml`.
+- Runtime and CLI read version dynamically from installed metadata.
+- No manual version strings in core code paths.
+
+### Planned release lines
+
+1. `0.3.x` — Reliability and migration UX
+- stronger `haxaml adopt` guidance and conflict detection
+- richer `haxaml_mcp_bootstrap` outputs for editor onboarding
+- improved export readability templates tuned for real agent workflows
+
+2. `0.4.x` — Deterministic benchmark suite
+- FRAME-vs-long-prompt benchmark command
+- fixture-based repeatable benchmark scenarios
+- documented claim boundaries and reproducible reports
+
+3. `0.5.x` — Multi-repo + map maturity
+- deeper map policy checks across larger module graphs
+- impact analysis quality upgrades for cross-module work
+- better runbook-to-map validation links
+
+4. `1.0.0` — Stable public contract
+- locked MCP tool envelope contract
+- locked export safety defaults and override semantics
+- migration guide from pre-1.0 behavior
+
+### Upgrade policy
+
+- keep `haxaml upgrade` as the default update path
+- support latest or pinned updates (`--to X.Y.Z`)
+- keep launcher package (`haxaml-mcp`) upgradeable in the same flow
