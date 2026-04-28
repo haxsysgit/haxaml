@@ -21,36 +21,14 @@ jobs:
         run: |
           python - <<'PY'
           import os
-          import tomllib
-          from pathlib import Path
+          from haxaml.versioning import validate_release_versions
 
-          ref = os.environ.get("GITHUB_REF_NAME", "")
-          if not ref.startswith("v"):
-              raise SystemExit(f"Expected tag ref like vX.Y.Z, got: {ref}")
-          tag_version = ref[1:]
-
-          root = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-          mcp = tomllib.loads(Path("packages/haxaml-mcp/pyproject.toml").read_text(encoding="utf-8"))
-
-          root_version = str(root["project"]["version"])
-          mcp_version = str(mcp["project"]["version"])
-          if root_version != mcp_version:
-              raise SystemExit(
-                  f"Version mismatch: haxaml={root_version} vs haxaml-mcp={mcp_version}"
-              )
-          if root_version != tag_version:
-              raise SystemExit(
-                  f"Tag/version mismatch: tag={tag_version} vs pyproject={root_version}"
-              )
-
-          deps = mcp["project"].get("dependencies", [])
-          expected_prefix = f"haxaml>={tag_version}"
-          if not any(str(dep).startswith(expected_prefix) for dep in deps):
-              raise SystemExit(
-                  f"haxaml-mcp dependency must start with '{expected_prefix}', got: {deps}"
-              )
-
-          print(f"Version checks passed for {tag_version}.")
+          snapshot = validate_release_versions(os.environ.get("GITHUB_REF_NAME", ""))
+          print(
+              "Version checks passed for "
+              f"{snapshot['core_version']} "
+              f"(core={snapshot['core_version']}, mcp={snapshot['mcp_version']})."
+          )
           PY
 
       - name: Install uv
