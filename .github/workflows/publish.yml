@@ -32,13 +32,24 @@ jobs:
       - name: Run tests
         run: uv run pytest -q
 
-      - name: Build package
+      - name: Build Haxaml package
         run: uv build
 
-      - name: Check package metadata
+      - name: Check Haxaml package metadata
         run: uv run twine check dist/*
 
-      - name: Publish to PyPI
+      - name: Publish Haxaml to PyPI
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
         run: uv publish --token "$PYPI_TOKEN"
+
+      - name: Build Haxaml MCP launcher package
+        run: uv build --project packages/haxaml-mcp --out-dir packages/haxaml-mcp/dist
+
+      - name: Check Haxaml MCP launcher metadata
+        run: uv run twine check packages/haxaml-mcp/dist/*
+
+      - name: Publish Haxaml MCP launcher to PyPI
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: uv publish --token "$PYPI_TOKEN" packages/haxaml-mcp/dist/*
