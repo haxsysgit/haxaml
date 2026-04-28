@@ -1,3 +1,6 @@
 """Haxaml — deterministic agent-management framework for FRAME-governed development."""
 
-__version__ = "0.1.2"
+from haxaml.versioning import get_version
+
+
+__version__ = get_version()

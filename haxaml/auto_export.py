@@ -2,7 +2,7 @@
 
 Provides:
 - export_if_stale(): checks mtimes and re-exports only if FRAME files are newer
-- install_git_hook(): writes a pre-commit hook that runs haxaml export --all
+- install_git_hook(): writes a pre-commit hook that runs haxaml export (generic)
 - watch_and_export(): polling watcher for dev use
 """
 
@@ -68,12 +68,12 @@ def export_if_stale(project_dir: str, agents: Optional[list[str]] = None) -> lis
         return []
 
     exported = []
-    targets = agents or [a["name"] for a in list_agents()]
+    targets = agents or ["generic"]
     for agent in targets:
         try:
             path = export_to_file(project_dir, agent)
             exported.append(path)
-        except (KeyError, FileNotFoundError):
+        except (KeyError, FileNotFoundError, FileExistsError):
             continue
 
     return exported
@@ -86,7 +86,7 @@ def export_all(project_dir: str) -> list[str]:
         try:
             path = export_to_file(project_dir, agent["name"])
             exported.append(path)
-        except (KeyError, FileNotFoundError):
+        except (KeyError, FileNotFoundError, FileExistsError):
             continue
     return exported
 
@@ -101,11 +101,8 @@ _HOOK_SCRIPT = """\
 # Installed by: haxaml install-hook
 
 if command -v haxaml >/dev/null 2>&1; then
-    haxaml export --all --quiet 2>/dev/null
-    git add CLAUDE.md AGENTS.md HAXAML.md GEMINI.md \\
-            .github/copilot-instructions.md \\
-            .cursor/rules/haxaml.mdc \\
-            .windsurf/rules/haxaml.md 2>/dev/null
+    haxaml export --quiet 2>/dev/null
+    git add HAXAML.md 2>/dev/null
 fi
 """
 
@@ -174,7 +171,7 @@ def watch_and_export(project_dir: str, interval: float = 2.0,
         current_mtime = _frame_mtime(p)
 
         if current_mtime and (last_mtime is None or current_mtime > last_mtime):
-            exported = export_all(project_dir)
+            exported = export_if_stale(project_dir, agents=["generic"])
             last_mtime = current_mtime
             if callback and exported:
                 callback(exported)

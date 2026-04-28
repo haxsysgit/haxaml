@@ -11,6 +11,7 @@ from typing import Iterable
 import yaml
 
 from haxaml.paths import frame_dir, frame_path, resolve_frame_file
+from haxaml.versioning import get_version
 
 
 FRAME_FILES = ("facts.yaml", "rules.yaml", "acts.yaml", "expect.yaml")
@@ -164,7 +165,7 @@ def render_adoption_report(plan: AdoptionPlan) -> str:
             "1. AI agent reads the native files and repo context listed above.",
             "2. AI agent derives real FRAME facts, rules, acts, and expectations from the evidence.",
         "3. Haxaml validates the FRAME files with `haxaml validate --dir .`.",
-            "4. Haxaml exports normalized native files with `haxaml export --all`.",
+            "4. Haxaml exports a neutral shared file with `haxaml export` and optionally per-agent files when explicitly requested.",
             "",
             "## Guardrail",
             "",
@@ -198,10 +199,11 @@ def _source_paths(plan: AdoptionPlan) -> list[str]:
 
 def _facts_template(plan: AdoptionPlan) -> dict:
     source_paths = _source_paths(plan)
+    version = get_version()
     return {
         "identity": {
             "name": plan.project_dir.name,
-            "version": "0.1.0",
+            "version": version,
             "description": "Existing project adopted into FRAME governance by Haxaml.",
         },
         "goal": {
@@ -275,8 +277,9 @@ def _facts_template(plan: AdoptionPlan) -> dict:
 def _rules_template(plan: AdoptionPlan) -> dict:
     source_paths = _source_paths(plan)
     then_read = [".haxaml/ADOPTION.md", ".haxaml/expect.yaml"] + source_paths
+    version = get_version()
     return {
-        "governance": {"system": "haxaml", "version": "0.1.0"},
+        "governance": {"system": "haxaml", "version": version},
         "before_task": {
             "read_first": [".haxaml/facts.yaml", ".haxaml/rules.yaml", ".haxaml/acts.yaml"],
             "then_read": then_read,
@@ -413,7 +416,7 @@ def _expect_template(plan: AdoptionPlan) -> dict:
                 "touches": ["acts", "expect", "exports"],
                 "requires": ["Completed run 1", "Validated FRAME files"],
                 "uses_map": uses_map,
-                "verify": ["haxaml validate --dir .", "haxaml export --all"],
+                "verify": ["haxaml validate --dir .", "haxaml export"],
                 "done_when": "FRAME validates and generated native files match supported agent conventions.",
                 "risks": ["Generated files may replace hand-written instructions if the user chooses to export over them."],
             },
