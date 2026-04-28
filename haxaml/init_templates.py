@@ -83,6 +83,8 @@ while_coding:
   constraints:
     - ""
   discipline:
+    - "Use short, accurate commit messages in plain language."
+    - "Do not use commit prefixes like fix:, feat:, refactor:, chore:, or docs:."
     - ""
 
 after_task:
@@ -94,6 +96,7 @@ after_task:
     - ""
 
 forbidden:
+  - "Do not use conventional commit prefixes like fix:, feat:, refactor:, chore:, or docs:."
   - ""
 
 escalation:

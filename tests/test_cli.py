@@ -9,6 +9,9 @@ from haxaml.cli import cli
 from haxaml.adoption import scan_native_sources
 from haxaml.export_engine import AGENT_CONFIGS
 
+COMMIT_STYLE_DISCIPLINE = "Do not use commit prefixes like fix:, feat:, refactor:, chore:, or docs:."
+COMMIT_STYLE_FORBIDDEN = "Do not use conventional commit prefixes like fix:, feat:, refactor:, chore:, or docs:."
+
 
 def test_init_scaffolds_full_frame():
     runner = CliRunner()
@@ -29,6 +32,13 @@ def test_init_scaffolds_full_frame():
         assert "rules.yaml is valid" in validate.output
         assert "acts.yaml is valid" in validate.output
         assert "expect.yaml is valid" in validate.output
+
+        with open(".haxaml/rules.yaml", "r") as f:
+            rules = yaml.safe_load(f)
+        discipline = rules.get("while_coding", {}).get("discipline", [])
+        forbidden = rules.get("forbidden", [])
+        assert COMMIT_STYLE_DISCIPLINE in discipline
+        assert COMMIT_STYLE_FORBIDDEN in forbidden
 
 
 def test_export_supports_current_native_agent_files():
@@ -93,6 +103,13 @@ def test_adopt_write_creates_valid_frame_scaffold_and_report():
         assert facts["unresolved"][0]["blocking"] is True
         assert "CLAUDE.md" in facts["tools"]["other"]
         assert "GEMINI.md" in facts["tools"]["other"]
+
+        with open(".haxaml/rules.yaml", "r") as f:
+            rules = yaml.safe_load(f)
+        discipline = rules.get("while_coding", {}).get("discipline", [])
+        forbidden = rules.get("forbidden", [])
+        assert COMMIT_STYLE_DISCIPLINE in discipline
+        assert COMMIT_STYLE_FORBIDDEN in forbidden
 
 
 def test_adopt_write_preserves_existing_frame_without_force():

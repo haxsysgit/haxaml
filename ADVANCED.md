@@ -69,6 +69,23 @@ Compatibility wrappers remain but are deprecated:
 - `haxaml_done`
 - `haxaml_context`
 
+## Commit message style
+
+Use short, accurate commit messages in plain language.
+Avoid conventional prefixes such as `fix:`, `feat:`, `refactor:`, `chore:`, and `docs:`.
+
+Good examples:
+
+- `Add 0.4.x roadmap draft`
+- `Improve reconcile conflict wording`
+- `Update adoption plan summary output`
+
+Bad examples:
+
+- `feat: add roadmap`
+- `fix: reconcile output`
+- `refactor: adoption template`
+
 MCP tool responses are structured JSON envelopes:
 
 - `ok`

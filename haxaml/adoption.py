@@ -304,6 +304,8 @@ def _rules_template(plan: AdoptionPlan) -> dict:
             "discipline": [
                 "Run haxaml validate after FRAME edits.",
                 "Regenerate native files only after FRAME is coherent.",
+                "Use accurate commit messages in plain language.",
+                "Do not use commit prefixes like fix:, feat:, refactor:, chore:, or docs:.",
             ],
         },
         "after_task": {
@@ -315,6 +317,7 @@ def _rules_template(plan: AdoptionPlan) -> dict:
             "Do not claim Haxaml inferred project intent.",
             "Do not use README.md as the primary operating target when native agent files exist.",
             "Do not overwrite existing FRAME files unless --force was intentionally used.",
+            "Do not use conventional commit prefixes like fix:, feat:, refactor:, chore:, or docs:.",
         ],
         "escalation": {
             "act_independently": ["Inventory native agent files and draft FRAME adoption scaffolds."],

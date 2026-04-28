@@ -48,6 +48,15 @@ def _msg(result):
     return str(result)
 
 
+RECONCILE_REQUIRED_GUIDANCE_FIELDS = {
+    "fix_confidence",
+    "safe_to_auto_apply",
+    "related_files",
+    "why_it_matters",
+    "suggested_next_tool",
+}
+
+
 @pytest.fixture
 def fresh_project(tmp_path):
     """Create a fresh project with initialized FRAME files."""
@@ -645,6 +654,49 @@ class TestReconcile:
         assert result["ok"] is False
         assert result["error"]["code"] == "derivation_conflicts"
         assert result["error"]["details"]["severity_totals"]["blocking"] > 0
+
+        conflicts = result["error"]["details"]["conflicts"]
+        assert conflicts
+        allowed_confidence = {"low", "medium", "high"}
+        allowed_next_tool = {
+            "haxaml_validate",
+            "haxaml_doctor",
+            "haxaml_impact",
+            "haxaml_session_verify",
+            "haxaml_context_pack",
+            "manual_edit",
+        }
+        for conflict in conflicts:
+            assert RECONCILE_REQUIRED_GUIDANCE_FIELDS.issubset(conflict.keys())
+            assert conflict["fix_confidence"] in allowed_confidence
+            assert conflict["safe_to_auto_apply"] is False
+            assert conflict["suggested_next_tool"] in allowed_next_tool
+            assert isinstance(conflict["related_files"], list)
+            assert len(conflict["related_files"]) > 0
+            assert conflict["related_files"] == sorted(conflict["related_files"])
+            assert all(isinstance(item, str) and item for item in conflict["related_files"])
+            assert isinstance(conflict["why_it_matters"], str)
+            assert conflict["why_it_matters"].strip()
+
+    def test_deterministic_summary_for_equivalent_state(self, governed_project):
+        map_data = {
+            "modules": [
+                {"name": "auth", "purpose": "Auth", "files": ["src/auth/"]},
+                {"name": "api", "purpose": "API", "files": ["src/api/"]},
+            ],
+            "dependencies": [{"from": "api", "to": "auth", "reason": "auth middleware"}],
+            "impact": [{"when": "auth", "check": ["api tests"]}],
+        }
+        (governed_project / ".haxaml" / "map.yaml").write_text(
+            yaml.dump(map_data, default_flow_style=False, sort_keys=False)
+        )
+
+        first = haxaml_reconcile(str(governed_project))
+        second = haxaml_reconcile(str(governed_project))
+        first_details = first["error"]["details"]
+        second_details = second["error"]["details"]
+        assert first_details["human_summary"] == second_details["human_summary"]
+        assert first_details["conflicts"] == second_details["conflicts"]
 
 
 # ─── Needs ───────────────────────────────────────────────────────────────────

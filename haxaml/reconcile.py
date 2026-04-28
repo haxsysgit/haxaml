@@ -11,6 +11,27 @@ from haxaml.paths import resolve_frame_file
 from haxaml.validator import load_yaml
 
 
+_CATEGORY_FIX_CONFIDENCE = {
+    "map_required": "high",
+    "module_sync": "medium",
+    "facts_boundary_sync": "low",
+    "runbook_module_sync": "medium",
+    "map_dependency_integrity": "high",
+    "dependency_sync": "medium",
+    "impact_integrity": "medium",
+}
+
+_CATEGORY_WHY_IT_MATTERS = {
+    "map_required": "Map-canonical checks are blocked without map.yaml, so validation and session gates cannot reliably enforce module boundaries.",
+    "module_sync": "When map modules and rules modules diverge, boundary ownership and downstream verification gates become inconsistent.",
+    "facts_boundary_sync": "Facts boundaries that drift from map modules reduce operator visibility and can mislead planning context.",
+    "runbook_module_sync": "Runbook touches must reference mapped modules so planned work aligns with enforced map boundaries.",
+    "map_dependency_integrity": "Dependencies that reference undeclared modules make impact analysis and gate decisions unreliable.",
+    "dependency_sync": "Dependency drift between map and rules causes inconsistent boundary enforcement across tools.",
+    "impact_integrity": "Impact triggers must point to declared modules so verification can enforce the correct checks.",
+}
+
+
 def _normalize_name(value: Any) -> str:
     return str(value).strip().lower()
 
@@ -130,6 +151,25 @@ def _edge_records(edges: set[tuple[str, str]], source: str | None = None) -> lis
     return records
 
 
+def _path_file(path: str) -> str:
+    return str(path).split(":", 1)[0].strip()
+
+
+def _related_files(canonical_path: str, derived_path: str) -> list[str]:
+    files = {_path_file(canonical_path), _path_file(derived_path)}
+    return sorted(f for f in files if f)
+
+
+def _fix_confidence(category: str, severity: str) -> str:
+    if category in _CATEGORY_FIX_CONFIDENCE:
+        return _CATEGORY_FIX_CONFIDENCE[category]
+    return "medium" if severity == "blocking" else "low"
+
+
+def _why_it_matters(category: str, message: str) -> str:
+    return _CATEGORY_WHY_IT_MATTERS.get(category, f"This conflict matters because {message.lower()}")
+
+
 @dataclass
 class _ConflictBuilder:
     items: list[dict[str, Any]]
@@ -148,6 +188,8 @@ class _ConflictBuilder:
         suggested_fix_action: str,
     ) -> None:
         self.counter += 1
+        related_files = _related_files(canonical_path, derived_path)
+        fix_confidence = _fix_confidence(category, severity)
         self.items.append(
             {
                 "id": f"conflict-{self.counter:03d}",
@@ -159,6 +201,11 @@ class _ConflictBuilder:
                 "derived_value": derived_value,
                 "message": message,
                 "suggested_fix_action": suggested_fix_action,
+                "fix_confidence": fix_confidence,
+                "safe_to_auto_apply": False,
+                "related_files": related_files,
+                "why_it_matters": _why_it_matters(category, message),
+                "suggested_next_tool": "manual_edit",
             }
         )
 
