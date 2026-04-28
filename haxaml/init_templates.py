@@ -96,7 +96,6 @@ after_task:
     - ""
 
 forbidden:
-  - "Do not use conventional commit prefixes like fix:, feat:, refactor:, chore:, or docs:."
   - ""
 
 escalation:
