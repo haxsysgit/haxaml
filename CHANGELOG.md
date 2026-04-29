@@ -6,7 +6,7 @@
 
 - Repositioned the public docs around Haxaml as an MCP-first governance project.
 - Simplified the public README into a lean OSS entrypoint with an MCP-centered bootstrap prompt.
-- Renamed `HAXAML_FULL.md` to `haxaml.md` for the public deep-dive guide.
+- Moved the public deep-dive guide to `learn/haxaml.md`.
 - Removed non-public scratch, research, generated build, and legacy documentation artifacts from the public repo surface.
 - Aligned `haxaml` and `haxaml-mcp` package versions at `0.5.0`.
 

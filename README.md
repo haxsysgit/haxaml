@@ -75,11 +75,10 @@ Do not edit .haxaml/* for utility or side tasks that are not governed project wo
 
 ## Docs
 
-- [FRAME.md](https://github.com/haxsysgit/haxaml/blob/main/FRAME.md) - FRAME memory model
-- [haxaml.md](https://github.com/haxsysgit/haxaml/blob/main/haxaml.md) - how Haxaml makes FRAME operational
+- [learn/FRAME.md](https://github.com/haxsysgit/haxaml/blob/main/learn/FRAME.md) - FRAME memory model
+- [learn/haxaml.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml.md) - how Haxaml makes FRAME operational
 - [MCP.md](https://github.com/haxsysgit/haxaml/blob/main/MCP.md) - MCP setup and operator guide
-- [assurance.md](https://github.com/haxsysgit/haxaml/blob/main/assurance.md) - implementation evidence and current maturity notes
-- [LONGTERM.md](https://github.com/haxsysgit/haxaml/blob/main/LONGTERM.md) - roadmap direction
+- [v1.0_Roadmap.md](https://github.com/haxsysgit/haxaml/blob/main/v1.0_Roadmap.md) - roadmap from `0.6.0` to `1.0`
 - [docs/architecture.md](https://github.com/haxsysgit/haxaml/blob/main/docs/architecture.md) - module layout and MCP split overview
 - [docs/mcp-tool-reference.md](https://github.com/haxsysgit/haxaml/blob/main/docs/mcp-tool-reference.md) - compact MCP tool and resource index
 - [CONTRIBUTING.md](https://github.com/haxsysgit/haxaml/blob/main/CONTRIBUTING.md) - contributor workflow and expectations
