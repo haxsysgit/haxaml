@@ -4,89 +4,68 @@
 
 Haxaml is an LLM-first governance layer for coding agents.
 
-It gives agents one deterministic source of truth called **FRAME** and a strict MCP tool workflow so project context does not drift across sessions or tools.
+It is an MCP-first project: agents are expected to work through the Haxaml MCP server, with the CLI available mainly for local setup and fallback.
 
-## What Haxaml Is For
+Latest release: `0.5.0`.
 
-Use Haxaml when an AI agent is doing implementation work and you want:
+Haxaml gives agents a deterministic project memory model called **FRAME**, plus MCP tools that make context, rules, verification, and handoff explicit during real work.
 
-- explicit project facts and rules
-- deterministic context handoff
-- verify/record gates before claiming success
-- stable MCP-native workflows instead of ad-hoc prompting
+## Why It Exists
 
-## 5-Minute Start
+Agent instructions are usually scattered across prompt files, chat history, local conventions, and whatever the current model remembers. That works until the project grows, the session rolls over, or a different agent enters the repo.
 
-1. Install:
+Haxaml keeps the operational truth in versioned project files and exposes it through a predictable workflow. Agents can ask for the right context, follow project rules, verify before claiming success, and record what changed.
+
+## What Agents Get
+
+- Project facts, rules, history, expectations, and impact maps in `.haxaml/`
+- Task-specific context packs instead of giant prompt dumps
+- Validation and reconcile checks before state is trusted
+- Verify/record gates for governed work
+- Export paths for native agent files such as `AGENTS.md`, `CLAUDE.md`, Cursor rules, Copilot instructions, and Gemini guidance
+
+## Install
 
 ```bash
-pip install haxaml
-# or
-uv tool install haxaml
+uvx haxaml-mcp
+```
+
+For persistent local installs:
+
+```bash
 uv tool install haxaml-mcp
 ```
 
-2. Initialize FRAME:
+## MCP Start
+
+Configure your MCP client to launch `haxaml-mcp` with `HAXAML_PROJECT_DIR` set to the project root. See [MCP.md](https://github.com/haxsysgit/haxaml/blob/main/MCP.md) for the human/operator guide.
+
+Once connected, agents can initialize and validate through MCP tools:
+
+- `haxaml_init`
+- `haxaml_validate`
+
+Optional CLI fallback for local setup:
 
 ```bash
 haxaml init
 haxaml validate
 ```
 
-3. Configure MCP client:
+## Bootstrap Prompt
 
-```json
-{
-  "mcpServers": {
-    "haxaml": {
-      "command": "uvx",
-      "args": ["haxaml-mcp"],
-      "env": {
-        "HAXAML_PROJECT_DIR": "/path/to/project"
-      }
-    }
-  }
-}
-```
-
-4. For existing projects:
-
-```bash
-haxaml adopt-plan --dir .
-haxaml reconcile --dir .
-haxaml validate --dir .
-```
-
-For the practical lifecycle flow and failure recovery path, use `MCP.md` sections: `Quick Start MCP Flow`, `Demo Walkthrough`, `Top 5 Troubleshooting`, and `Detail Mode Quick Examples`.
-
-## Startup Prompt For Agent Files
-
-Paste this at the top of your native agent file (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, etc.):
+Paste this into your native agent instruction file (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, etc.):
 
 ```md
-You are working in a repository governed by Haxaml.
+This repository uses Haxaml for agent governance.
 
-Haxaml is the project governance source of truth for LLM agents.
-Use Haxaml MCP tools directly instead of ad-hoc workflow decisions.
-
-Operational contract:
-1. Start with haxaml_guidance(task=...).
-2. Open a governed run with haxaml_session_start(task=..., description=...).
-3. Generate execution steps with haxaml_session_plan(session_id=...).
-4. Pull only task-relevant context with haxaml_context_pack(task=...).
-5. Before recording success/partial, run haxaml_session_verify(...).
-6. Record outcomes using haxaml_session_record(...).
-7. If boundary or derivation risk appears, run haxaml_reconcile(project_dir='.') and resolve conflicts first.
-
-Adoption rule:
-- For existing repos, run haxaml_adopt_plan(project_dir='.') first.
-- Do not overwrite existing governance files unless explicitly requested.
-
-Safety rule:
-- Do not claim success if validation/reconcile gates are unresolved.
+Use the Haxaml MCP server for governed project work.
+Before governed project work, call haxaml_about(project_dir='.') once in the active MCP session.
+Follow the workflow returned by that tool.
+Do not edit .haxaml/* for utility or side tasks that are not governed project work.
 ```
 
-## Core FRAME Files
+## FRAME Files
 
 - `.haxaml/facts.yaml` - project truth
 - `.haxaml/rules.yaml` - agent operating rules
@@ -96,7 +75,12 @@ Safety rule:
 
 ## Docs
 
-- [MCP.md](https://github.com/haxsysgit/haxaml/blob/main/MCP.md) - MCP-first operator guide with bootstrap-aligned config examples, Quick Start MCP Flow, demo walkthroughs, bad/good usage pairs, and troubleshooting
-- [ADVANCED.md](https://github.com/haxsysgit/haxaml/blob/main/ADVANCED.md) - deeper command and export behavior
+- [FRAME.md](https://github.com/haxsysgit/haxaml/blob/main/FRAME.md) - FRAME memory model
+- [haxaml.md](https://github.com/haxsysgit/haxaml/blob/main/haxaml.md) - how Haxaml makes FRAME operational
+- [MCP.md](https://github.com/haxsysgit/haxaml/blob/main/MCP.md) - MCP setup and operator guide
+- [assurance.md](https://github.com/haxsysgit/haxaml/blob/main/assurance.md) - implementation evidence and current maturity notes
 - [LONGTERM.md](https://github.com/haxsysgit/haxaml/blob/main/LONGTERM.md) - roadmap direction
-- `CHANGELOG.md` - release notes
+- [docs/architecture.md](https://github.com/haxsysgit/haxaml/blob/main/docs/architecture.md) - module layout and MCP split overview
+- [docs/mcp-tool-reference.md](https://github.com/haxsysgit/haxaml/blob/main/docs/mcp-tool-reference.md) - compact MCP tool and resource index
+- [CONTRIBUTING.md](https://github.com/haxsysgit/haxaml/blob/main/CONTRIBUTING.md) - contributor workflow and expectations
+- [examples/minimal-governed-flow](https://github.com/haxsysgit/haxaml/tree/main/examples/minimal-governed-flow) - minimal FRAME project for governed-flow smoke tests

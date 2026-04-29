@@ -247,3 +247,15 @@ properties:
           pct_128000:
             type: number
             minimum: 0
+
+  about:
+    type: object
+    description: "Onboarding acknowledgment state for haxaml_about."
+    properties:
+      acknowledged_at:
+        type: string
+        format: date-time
+      prompt_version:
+        type: string
+      haxaml_version:
+        type: string

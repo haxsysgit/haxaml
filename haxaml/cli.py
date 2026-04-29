@@ -319,9 +319,20 @@ def health(project_dir):
 
 
 @cli.command()
+@click.option("--dir", "project_dir", default=".", help="Project directory")
+def about(project_dir):
+    """Load Haxaml/FRAME onboarding brief (mandatory first call for lifecycle tools)."""
+    result = _mcp_tools().haxaml_about(project_dir=project_dir)
+    click.echo(_result_text(result))
+    if _is_failure(result):
+        sys.exit(1)
+
+
+@cli.command()
 @click.option("--facts", "facts_path", default=None, help="Path to facts.yaml")
 @click.option("--dir", "project_dir", default=".", help="Project directory for full report")
-def benchmark(facts_path, project_dir):
+@click.option("--mode", default="frame", type=click.Choice(["frame", "workflow"]), help="Benchmark mode")
+def benchmark(facts_path, project_dir, mode):
     """Run token efficiency benchmarks."""
     if facts_path is not None:
         if not os.path.exists(facts_path):
@@ -331,7 +342,7 @@ def benchmark(facts_path, project_dir):
         click.echo(report)
         return
 
-    result = _mcp_tools().haxaml_benchmark(project_dir)
+    result = _mcp_tools().haxaml_benchmark(project_dir=project_dir, mode=mode)
     click.echo(_result_text(result))
     if _is_failure(result):
         sys.exit(1)
@@ -376,13 +387,17 @@ def session_plan(project_dir, session_id):
 @click.option("--task", required=True, help="Task to build context for")
 @click.option("--pack", default="balanced", type=click.Choice(["minimal", "balanced", "standard", "full"]), help="Pack detail level")
 @click.option("--no-state", is_flag=True, help="Exclude acts state from the pack")
-def context_pack(project_dir, task, pack, no_state):
+@click.option("--session-id", default="", help="Session ID for one-pack-per-task enforcement")
+@click.option("--refresh-reason", default="", help="Reason for repeated context-pack call")
+def context_pack(project_dir, task, pack, no_state, session_id, refresh_reason):
     """Build token-efficient task-specific context pack."""
     result = _mcp_tools().haxaml_context_pack(
         task=task,
         project_dir=project_dir,
         pack=pack,
         include_state=not no_state,
+        session_id=session_id,
+        refresh_reason=refresh_reason,
     )
     click.echo(_result_text(result))
     if _is_failure(result):

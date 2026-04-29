@@ -279,3 +279,19 @@ def test_mcp_bootstrap_write_creates_project_config():
         )
         assert result.exit_code == 0, result.output
         assert os.path.exists(".mcp.json")
+
+
+def test_cli_about_and_workflow_benchmark_mode():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        init = runner.invoke(cli, ["init", "."])
+        assert init.exit_code == 0, init.output
+
+        about = runner.invoke(cli, ["about", "--dir", "."])
+        assert about.exit_code == 0, about.output
+        assert "Haxaml onboarding brief loaded" in about.output
+
+        benchmark = runner.invoke(cli, ["benchmark", "--mode", "workflow", "--dir", "."])
+        assert benchmark.exit_code == 0, benchmark.output
+        assert "Workflow benchmark complete" in benchmark.output

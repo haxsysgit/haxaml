@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 - 2026-04-29
+
+### Changed
+
+- Repositioned the public docs around Haxaml as an MCP-first governance project.
+- Simplified the public README into a lean OSS entrypoint with an MCP-centered bootstrap prompt.
+- Renamed `HAXAML_FULL.md` to `haxaml.md` for the public deep-dive guide.
+- Removed non-public scratch, research, generated build, and legacy documentation artifacts from the public repo surface.
+- Aligned `haxaml` and `haxaml-mcp` package versions at `0.5.0`.
+
 ## 0.4.5 - 2026-04-28
 
 ### Added

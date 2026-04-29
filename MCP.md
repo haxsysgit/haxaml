@@ -25,6 +25,7 @@ For full payloads on a specific call, pass `detail="full"`.
 
 ## Core Tools (0.4.x)
 
+- `haxaml_about` (mandatory once per active agent/MCP session before `haxaml_session_start`)
 - `haxaml_guidance`
 - `haxaml_session_start`
 - `haxaml_session_plan`
@@ -40,6 +41,12 @@ Compatibility wrappers (deprecated in 0.4.x):
 - `haxaml_run` -> `haxaml_session_start`
 - `haxaml_done` -> `haxaml_session_verify` + `haxaml_session_record`
 - `haxaml_context` -> `haxaml_context_pack`
+
+## Operating Modes
+
+- Governed mode: project work. Use Haxaml lifecycle and FRAME journal updates.
+- Utility mode: side task or unrelated request. Do not call lifecycle tools and do not edit `.haxaml/*`.
+- Resume rule: after utility work, return to governed flow with `haxaml_guidance` then `haxaml_session_start`.
 
 ## MCP Client Config Examples (Bootstrap-Aligned)
 
@@ -78,24 +85,34 @@ haxaml mcp-bootstrap --mode snippets --editor generic --editor claude_code --edi
 
 Use this call order for governed execution:
 
-1. `haxaml_guidance(task=..., project_dir='.')`
-2. `haxaml_session_start(task=..., description=..., project_dir='.')`
-3. `haxaml_session_plan(session_id=..., project_dir='.')`
-4. `haxaml_context_pack(task=..., project_dir='.', pack='balanced', include_state=True)`
-5. `haxaml_session_verify(task=..., project_dir='.', session_id=..., inspected_context=[...], changed_files=[...], summary=...)`
-6. `haxaml_session_record(task=..., result='success'|'partial'|'failed', project_dir='.', session_id=..., changes=..., decisions=..., risks=...)`
-7. `haxaml_reconcile(project_dir='.')` when boundary/derivation risk appears (or before retrying blocked record/validate).
+If the task is utility/off-topic, skip this flow and keep `.haxaml/*` unchanged.
+
+1. `haxaml_about(project_dir='.')`
+2. `haxaml_guidance(task=..., project_dir='.')`
+3. `haxaml_session_start(task=..., description=..., project_dir='.')`
+4. `haxaml_session_plan(session_id=..., project_dir='.')`
+5. `haxaml_context_pack(task=..., project_dir='.', pack='balanced', include_state=True, session_id=...)`
+6. `haxaml_session_verify(task=..., project_dir='.', session_id=..., inspected_context=[...], changed_files=[...], summary=...)`
+7. `haxaml_session_record(task=..., result='success'|'partial'|'failed', project_dir='.', session_id=..., changes=..., decisions=..., risks=...)`
+8. `haxaml_reconcile(project_dir='.')` when boundary/derivation risk appears (or before retrying blocked record/validate).
 
 Expected signals:
 
-- Step 1: `data.status`, `data.required_questions`, `data.recommended_packs`.
-- Step 2: `data.session_id`, `data.required_reads`.
-- Step 3: `data.plan`, `data.verification_expectations`.
-- Step 4 (short default): `data.tokens`, `data.context_window_usage`, `data.included_sections`, `data.omitted_sections`, `data.omitted_context`.
-- Step 4 (full): `data.context_pack` is included.
-- Step 5: `data.verdict` should be `pass` or `pass_with_risks` before recording `success`/`partial`.
-- Step 6: `data.run_id` on success; gate failures return `error.code`.
-- Step 7: confirm `severity_totals.blocking == 0` before expecting record/validate success.
+- Step 1: `data.recommended_workflow`, `data.call_budgets`.
+- Step 2: `data.status`, `data.call_budget`, `data.visibility_calls_optional`.
+- Step 3: `data.session_id`, `data.required_reads`.
+- Step 4: `data.plan`, `data.verification_expectations`.
+- Step 5 (short default): `data.tokens`, `data.context_window_usage`, `data.included_sections`, `data.omitted_sections`, `data.omitted_context`.
+- Step 5 policy: one context-pack call per session/task by default; repeats require `refresh_reason`.
+- Step 5 (full): `data.context_pack` is included.
+- Step 6: `data.verdict` should be `pass` or `pass_with_risks` before recording `success`/`partial`.
+- Step 7: `data.run_id` on success; gate failures return `error.code`.
+- Step 8: confirm `severity_totals.blocking == 0` before expecting record/validate success.
+
+Lean default:
+- Keep to `about -> guidance -> start -> plan -> context_pack -> verify -> record`.
+- Visibility calls are optional diagnostics: `haxaml_health`, `haxaml_needs`, `haxaml_reconcile`, `haxaml_state_show`.
+- Retry rule: if the same gate error appears twice, stop retries, fix root cause, then retry once.
 
 ## Demo Walkthrough
 
@@ -107,17 +124,19 @@ Request:
 
 Flow and expected response signals:
 
-1. `haxaml_guidance(task="Add parser tests for empty-input handling.", project_dir=".")`
+1. `haxaml_about(project_dir=".")`
+- signal: `ok=true`; onboarding prompt and lean workflow are returned.
+2. `haxaml_guidance(task="Add parser tests for empty-input handling.", project_dir=".")`
 - signal: `ok=true`; use `data.required_questions` if present.
-2. `haxaml_session_start(task="Add parser tests for empty-input handling.", description="Add tests only.", project_dir=".")`
+3. `haxaml_session_start(task="Add parser tests for empty-input handling.", description="Add tests only.", project_dir=".")`
 - signal: `ok=true`; capture `data.session_id`.
-3. `haxaml_session_plan(session_id="<session_id>", project_dir=".")`
+4. `haxaml_session_plan(session_id="<session_id>", project_dir=".")`
 - signal: `ok=true`; non-empty `data.plan`.
-4. `haxaml_context_pack(task="Add parser tests for empty-input handling.", pack="standard", include_state=True, project_dir=".")`
+5. `haxaml_context_pack(task="Add parser tests for empty-input handling.", pack="standard", include_state=True, session_id="<session_id>", project_dir=".")`
 - signal: `ok=true`; short mode returns context text + `tokens` + included/omitted metadata. (`standard` resolves to `balanced`)
-5. `haxaml_session_verify(task="Add parser tests for empty-input handling.", session_id="<session_id>", inspected_context=[".haxaml/facts.yaml",".haxaml/rules.yaml"], changed_files=["tests/test_parser.py"], summary="Added empty-input test coverage.", project_dir=".")`
+6. `haxaml_session_verify(task="Add parser tests for empty-input handling.", session_id="<session_id>", inspected_context=[".haxaml/facts.yaml",".haxaml/rules.yaml"], changed_files=["tests/test_parser.py"], summary="Added empty-input test coverage.", project_dir=".")`
 - signal: `ok=true`; `data.verdict` is `pass` or `pass_with_risks`.
-6. `haxaml_session_record(task="Add parser tests for empty-input handling.", result="success", session_id="<session_id>", changes="Added parser empty-input tests.", decisions="Reuse existing test fixtures.", risks="None.", project_dir=".")`
+7. `haxaml_session_record(task="Add parser tests for empty-input handling.", result="success", session_id="<session_id>", changes="Added parser empty-input tests.", decisions="Reuse existing test fixtures.", risks="None.", project_dir=".")`
 - signal: `ok=true`; `data.run_id` starts with `run-`.
 
 ### Gate-Failure Branch (Derivation Conflict)
@@ -143,8 +162,8 @@ Note:
 
 1. Verify gate
 - Bad: `haxaml_guidance -> haxaml_session_start -> haxaml_session_record(result="success")`
-- Result: `error.code="verification_required"`
-- Good: `haxaml_guidance -> haxaml_session_start -> haxaml_session_plan -> haxaml_context_pack -> haxaml_session_verify(verdict=pass|pass_with_risks) -> haxaml_session_record`
+- Result: `error.code="about_required"` first, then `error.code="verification_required"` if verify is skipped.
+- Good: `haxaml_about -> haxaml_guidance -> haxaml_session_start -> haxaml_session_plan -> haxaml_context_pack -> haxaml_session_verify(verdict=pass|pass_with_risks) -> haxaml_session_record`
 
 2. Reconcile gate
 - Bad: `haxaml_session_verify -> haxaml_session_record(result="success")` while blocking map/rules conflicts exist
@@ -154,36 +173,56 @@ Note:
 3. Context scope
 - Bad: `haxaml_context(include_state=True)` for every task
 - Result: oversized context and weak task focus
-- Good: `haxaml_context_pack(task=..., pack="minimal"|"balanced")` per task, then verify/record
+- Good: `haxaml_context_pack(task=..., pack="minimal"|"balanced", session_id=...)` once; repeat only with `refresh_reason`
 
-## Top 5 Troubleshooting
+## Troubleshooting
 
 1. Symptom: `error.code="missing_facts"` on guidance/start/context tools.
 - Fix: run `haxaml_init(project_dir='.')` or create `.haxaml/facts.yaml`, then `haxaml_validate(project_dir='.')`.
 
-2. Symptom: `error.code="unknown_session"` on `haxaml_session_plan`.
+2. Symptom: `error.code="about_required"` on `haxaml_session_start`.
+- Fix: call `haxaml_about(project_dir='.')` once in the active agent/MCP session, then retry.
+
+3. Symptom: `error.code="unknown_session"` on `haxaml_session_plan`.
 - Fix: use a current `session_id` from `haxaml_session_start`; then retry plan.
 
-3. Symptom: `error.code="verification_required"` on `haxaml_session_record(result="success"|"partial")`.
+4. Symptom: `error.code="verification_required"` on `haxaml_session_record(result="success"|"partial")`.
 - Fix: run `haxaml_session_verify` first and ensure verdict is `pass` or `pass_with_risks`.
 
-4. Symptom: `error.code="derivation_conflicts"` on `haxaml_validate` or `haxaml_session_record`.
+5. Symptom: `error.code="derivation_conflicts"` on `haxaml_validate` or `haxaml_session_record`.
 - Fix: run `haxaml_reconcile`, apply suggested fixes, and retry when blocking conflicts are zero.
 
-5. Symptom: `error.code="conflict_reason_required"` on `haxaml_session_record(result="failed")`.
-- Fix: explicitly document unresolved conflict as stop reason in `changes`, `decisions`, or `risks`, or resolve conflicts before recording.
+6. Symptom: `error.code="utility_mode_task"` on lifecycle tools.
+- Fix: treat the request as utility mode (no lifecycle calls, no `.haxaml/*` edits). Resume governed flow only when back to project work.
+
+7. Symptom: `error.code="retry_policy_blocked"`.
+- Fix: stop looped retries, resolve root cause, then retry once.
+
+8. Symptom: `error.code="context_pack_refresh_reason_required"` on repeated `haxaml_context_pack`.
+- Fix: pass `refresh_reason` only when scope changed or context became stale.
 
 ## Detail Mode Quick Examples
 
 - Default short:
-  - `haxaml_context_pack(task="implement auth module", pack="balanced", include_state=True)`
+  - `haxaml_context_pack(task="implement auth module", pack="balanced", include_state=True, session_id="<session_id>")`
 - Token/window tracking:
   - `data.tokens` gives pack token count.
   - `data.context_window_usage` gives percentage usage for `4k`, `8k`, `32k`, and `128k` windows.
 - Full for one call:
-  - `haxaml_context_pack(task="implement auth module", pack="balanced", include_state=True, detail="full")`
+  - `haxaml_context_pack(task="implement auth module", pack="balanced", include_state=True, session_id="<session_id>", detail="full")`
 - Invalid value:
   - returns `error.code="invalid_detail"`
+
+## Workflow Benchmark Mode
+
+- Use `haxaml_benchmark(project_dir='.', mode='workflow')` for workflow-level profiling.
+- It returns profile totals for:
+  - `essential_short` (lean default)
+  - `expanded_short` (lean + visibility calls)
+  - `essential_full` (full detail payloads)
+- It also returns:
+  - `transport_overhead` (serialized envelope token estimates)
+  - `guardrails` (ceiling checks for CI drift detection)
 
 ## Adoption Flow (Non-Destructive First)
 
