@@ -60,6 +60,7 @@ def _call_budget_for(task_type: str, risk_level: str) -> dict[str, Any]:
         "haxaml_context_pack",
         "haxaml_session_verify",
         "haxaml_session_record",
+        "haxaml_expect_sync",
     ]
     base["optional_visibility_calls"] = visibility
     return base
@@ -242,7 +243,7 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
             "contract": [
                 "Call haxaml_about once per active agent/MCP session.",
                 "Use FRAME files as operating truth.",
-                "Run guidance/start/plan/context/verify/record in order.",
+                "Run guidance/start/plan/context/verify/record/expect_sync in order.",
                 "Treat visibility calls as optional diagnostics, not default every run.",
             ],
         },
@@ -266,6 +267,7 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
                 "haxaml_context_pack",
                 "haxaml_session_verify",
                 "haxaml_session_record",
+                "haxaml_expect_sync",
             ],
             "visibility_calls_optional": ["haxaml_health", "haxaml_needs", "haxaml_reconcile", "haxaml_state_show"],
             "detail_policy": {

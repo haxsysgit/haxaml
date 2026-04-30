@@ -4,8 +4,8 @@ This file is a compact operator reference for Haxaml MCP tools.
 
 ## Stable Contracts
 
-- Tool names are stable in 0.4.x.
-- Payload shape is stable in 0.4.x.
+- Tool names are stable in 0.5.x.
+- Payload shape is stable in 0.5.x.
 - Entry path remains `haxaml.mcp_server:main`.
 
 ## Tool Groups
@@ -27,6 +27,7 @@ This file is a compact operator reference for Haxaml MCP tools.
 - `haxaml_context_pack`
 - `haxaml_session_verify`
 - `haxaml_session_record`
+- `haxaml_expect_sync`
 - `haxaml_run` (wrapper)
 - `haxaml_done` (wrapper)
 
@@ -65,5 +66,6 @@ This file is a compact operator reference for Haxaml MCP tools.
 5. `haxaml_context_pack`
 6. `haxaml_session_verify`
 7. `haxaml_session_record`
+8. `haxaml_expect_sync`
 
 Use `haxaml_reconcile` when conflicts or derivation warnings appear.

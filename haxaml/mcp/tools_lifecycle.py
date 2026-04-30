@@ -147,6 +147,12 @@ def haxaml_session_start(
     warnings = []
     if sm:
         state = sm.read()
+        expect_sync = _expect_sync_state(state)
+        if expect_sync["required"]:
+            warnings.append(
+                "Expect sync is pending from the previous recorded run. "
+                "Call haxaml_expect_sync before claiming the next governed completion."
+            )
         sessions = state.get("sessions", [])
         if not isinstance(sessions, list):
             sessions = []
@@ -564,6 +570,21 @@ def haxaml_session_record(
 
     sm, _ = _get_state_manager(project_dir)
     state = sm.read() if sm else {}
+    expect_sync = _expect_sync_state(state)
+    if expect_sync["required"]:
+        return _gate_error_with_retry_policy(
+            "haxaml_session_record",
+            "expect_sync_required",
+            "Previous record is not synced to expect.yaml. Call haxaml_expect_sync before recording another governed result.",
+            project_dir=project_dir,
+            task=task,
+            session_id=session_id,
+            details={
+                "pending_sync": expect_sync,
+                "retry_after": ["haxaml_expect_sync(project_dir='.')", "haxaml_session_record(...)"],
+            },
+        )
+
     latest_verdict = None
     latest_verification_id = ""
     verifications = state.get("verifications", []) if isinstance(state, dict) else []
@@ -651,6 +672,17 @@ def haxaml_session_record(
         context_compaction = state.get("context_compaction", {})
         if not isinstance(context_compaction, dict):
             context_compaction = {}
+        sync_state = _expect_sync_state(state)
+        sync_state.update(
+            {
+                "required": True,
+                "pending_run_id": run_result.run_id,
+                "pending_task": task,
+                "pending_result": result,
+                "pending_recorded_at": _now_iso(),
+            }
+        )
+        state["expect_sync"] = sync_state
         if session_id:
             session = _find_session(state, session_id)
             if session:
@@ -672,7 +704,10 @@ def haxaml_session_record(
     return _ok(
         "haxaml_session_record",
         {
-            "message": f"✓ Session record complete (run {run_result.run_id}, result={result})",
+            "message": (
+                f"✓ Session record complete (run {run_result.run_id}, result={result}). "
+                "Next: call haxaml_expect_sync to update expect.yaml deterministically."
+            ),
             "session_id": session_id,
             "run_id": run_result.run_id,
             "token_count": run_result.token_count,
@@ -683,6 +718,190 @@ def haxaml_session_record(
             "last_pack_tokens": context_compaction.get("last_pack_tokens", 0) if sm else 0,
             "last_context_window_usage": context_compaction.get("last_window_usage", {}) if sm else {},
             "auto_exported": stale,
+            "expect_sync_required": True,
+        },
+        warnings=warnings,
+        detail=detail_mode,
+    )
+
+
+@mcp_app.tool()
+def haxaml_expect_sync(
+    project_dir: str = ".",
+    run: int = 0,
+    detail: str = DETAIL_SHORT,
+) -> dict:
+    """Sync latest recorded acts outcome into expect.yaml runbook deterministically."""
+    detail_mode, detail_err = _normalize_detail("haxaml_expect_sync", detail)
+    if detail_err:
+        return detail_err
+
+    sm, _ = _get_state_manager(project_dir)
+    if not sm:
+        return _err("haxaml_expect_sync", "missing_acts", "acts.yaml not found")
+
+    state = sm.read()
+    sync_state = _expect_sync_state(state)
+    if not sync_state["required"]:
+        return _ok(
+            "haxaml_expect_sync",
+            {
+                "message": "No pending expect sync. acts.yaml and expect.yaml lifecycle is already reconciled.",
+                "synced": False,
+                "expect_sync": sync_state,
+            },
+            detail=detail_mode,
+        )
+
+    pending_result = sync_state["pending_result"].strip().lower()
+    status_map = {"success": "done", "partial": "active", "failed": "blocked"}
+    if pending_result not in status_map:
+        return _err(
+            "haxaml_expect_sync",
+            "invalid_pending_result",
+            f"Unsupported pending result for expect sync: {pending_result or '(empty)'}",
+            {"pending_sync": sync_state, "allowed_results": sorted(status_map.keys())},
+        )
+
+    project = Path(project_dir).resolve()
+    expect_path = resolve_frame_file(project, "expect.yaml")
+    if not expect_path:
+        return _err("haxaml_expect_sync", "missing_expect", "expect.yaml not found")
+
+    expect = load_yaml(str(expect_path))
+    runbook = expect.get("runbook", [])
+    if not isinstance(runbook, list) or not runbook:
+        return _err("haxaml_expect_sync", "invalid_expect_runbook", "expect.yaml runbook is missing or empty.")
+
+    target_run = int(run) if isinstance(run, int) else 0
+    if target_run <= 0:
+        active_runs = [
+            int(item.get("run"))
+            for item in runbook
+            if isinstance(item, dict) and item.get("status") == "active" and isinstance(item.get("run"), int)
+        ]
+        if len(active_runs) != 1:
+            return _err(
+                "haxaml_expect_sync",
+                "ambiguous_active_run",
+                "Cannot infer target runbook entry. Provide run=<number> explicitly.",
+                {"active_runs": sorted(active_runs), "pending_sync": sync_state},
+            )
+        target_run = active_runs[0]
+
+    target = None
+    for item in runbook:
+        if isinstance(item, dict) and item.get("run") == target_run:
+            target = item
+            break
+    if not target:
+        return _err(
+            "haxaml_expect_sync",
+            "run_not_found",
+            f"Run {target_run} not found in expect.runbook.",
+            {"run": target_run},
+        )
+
+    target["status"] = status_map[pending_result]
+    expected_status = target["status"]
+
+    # Maintain a single active run invariant when sync writes statuses.
+    if pending_result in ("success", "partial"):
+        for item in runbook:
+            if (
+                isinstance(item, dict)
+                and item is not target
+                and item.get("status") == "active"
+            ):
+                item["status"] = "planned"
+
+    if pending_result == "success":
+        done_like = {"done", "skipped"}
+        next_candidate = None
+        for item in sorted(
+            [x for x in runbook if isinstance(x, dict) and isinstance(x.get("run"), int)],
+            key=lambda r: int(r.get("run", 0)),
+        ):
+            if item.get("status") != "planned":
+                continue
+            deps = item.get("depends_on", [])
+            if not isinstance(deps, list):
+                deps = []
+            deps_ok = True
+            for dep_run in deps:
+                dep = next(
+                    (r for r in runbook if isinstance(r, dict) and r.get("run") == dep_run),
+                    None,
+                )
+                if not dep or dep.get("status") not in done_like:
+                    deps_ok = False
+                    break
+            if deps_ok:
+                next_candidate = item
+                break
+        if next_candidate:
+            next_candidate["status"] = "active"
+
+    phases = expect.get("phases", [])
+    if isinstance(phases, list):
+        active_phase_seen = False
+        for phase in phases:
+            if not isinstance(phase, dict):
+                continue
+            phase_name = str(phase.get("name", "")).strip()
+            if not phase_name:
+                continue
+            phase_runs = [
+                item
+                for item in runbook
+                if isinstance(item, dict) and str(item.get("phase", "")).strip() == phase_name
+            ]
+            if not phase_runs:
+                continue
+            statuses = {str(item.get("status", "")).strip() for item in phase_runs}
+            if statuses and statuses.issubset({"done", "skipped"}):
+                phase["status"] = "done"
+            elif "active" in statuses and not active_phase_seen:
+                phase["status"] = "active"
+                active_phase_seen = True
+            else:
+                phase["status"] = "planned"
+
+    import yaml
+
+    expect["runbook"] = runbook
+    if isinstance(phases, list):
+        expect["phases"] = phases
+    with open(expect_path, "w", encoding="utf-8") as handle:
+        yaml.dump(expect, handle, default_flow_style=False, sort_keys=False)
+
+    now = _now_iso()
+    sync_state["required"] = False
+    sync_state["last_synced_run_id"] = sync_state["pending_run_id"]
+    sync_state["last_synced_at"] = now
+    sync_state["last_sync_status"] = expected_status
+    sync_state["pending_run_id"] = ""
+    sync_state["pending_task"] = ""
+    sync_state["pending_result"] = ""
+    sync_state["pending_recorded_at"] = ""
+    state["expect_sync"] = sync_state
+    err = _persist_state(sm, state)
+    warnings = [f"Could not persist expect sync state: {err}"] if err else []
+
+    _retry_guard_clear(project_dir, tool="haxaml_session_record", error_code="expect_sync_required")
+    _retry_guard_clear(project_dir, tool="haxaml_validate", error_code="lifecycle_drift")
+
+    return _ok(
+        "haxaml_expect_sync",
+        {
+            "message": (
+                f"Synced acts -> expect for run {target_run}. "
+                f"Applied status '{expected_status}' from recorded result '{pending_result}'."
+            ),
+            "synced": True,
+            "run": target_run,
+            "applied_status": expected_status,
+            "expect_sync": sync_state,
         },
         warnings=warnings,
         detail=detail_mode,

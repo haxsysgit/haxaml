@@ -54,6 +54,7 @@ from haxaml.state_manager import StateError, StateManager
 from haxaml.supervision import render_impact, render_needs
 from haxaml.validator import (
     detect_missing_facts_fields,
+    load_yaml,
     validate_acts,
     validate_expect,
     validate_facts,
@@ -90,6 +91,7 @@ from haxaml.mcp.lifecycle_helpers import (
     _get_state_manager,
     _guidance_eval,
     _has_conflict_stop_reason,
+    _expect_sync_state,
     _now_iso,
     _persist_state,
     _rules_policy,

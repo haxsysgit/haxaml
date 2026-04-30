@@ -259,3 +259,29 @@ properties:
         type: string
       haxaml_version:
         type: string
+
+  expect_sync:
+    type: object
+    description: "Lifecycle sync state for propagating latest recorded acts outcome into expect.yaml."
+    properties:
+      required:
+        type: boolean
+        default: false
+      pending_run_id:
+        type: string
+      pending_task:
+        type: string
+      pending_result:
+        type: string
+        enum: ["", success, partial, failed]
+      pending_recorded_at:
+        type: string
+        format: date-time
+      last_synced_run_id:
+        type: string
+      last_synced_at:
+        type: string
+        format: date-time
+      last_sync_status:
+        type: string
+        enum: ["", planned, active, done, skipped, blocked]

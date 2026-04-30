@@ -110,6 +110,14 @@ def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
                 all_valid = False
             else:
                 lines.append(f"⚠ {new_name} not found (optional)")
+    acts_path = resolve_frame_file(p, "acts.yaml", "state.yaml")
+    if acts_path:
+        acts = load_yaml(str(acts_path))
+        sync_state = _expect_sync_state(acts)
+        if sync_state["required"]:
+            lines.append("✗ lifecycle drift: expect sync is required before validation can pass")
+            lines.append("  → fix: call haxaml_expect_sync(project_dir='.')")
+            all_valid = False
 
     expect_path = resolve_frame_file(p, "expect.yaml")
     if expect_path:
@@ -172,6 +180,21 @@ def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
             },
             detail=detail_mode,
         )
+    if acts_path:
+        acts = load_yaml(str(acts_path))
+        sync_state = _expect_sync_state(acts)
+        if sync_state["required"]:
+            return _gate_error_with_retry_policy(
+                "haxaml_validate",
+                "lifecycle_drift",
+                "FRAME lifecycle drift detected: expect.yaml has not been synced after the latest session record.",
+                project_dir=project_dir,
+                details={
+                    "message": message,
+                    "pending_sync": sync_state,
+                    "retry_after": ["haxaml_expect_sync(project_dir='.')", "haxaml_validate(project_dir='.')"],
+                },
+            )
     error_code = "derivation_conflicts" if reconcile["severity_totals"]["blocking"] > 0 else "validation_failed"
     return _gate_error_with_retry_policy(
         "haxaml_validate",

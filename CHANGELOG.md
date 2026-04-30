@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.1 - 2026-04-30
+
+### Added
+
+- New lifecycle tool: `haxaml_expect_sync` for deterministic acts -> expect runbook synchronization.
+- New `acts.yaml` lifecycle marker: `expect_sync` state (`required`, pending run metadata, last sync metadata).
+
+### Changed
+
+- `haxaml_session_record` now marks expect sync as required after every recorded result and blocks the next record until synced.
+- `haxaml_session_start` now warns (but allows start) when expect sync is pending from a previous record.
+- `haxaml_validate` now fails with `error.code="lifecycle_drift"` when expect sync is pending.
+- `haxaml_needs` now reports blocking lifecycle sync requirements when expect is out of date.
+- Workflow metadata and docs now include `haxaml_expect_sync` after `haxaml_session_record`.
+- Aligned `haxaml` and `haxaml-mcp` package versions at `0.5.1`.
+
 ## 0.5.0 - 2026-04-29
 
 ### Changed

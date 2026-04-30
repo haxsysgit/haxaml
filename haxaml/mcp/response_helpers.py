@@ -204,10 +204,23 @@ def _compact_success(tool: str, payload: dict) -> dict:
                 "last_pack_tokens",
                 "last_context_window_usage",
                 "auto_exported",
+                "expect_sync_required",
             ],
         )
         compact["reconcile"] = _reconcile_summary(payload.get("reconcile"))
         return compact
+
+    if tool == "haxaml_expect_sync":
+        return _pick_fields(
+            payload,
+            [
+                "message",
+                "synced",
+                "run",
+                "applied_status",
+                "expect_sync",
+            ],
+        )
 
     if tool == "haxaml_validate":
         compact = _pick_fields(payload, ["message", "valid"])

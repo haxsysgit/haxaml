@@ -5,13 +5,16 @@ import yaml
 from haxaml.mcp_server import (
     haxaml_about,
     haxaml_done,
+    haxaml_expect_sync,
     haxaml_guidance,
     haxaml_init,
+    haxaml_needs,
     haxaml_run,
     haxaml_session_plan,
     haxaml_session_record,
     haxaml_session_start,
     haxaml_session_verify,
+    haxaml_validate,
 )
 
 from .helpers import msg as _msg
@@ -288,6 +291,211 @@ class TestSessionLifecycle:
         )
         assert record["ok"] is False
         assert record["error"]["code"] == "derivation_conflicts"
+
+    def test_record_sets_expect_sync_and_validate_blocks_until_synced(self, governed_project):
+        started = haxaml_session_start(
+            task="implement auth module",
+            description="add login endpoint",
+            project_dir=str(governed_project),
+        )
+        assert started["ok"] is True
+        session_id = started["data"]["session_id"]
+
+        verify = haxaml_session_verify(
+            task="implement auth module",
+            project_dir=str(governed_project),
+            session_id=session_id,
+            inspected_context=[".haxaml/facts.yaml", ".haxaml/rules.yaml"],
+            changed_files=["src/auth.py"],
+            summary="Implemented login flow.",
+        )
+        assert verify["ok"] is True
+
+        record = haxaml_session_record(
+            task="implement auth module",
+            result="success",
+            session_id=session_id,
+            project_dir=str(governed_project),
+            changes="Added auth endpoints",
+            decisions="Used existing signer",
+            risks="none",
+        )
+        assert record["ok"] is True
+        assert record["data"]["expect_sync_required"] is True
+
+        blocked_validate = haxaml_validate(project_dir=str(governed_project))
+        assert blocked_validate["ok"] is False
+        assert blocked_validate["error"]["code"] == "lifecycle_drift"
+
+        needs = haxaml_needs(project_dir=str(governed_project))
+        assert needs["ok"] is True
+        assert "Blocking lifecycle sync" in _msg(needs)
+
+        synced = haxaml_expect_sync(project_dir=str(governed_project))
+        assert synced["ok"] is True
+        assert synced["data"]["synced"] is True
+
+        validated = haxaml_validate(project_dir=str(governed_project))
+        assert validated["ok"] is True
+
+    def test_expect_sync_success_activates_next_runnable_run(self, governed_project):
+        expect_path = governed_project / ".haxaml" / "expect.yaml"
+        expect = yaml.safe_load(expect_path.read_text())
+        expect["runbook"].append(
+            {
+                "run": 2,
+                "phase": "Phase 1",
+                "status": "planned",
+                "goal": "Next run",
+                "outcome": "Second slice done",
+                "depends_on": [1],
+                "touches": ["api"],
+                "requires": [],
+                "uses_map": False,
+                "verify": ["haxaml validate"],
+                "done_when": "Done",
+            }
+        )
+        expect_path.write_text(yaml.dump(expect, default_flow_style=False, sort_keys=False))
+
+        started = haxaml_session_start(
+            task="implement auth module",
+            description="add login endpoint",
+            project_dir=str(governed_project),
+        )
+        assert started["ok"] is True
+
+        verify = haxaml_session_verify(
+            task="implement auth module",
+            project_dir=str(governed_project),
+            session_id=started["data"]["session_id"],
+            inspected_context=[".haxaml/facts.yaml", ".haxaml/rules.yaml"],
+            changed_files=["src/auth.py"],
+            summary="Implemented login flow.",
+        )
+        assert verify["ok"] is True
+
+        record = haxaml_session_record(
+            task="implement auth module",
+            result="success",
+            session_id=started["data"]["session_id"],
+            project_dir=str(governed_project),
+            changes="Added auth endpoints",
+        )
+        assert record["ok"] is True
+
+        sync = haxaml_expect_sync(project_dir=str(governed_project))
+        assert sync["ok"] is True
+        assert sync["data"]["run"] == 1
+        assert sync["data"]["applied_status"] == "done"
+
+        updated = yaml.safe_load(expect_path.read_text())
+        runbook = {item["run"]: item for item in updated["runbook"]}
+        assert runbook[1]["status"] == "done"
+        assert runbook[2]["status"] == "active"
+
+    def test_session_start_warns_and_record_blocks_when_expect_sync_pending(self, governed_project):
+        first = haxaml_session_start(
+            task="task one",
+            description="first slice",
+            project_dir=str(governed_project),
+        )
+        assert first["ok"] is True
+
+        verify_first = haxaml_session_verify(
+            task="task one",
+            project_dir=str(governed_project),
+            session_id=first["data"]["session_id"],
+            inspected_context=[".haxaml/facts.yaml", ".haxaml/rules.yaml"],
+            changed_files=["src/one.py"],
+            summary="Done first slice.",
+        )
+        assert verify_first["ok"] is True
+
+        record_first = haxaml_session_record(
+            task="task one",
+            result="success",
+            session_id=first["data"]["session_id"],
+            project_dir=str(governed_project),
+            changes="First run done",
+        )
+        assert record_first["ok"] is True
+
+        second = haxaml_session_start(
+            task="task two",
+            description="second slice",
+            project_dir=str(governed_project),
+        )
+        assert second["ok"] is True
+        assert second["warnings"]
+        assert "Expect sync is pending" in second["warnings"][0]
+
+        verify_second = haxaml_session_verify(
+            task="task two",
+            project_dir=str(governed_project),
+            session_id=second["data"]["session_id"],
+            inspected_context=[".haxaml/facts.yaml", ".haxaml/rules.yaml"],
+            changed_files=["src/two.py"],
+            summary="Done second slice.",
+        )
+        assert verify_second["ok"] is True
+
+        blocked_record = haxaml_session_record(
+            task="task two",
+            result="success",
+            session_id=second["data"]["session_id"],
+            project_dir=str(governed_project),
+            changes="Second run done",
+        )
+        assert blocked_record["ok"] is False
+        assert blocked_record["error"]["code"] == "expect_sync_required"
+
+    def test_expect_sync_requires_explicit_run_when_active_run_is_ambiguous(self, governed_project):
+        expect_path = governed_project / ".haxaml" / "expect.yaml"
+        expect = yaml.safe_load(expect_path.read_text())
+        expect["runbook"].append(
+            {
+                "run": 2,
+                "phase": "Phase 1",
+                "status": "active",
+                "goal": "Competing active run",
+                "outcome": "N/A",
+                "depends_on": [],
+                "touches": ["api"],
+                "requires": [],
+                "uses_map": False,
+                "verify": ["haxaml validate"],
+                "done_when": "Done",
+            }
+        )
+        expect_path.write_text(yaml.dump(expect, default_flow_style=False, sort_keys=False))
+
+        started = haxaml_session_start(task="task one", description="first slice", project_dir=str(governed_project))
+        assert started["ok"] is True
+        verify = haxaml_session_verify(
+            task="task one",
+            project_dir=str(governed_project),
+            session_id=started["data"]["session_id"],
+            inspected_context=[".haxaml/facts.yaml", ".haxaml/rules.yaml"],
+            changed_files=["src/one.py"],
+            summary="Done first slice.",
+        )
+        assert verify["ok"] is True
+        record = haxaml_session_record(
+            task="task one",
+            result="success",
+            session_id=started["data"]["session_id"],
+            project_dir=str(governed_project),
+            changes="First run done",
+        )
+        assert record["ok"] is True
+
+        ambiguous = haxaml_expect_sync(project_dir=str(governed_project))
+        assert ambiguous["ok"] is False
+        assert ambiguous["error"]["code"] == "ambiguous_active_run"
+
+        explicit = haxaml_expect_sync(project_dir=str(governed_project), run=1)
+        assert explicit["ok"] is True
 
     def test_session_record_failed_requires_explicit_conflict_reason(self, governed_project):
         map_data = {

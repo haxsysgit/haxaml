@@ -36,6 +36,7 @@ class TestServerRegistration:
             "haxaml_session_plan",
             "haxaml_session_verify",
             "haxaml_session_record",
+            "haxaml_expect_sync",
         ]
         for name in expected:
             assert name in tools, f"Tool {name} not registered"

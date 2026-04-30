@@ -13,6 +13,7 @@ __all__ = [
     "haxaml_context_pack",
     "haxaml_session_verify",
     "haxaml_session_record",
+    "haxaml_expect_sync",
     "haxaml_run",
     "haxaml_done",
     "haxaml_init",

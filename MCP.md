@@ -1,4 +1,4 @@
-# MCP: Haxaml Operator Guide (0.4.x)
+# MCP: Haxaml Operator Guide (0.5.x)
 
 Haxaml is MCP-first.
 Use MCP tools for lifecycle, adoption, and reconciliation gates.
@@ -23,7 +23,7 @@ Every tool also accepts:
 
 For full payloads on a specific call, pass `detail="full"`.
 
-## Core Tools (0.4.x)
+## Core Tools (0.5.x)
 
 - `haxaml_about` (mandatory once per active agent/MCP session before `haxaml_session_start`)
 - `haxaml_guidance`
@@ -32,6 +32,7 @@ For full payloads on a specific call, pass `detail="full"`.
 - `haxaml_context_pack`
 - `haxaml_session_verify`
 - `haxaml_session_record`
+- `haxaml_expect_sync`
 - `haxaml_validate`
 - `haxaml_reconcile`
 - `haxaml_adopt_plan`
@@ -94,7 +95,8 @@ If the task is utility/off-topic, skip this flow and keep `.haxaml/*` unchanged.
 5. `haxaml_context_pack(task=..., project_dir='.', pack='balanced', include_state=True, session_id=...)`
 6. `haxaml_session_verify(task=..., project_dir='.', session_id=..., inspected_context=[...], changed_files=[...], summary=...)`
 7. `haxaml_session_record(task=..., result='success'|'partial'|'failed', project_dir='.', session_id=..., changes=..., decisions=..., risks=...)`
-8. `haxaml_reconcile(project_dir='.')` when boundary/derivation risk appears (or before retrying blocked record/validate).
+8. `haxaml_expect_sync(project_dir='.', run=<optional>)`
+9. `haxaml_reconcile(project_dir='.')` when boundary/derivation risk appears (or before retrying blocked record/validate).
 
 Expected signals:
 
@@ -107,10 +109,11 @@ Expected signals:
 - Step 5 (full): `data.context_pack` is included.
 - Step 6: `data.verdict` should be `pass` or `pass_with_risks` before recording `success`/`partial`.
 - Step 7: `data.run_id` on success; gate failures return `error.code`.
-- Step 8: confirm `severity_totals.blocking == 0` before expecting record/validate success.
+- Step 8: sync acts->expect lifecycle status (`success->done`, `partial->active`, `failed->blocked`).
+- Step 9: confirm `severity_totals.blocking == 0` before expecting record/validate success.
 
 Lean default:
-- Keep to `about -> guidance -> start -> plan -> context_pack -> verify -> record`.
+- Keep to `about -> guidance -> start -> plan -> context_pack -> verify -> record -> expect_sync`.
 - Visibility calls are optional diagnostics: `haxaml_health`, `haxaml_needs`, `haxaml_reconcile`, `haxaml_state_show`.
 - Retry rule: if the same gate error appears twice, stop retries, fix root cause, then retry once.
 
@@ -138,6 +141,8 @@ Flow and expected response signals:
 - signal: `ok=true`; `data.verdict` is `pass` or `pass_with_risks`.
 7. `haxaml_session_record(task="Add parser tests for empty-input handling.", result="success", session_id="<session_id>", changes="Added parser empty-input tests.", decisions="Reuse existing test fixtures.", risks="None.", project_dir=".")`
 - signal: `ok=true`; `data.run_id` starts with `run-`.
+8. `haxaml_expect_sync(project_dir=".")`
+- signal: `ok=true`; lifecycle drift marker clears and runbook status is updated.
 
 ### Gate-Failure Branch (Derivation Conflict)
 
@@ -189,16 +194,19 @@ Note:
 4. Symptom: `error.code="verification_required"` on `haxaml_session_record(result="success"|"partial")`.
 - Fix: run `haxaml_session_verify` first and ensure verdict is `pass` or `pass_with_risks`.
 
-5. Symptom: `error.code="derivation_conflicts"` on `haxaml_validate` or `haxaml_session_record`.
+5. Symptom: `error.code="expect_sync_required"` on `haxaml_session_record` or `error.code="lifecycle_drift"` on `haxaml_validate`.
+- Fix: call `haxaml_expect_sync(project_dir='.')`, then retry.
+
+6. Symptom: `error.code="derivation_conflicts"` on `haxaml_validate` or `haxaml_session_record`.
 - Fix: run `haxaml_reconcile`, apply suggested fixes, and retry when blocking conflicts are zero.
 
-6. Symptom: `error.code="utility_mode_task"` on lifecycle tools.
+7. Symptom: `error.code="utility_mode_task"` on lifecycle tools.
 - Fix: treat the request as utility mode (no lifecycle calls, no `.haxaml/*` edits). Resume governed flow only when back to project work.
 
-7. Symptom: `error.code="retry_policy_blocked"`.
+8. Symptom: `error.code="retry_policy_blocked"`.
 - Fix: stop looped retries, resolve root cause, then retry once.
 
-8. Symptom: `error.code="context_pack_refresh_reason_required"` on repeated `haxaml_context_pack`.
+9. Symptom: `error.code="context_pack_refresh_reason_required"` on repeated `haxaml_context_pack`.
 - Fix: pass `refresh_reason` only when scope changed or context became stale.
 
 ## Detail Mode Quick Examples

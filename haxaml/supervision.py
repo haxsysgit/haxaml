@@ -38,6 +38,19 @@ def render_needs(project_dir: str) -> str:
     acts_path = resolve_frame_file(p, "acts.yaml", "state.yaml")
     if acts_path:
         acts = load_yaml(str(acts_path))
+        expect_sync = acts.get("expect_sync", {})
+        if isinstance(expect_sync, dict) and bool(expect_sync.get("required")):
+            lines.append("\n## Blocking lifecycle sync\n")
+            lines.append("- expect.yaml is out of date for the latest recorded run.")
+            pending_run = str(expect_sync.get("pending_run_id", "") or "")
+            pending_task = str(expect_sync.get("pending_task", "") or "")
+            pending_result = str(expect_sync.get("pending_result", "") or "")
+            if pending_run or pending_task or pending_result:
+                lines.append(
+                    f"- Pending record: run={pending_run or '?'} task={pending_task or '?'} result={pending_result or '?'}"
+                )
+            lines.append("- Required action: call haxaml_expect_sync(project_dir='.')")
+
         deps = acts.get("unresolved_dependencies", [])
         blocking_deps = [d for d in deps if d.get("blocking")]
         if blocking_deps:
