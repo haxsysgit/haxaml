@@ -37,6 +37,11 @@ For full payloads on a specific call, pass `detail="full"`.
 - `haxaml_reconcile`
 - `haxaml_adopt_plan`
 
+Strict lifecycle contract (0.5.2+):
+- Governed calls are hard-gated by order.
+- Expected order: `about -> guidance -> session_start -> session_plan -> context_pack -> session_verify -> session_record -> expect_sync`.
+- Out-of-order governed calls fail with `error.code="lifecycle_contract_violation"`.
+
 Compatibility wrappers (deprecated in 0.4.x):
 
 - `haxaml_run` -> `haxaml_session_start`
@@ -116,6 +121,7 @@ Lean default:
 - Keep to `about -> guidance -> start -> plan -> context_pack -> verify -> record -> expect_sync`.
 - Visibility calls are optional diagnostics: `haxaml_health`, `haxaml_needs`, `haxaml_reconcile`, `haxaml_state_show`.
 - Retry rule: if the same gate error appears twice, stop retries, fix root cause, then retry once.
+- Contract rule: governed steps out of order are not warnings; they are blocking errors.
 
 ## Demo Walkthrough
 
@@ -200,13 +206,20 @@ Note:
 6. Symptom: `error.code="derivation_conflicts"` on `haxaml_validate` or `haxaml_session_record`.
 - Fix: run `haxaml_reconcile`, apply suggested fixes, and retry when blocking conflicts are zero.
 
-7. Symptom: `error.code="utility_mode_task"` on lifecycle tools.
+7. Symptom: `error.code="lifecycle_contract_violation"` on governed tools.
+- Fix: run the tool(s) listed in `error.details.expected_next`, then retry the blocked call.
+
+8. Symptom: `error.code="governance_evidence_missing"` on `haxaml_validate`.
+- Meaning: code/config changed but no governed lifecycle evidence exists in `acts.yaml`.
+- Fix: execute the governed flow and record+sync before validating again.
+
+9. Symptom: `error.code="utility_mode_task"` on lifecycle tools.
 - Fix: treat the request as utility mode (no lifecycle calls, no `.haxaml/*` edits). Resume governed flow only when back to project work.
 
-8. Symptom: `error.code="retry_policy_blocked"`.
+10. Symptom: `error.code="retry_policy_blocked"`.
 - Fix: stop looped retries, resolve root cause, then retry once.
 
-9. Symptom: `error.code="context_pack_refresh_reason_required"` on repeated `haxaml_context_pack`.
+11. Symptom: `error.code="context_pack_refresh_reason_required"` on repeated `haxaml_context_pack`.
 - Fix: pass `refresh_reason` only when scope changed or context became stale.
 
 ## Detail Mode Quick Examples

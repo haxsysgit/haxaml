@@ -1,5 +1,6 @@
 """Tests for FRAME/core MCP tools."""
 
+import subprocess
 import yaml
 
 from haxaml.mcp_server import (
@@ -9,11 +10,24 @@ from haxaml.mcp_server import (
     haxaml_guidance,
     haxaml_health,
     haxaml_init,
+    haxaml_session_plan,
+    haxaml_session_start,
     haxaml_validate,
 )
 from haxaml.versioning import get_version
 
 from .helpers import msg as _msg
+
+
+def _start_session_for_pack(project_dir, task: str = "implement auth module") -> str:
+    guided = haxaml_guidance(task=task, project_dir=str(project_dir))
+    assert guided["ok"] is True
+    started = haxaml_session_start(task=task, description="context-pack test", project_dir=str(project_dir))
+    assert started["ok"] is True
+    session_id = started["data"]["session_id"]
+    planned = haxaml_session_plan(session_id=session_id, project_dir=str(project_dir))
+    assert planned["ok"] is True
+    return session_id
 
 
 class TestInit:
@@ -113,6 +127,24 @@ class TestValidate:
         assert result["error"]["code"] == "derivation_conflicts"
         assert result["error"]["details"]["reconcile"]["severity_totals"]["blocking"] > 0
 
+    def test_fails_when_code_changes_have_no_governed_evidence(self, governed_project):
+        project = governed_project
+        subprocess.run(["git", "init"], cwd=project, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=project, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Test User"], cwd=project, check=True, capture_output=True)
+
+        src_dir = project / "src"
+        src_dir.mkdir(exist_ok=True)
+        code_file = src_dir / "app.py"
+        code_file.write_text("print('v1')\n")
+        subprocess.run(["git", "add", "."], cwd=project, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "baseline"], cwd=project, check=True, capture_output=True)
+
+        code_file.write_text("print('v2')\n")
+        result = haxaml_validate(str(project))
+        assert result["ok"] is False
+        assert result["error"]["code"] == "governance_evidence_missing"
+
 
 class TestContext:
     def test_returns_context_with_tokens(self, governed_project):
@@ -130,11 +162,13 @@ class TestContext:
         assert "Current Acts" not in text
 
     def test_context_pack_contains_expected_sections(self, governed_project):
+        session_id = _start_session_for_pack(governed_project)
         result = haxaml_context_pack(
             task="implement auth module",
             project_dir=str(governed_project),
             pack="balanced",
             include_state=True,
+            session_id=session_id,
         )
         assert result["ok"] is True
         data = result["data"]
@@ -147,11 +181,13 @@ class TestContext:
         assert "context_pack" not in data
 
     def test_context_pack_full_detail_keeps_structured_payload(self, governed_project):
+        session_id = _start_session_for_pack(governed_project)
         result = haxaml_context_pack(
             task="implement auth module",
             project_dir=str(governed_project),
             pack="balanced",
             include_state=True,
+            session_id=session_id,
             detail="full",
         )
         assert result["ok"] is True
@@ -162,11 +198,13 @@ class TestContext:
         assert "relevant_rules" in data["context_pack"]
 
     def test_context_pack_accepts_standard_alias(self, governed_project):
+        session_id = _start_session_for_pack(governed_project)
         result = haxaml_context_pack(
             task="implement auth module",
             project_dir=str(governed_project),
             pack="standard",
             include_state=True,
+            session_id=session_id,
             detail="full",
         )
         assert result["ok"] is True
@@ -174,11 +212,13 @@ class TestContext:
         assert result["data"]["context_pack"]["pack"] == "balanced"
 
     def test_scaffold_context_pack_avoids_blank_rule_entries(self, fresh_project):
+        session_id = _start_session_for_pack(fresh_project, task="scaffold smoke check")
         result = haxaml_context_pack(
             task="scaffold smoke check",
             project_dir=str(fresh_project),
             pack="balanced",
             include_state=True,
+            session_id=session_id,
             detail="full",
         )
         assert result["ok"] is True
@@ -199,15 +239,12 @@ class TestDetailMode:
         assert result["error"]["code"] == "invalid_detail"
 
     def test_guidance_full_detail_includes_extended_fields(self, governed_project):
-        short_result = haxaml_guidance(task="implement auth module", project_dir=str(governed_project))
         full_result = haxaml_guidance(
             task="implement auth module",
             project_dir=str(governed_project),
             detail="full",
         )
-        assert short_result["ok"] is True
         assert full_result["ok"] is True
-        assert "missing_context" not in short_result["data"]
         assert "missing_context" in full_result["data"]
 
 

@@ -69,3 +69,10 @@ This file is a compact operator reference for Haxaml MCP tools.
 8. `haxaml_expect_sync`
 
 Use `haxaml_reconcile` when conflicts or derivation warnings appear.
+
+## Contract Notes (0.5.2+)
+
+- Governed lifecycle order is hard-enforced.
+- Out-of-order governed calls fail with `lifecycle_contract_violation`.
+- `session_id` is required for governed `context_pack`, `session_verify`, and `session_record`.
+- `haxaml_validate` can fail with `governance_evidence_missing` when code changes exist without governed evidence in `acts.yaml`.

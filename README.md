@@ -6,7 +6,7 @@ Haxaml is an LLM-first governance layer for coding agents.
 
 It is an MCP-first project: agents are expected to work through the Haxaml MCP server, with the CLI available mainly for local setup and fallback.
 
-Latest release: `0.5.0`.
+Latest release: `0.5.2`.
 
 Haxaml gives agents a deterministic project memory model called **FRAME**, plus MCP tools that make context, rules, verification, and handoff explicit during real work.
 
@@ -45,12 +45,7 @@ Once connected, agents can initialize and validate through MCP tools:
 - `haxaml_init`
 - `haxaml_validate`
 
-Optional CLI fallback for local setup:
-
-```bash
-haxaml init
-haxaml validate
-```
+Optional fallback: run `haxaml init` / `haxaml validate` directly when MCP is unavailable.
 
 ## Bootstrap Prompt
 
@@ -62,6 +57,7 @@ This repository uses Haxaml for agent governance.
 Use the Haxaml MCP server for governed project work.
 Before governed project work, call haxaml_about(project_dir='.') once in the active MCP session.
 Follow the workflow returned by that tool.
+If a governed step is skipped or out of order, treat Haxaml contract errors as hard blockers and fix the lifecycle step before continuing.
 Do not edit .haxaml/* for utility or side tasks that are not governed project work.
 ```
 
@@ -77,6 +73,7 @@ Do not edit .haxaml/* for utility or side tasks that are not governed project wo
 
 - [learn/FRAME.md](https://github.com/haxsysgit/haxaml/blob/main/learn/FRAME.md) - FRAME memory model
 - [learn/haxaml.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml.md) - how Haxaml makes FRAME operational
+- [learn/mcp-architecture-for-haxaml.md](https://github.com/haxsysgit/haxaml/blob/main/learn/mcp-architecture-for-haxaml.md) - plain-language MCP architecture mapped to Haxaml
 - [MCP.md](https://github.com/haxsysgit/haxaml/blob/main/MCP.md) - MCP setup and operator guide
 - [v1.0_Roadmap.md](https://github.com/haxsysgit/haxaml/blob/main/v1.0_Roadmap.md) - roadmap from `0.6.0` to `1.0`
 - [docs/architecture.md](https://github.com/haxsysgit/haxaml/blob/main/docs/architecture.md) - module layout and MCP split overview

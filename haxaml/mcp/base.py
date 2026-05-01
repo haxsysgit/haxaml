@@ -87,14 +87,21 @@ from haxaml.mcp.export_helpers import (
 )
 from haxaml.mcp.lifecycle_helpers import (
     _classify_task_type,
+    _contract_allows,
+    _contract_touch,
+    _git_changed_files,
     _find_session,
     _get_state_manager,
+    _governed_code_changes,
+    _has_governed_evidence_for_changes,
     _guidance_eval,
     _has_conflict_stop_reason,
+    _lifecycle_contract_state,
     _expect_sync_state,
     _now_iso,
     _persist_state,
     _rules_policy,
+    _set_lifecycle_contract_state,
     _session_read_policy,
     _wrapper_deprecation,
 )

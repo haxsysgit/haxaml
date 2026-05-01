@@ -86,6 +86,8 @@ def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     p = Path(project_dir).resolve()
     lines = []
     all_valid = True
+    facts_blob = {}
+    rules_blob = {}
 
     checks = [
         ("facts.yaml", "brain.yaml", validate_facts),
@@ -104,6 +106,10 @@ def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
                 all_valid = False
             else:
                 lines.append(f"✓ {new_name} is valid")
+                if new_name == "facts.yaml":
+                    facts_blob = load_yaml(str(path))
+                if new_name == "rules.yaml":
+                    rules_blob = load_yaml(str(path))
         else:
             if new_name == "facts.yaml":
                 lines.append(f"✗ {new_name} not found")
@@ -117,6 +123,17 @@ def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
         if sync_state["required"]:
             lines.append("✗ lifecycle drift: expect sync is required before validation can pass")
             lines.append("  → fix: call haxaml_expect_sync(project_dir='.')")
+            all_valid = False
+
+    lifecycle_rules = _rules_policy(rules_blob if isinstance(rules_blob, dict) else {}, "lifecycle", {})
+    enforce_governed_evidence = bool(lifecycle_rules.get("enforce_governed_evidence_on_validate", True))
+    governed_changed = _governed_code_changes(project_dir)
+    if enforce_governed_evidence and governed_changed and acts_path:
+        acts = load_yaml(str(acts_path))
+        has_evidence = _has_governed_evidence_for_changes(acts, governed_changed)
+        if not has_evidence:
+            lines.append("✗ governance evidence missing: code changes exist without governed lifecycle evidence")
+            lines.append("  → fix: run governed flow (about -> guidance -> start -> plan -> context_pack -> verify -> record -> expect_sync)")
             all_valid = False
 
     expect_path = resolve_frame_file(p, "expect.yaml")
@@ -195,6 +212,33 @@ def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
                     "retry_after": ["haxaml_expect_sync(project_dir='.')", "haxaml_validate(project_dir='.')"],
                 },
             )
+        lifecycle_rules = _rules_policy(rules_blob if isinstance(rules_blob, dict) else {}, "lifecycle", {})
+        enforce_governed_evidence = bool(lifecycle_rules.get("enforce_governed_evidence_on_validate", True))
+        governed_changed = _governed_code_changes(project_dir)
+        if enforce_governed_evidence and governed_changed:
+            has_evidence = _has_governed_evidence_for_changes(acts, governed_changed)
+            if not has_evidence:
+                return _gate_error_with_retry_policy(
+                    "haxaml_validate",
+                    "governance_evidence_missing",
+                    "Code changes were detected but no governed lifecycle evidence was found.",
+                    project_dir=project_dir,
+                    details={
+                        "message": message,
+                        "changed_files": governed_changed,
+                        "retry_after": [
+                            "haxaml_about(project_dir='.')",
+                            "haxaml_guidance(task=..., project_dir='.')",
+                            "haxaml_session_start(task=..., description=..., project_dir='.')",
+                            "haxaml_session_plan(session_id=..., project_dir='.')",
+                            "haxaml_context_pack(task=..., session_id=..., project_dir='.')",
+                            "haxaml_session_verify(task=..., session_id=..., project_dir='.')",
+                            "haxaml_session_record(task=..., session_id=..., result='success'|'partial'|'failed', project_dir='.')",
+                            "haxaml_expect_sync(project_dir='.')",
+                            "haxaml_validate(project_dir='.')",
+                        ],
+                    },
+                )
     error_code = "derivation_conflicts" if reconcile["severity_totals"]["blocking"] > 0 else "validation_failed"
     return _gate_error_with_retry_policy(
         "haxaml_validate",

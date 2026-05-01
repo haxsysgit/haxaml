@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.2 - 2026-05-01
+
+### Added
+
+- Deterministic lifecycle contract state in `acts.yaml` (`lifecycle_contract`) for governed MCP flow sequencing.
+- New validation failure gate: `error.code="governance_evidence_missing"` when code changes exist without governed lifecycle evidence.
+- New plain-language guide: `learn/mcp-architecture-for-haxaml.md`.
+
+### Changed
+
+- Governed lifecycle flow is now hard-ordered:
+  `about -> guidance -> session_start -> session_plan -> context_pack -> session_verify -> session_record -> expect_sync`.
+- Out-of-order governed lifecycle calls now fail with `error.code="lifecycle_contract_violation"`.
+- `haxaml_context_pack`, `haxaml_session_verify`, and `haxaml_session_record` now require `session_id` for governed execution.
+- `haxaml_run` compatibility wrapper now executes guidance/start/plan/context-pack to stay compliant with strict lifecycle order.
+- `haxaml_done` wrapper now resolves and uses governed session context for verify/record compatibility.
+- Added lifecycle policy flag `rules.lifecycle.enforce_governed_evidence_on_validate` (default `true` in scaffolded rules).
+- Aligned `haxaml` and `haxaml-mcp` package versions at `0.5.2`.
+
 ## 0.5.1 - 2026-04-30
 
 ### Added

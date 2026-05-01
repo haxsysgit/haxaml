@@ -472,14 +472,16 @@ def run(project_dir, task, description):
 @click.option("--task", required=True, help="Task that was completed")
 @click.option("--result", "run_result", default="success",
               type=click.Choice(["success", "partial", "failed"]))
+@click.option("--session-id", default="", help="Session ID (optional)")
 @click.option("--changes", default="", help="Summary of changes")
 @click.option("--decisions", default="", help="Key decisions made")
 @click.option("--risks", default="", help="Identified risks")
-def done(project_dir, task, run_result, changes, decisions, risks):
+def done(project_dir, task, run_result, session_id, changes, decisions, risks):
     """Complete an execution run and record results."""
     result = _mcp_tools().haxaml_done(
         task=task,
         result=run_result,
+        session_id=session_id,
         changes=changes,
         decisions=decisions,
         risks=risks,

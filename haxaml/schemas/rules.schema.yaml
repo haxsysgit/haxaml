@@ -34,6 +34,8 @@ properties:
         maximum: 20
       enforce_verify_before_record:
         type: boolean
+      enforce_governed_evidence_on_validate:
+        type: boolean
       phases:
         type: array
         items:

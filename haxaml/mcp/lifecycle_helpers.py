@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from pathlib import Path
+import subprocess
 from typing import Any, Optional
 
 from haxaml.paths import resolve_frame_file
@@ -273,3 +274,189 @@ def _expect_sync_state(state: dict[str, Any]) -> dict[str, Any]:
         "last_synced_at": str(raw.get("last_synced_at", "") or ""),
         "last_sync_status": str(raw.get("last_sync_status", "") or ""),
     }
+
+
+def _lifecycle_contract_state(state: dict[str, Any]) -> dict[str, Any]:
+    """Return normalized lifecycle contract state from acts.yaml payload."""
+    raw = state.get("lifecycle_contract", {}) if isinstance(state, dict) else {}
+    if not isinstance(raw, dict):
+        raw = {}
+    required_next = raw.get("required_next", [])
+    if isinstance(required_next, str):
+        required_next = [required_next]
+    if not isinstance(required_next, list):
+        required_next = []
+    normalized_required = []
+    for item in required_next:
+        if isinstance(item, str) and item.strip():
+            normalized_required.append(item.strip())
+    if not normalized_required:
+        normalized_required = ["haxaml_about"]
+    return {
+        "phase": str(raw.get("phase", "idle") or "idle"),
+        "required_next": normalized_required,
+        "active_session_id": str(raw.get("active_session_id", "") or ""),
+        "active_task": str(raw.get("active_task", "") or ""),
+        "last_tool": str(raw.get("last_tool", "") or ""),
+        "last_verification_id": str(raw.get("last_verification_id", "") or ""),
+        "last_verification_verdict": str(raw.get("last_verification_verdict", "") or ""),
+        "last_record_run_id": str(raw.get("last_record_run_id", "") or ""),
+        "last_record_result": str(raw.get("last_record_result", "") or ""),
+        "updated_at": str(raw.get("updated_at", "") or ""),
+    }
+
+
+def _set_lifecycle_contract_state(state: dict[str, Any], contract: dict[str, Any]) -> None:
+    """Persist normalized lifecycle contract state in acts payload."""
+    clean = _lifecycle_contract_state({"lifecycle_contract": contract})
+    state["lifecycle_contract"] = clean
+
+
+def _contract_allows(contract: dict[str, Any], tool_name: str) -> bool:
+    required_next = contract.get("required_next", [])
+    if not isinstance(required_next, list):
+        return False
+    return tool_name in required_next
+
+
+def _contract_touch(
+    contract: dict[str, Any],
+    *,
+    phase: str,
+    required_next: list[str],
+    tool_name: str,
+    active_session_id: str = "",
+    active_task: str = "",
+    last_verification_id: str = "",
+    last_verification_verdict: str = "",
+    last_record_run_id: str = "",
+    last_record_result: str = "",
+) -> dict[str, Any]:
+    """Return updated contract state after a successful lifecycle transition."""
+    updated = dict(contract)
+    updated["phase"] = phase
+    updated["required_next"] = list(required_next)
+    updated["last_tool"] = tool_name
+    if active_session_id or updated.get("active_session_id"):
+        updated["active_session_id"] = active_session_id
+    if active_task or updated.get("active_task"):
+        updated["active_task"] = active_task
+    if last_verification_id:
+        updated["last_verification_id"] = last_verification_id
+    if last_verification_verdict:
+        updated["last_verification_verdict"] = last_verification_verdict
+    if last_record_run_id:
+        updated["last_record_run_id"] = last_record_run_id
+    if last_record_result:
+        updated["last_record_result"] = last_record_result
+    updated["updated_at"] = _now_iso()
+    return _lifecycle_contract_state({"lifecycle_contract": updated})
+
+
+def _git_changed_files(project_dir: str) -> list[str]:
+    """Return changed file paths (git status --porcelain) relative to project root."""
+    project = Path(project_dir).resolve()
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(project), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return []
+    if result.returncode != 0:
+        return []
+
+    files: list[str] = []
+    for line in (result.stdout or "").splitlines():
+        if not line.strip():
+            continue
+        path_part = line[3:].strip() if len(line) > 3 else ""
+        if " -> " in path_part:
+            path_part = path_part.split(" -> ", 1)[1].strip()
+        if path_part:
+            files.append(path_part)
+    return sorted(set(files))
+
+
+def _is_likely_code_path(path: str) -> bool:
+    path_l = path.lower().strip()
+    if not path_l or path_l.startswith(".haxaml/"):
+        return False
+    code_exts = (
+        ".py",
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".go",
+        ".rs",
+        ".java",
+        ".kt",
+        ".swift",
+        ".c",
+        ".cc",
+        ".cpp",
+        ".h",
+        ".hpp",
+        ".cs",
+        ".rb",
+        ".php",
+        ".sh",
+    )
+    if path_l.endswith(code_exts):
+        return True
+    code_names = {
+        "pyproject.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "uv.lock",
+        "tsconfig.json",
+        "vite.config.ts",
+        "vite.config.js",
+        "dockerfile",
+        "makefile",
+        "requirements.txt",
+    }
+    return Path(path_l).name in code_names
+
+
+def _governed_code_changes(project_dir: str) -> list[str]:
+    """Return changed paths likely to represent governed code/config changes."""
+    return [path for path in _git_changed_files(project_dir) if _is_likely_code_path(path)]
+
+
+def _has_governed_evidence_for_changes(state: dict[str, Any], changed_files: list[str]) -> bool:
+    """Determine whether acts state contains governed evidence for current changed files."""
+    if not changed_files:
+        return True
+
+    sessions = state.get("sessions", []) if isinstance(state, dict) else []
+    if isinstance(sessions, list):
+        for session in sessions:
+            if not isinstance(session, dict):
+                continue
+            if str(session.get("execution_mode", "")).strip() != "governed":
+                continue
+            if str(session.get("status", "")).strip() in {"started", "planned", "verified", "recorded"}:
+                return True
+
+    verifications = state.get("verifications", []) if isinstance(state, dict) else []
+    evidence_files: set[str] = set()
+    if isinstance(verifications, list):
+        for item in reversed(verifications):
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("verdict", "")).strip() not in {"pass", "pass_with_risks"}:
+                continue
+            refs = item.get("evidence_refs", [])
+            if not isinstance(refs, list):
+                continue
+            for ref in refs:
+                if isinstance(ref, str) and _is_likely_code_path(ref):
+                    evidence_files.add(ref.strip())
+
+    if not evidence_files:
+        return False
+    return all(path in evidence_files for path in changed_files)

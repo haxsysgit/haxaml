@@ -109,6 +109,7 @@ escalation:
 lifecycle:
   onboarding_full_reads: 5
   enforce_verify_before_record: true
+  enforce_governed_evidence_on_validate: true
   phases:
     - start
     - plan
@@ -176,6 +177,29 @@ context_compaction:
   full_reads_completed: 0
   default_pack: balanced
   last_pack_tokens: 0
+
+expect_sync:
+  required: false
+  pending_run_id: ""
+  pending_task: ""
+  pending_result: ""
+  pending_recorded_at: ""
+  last_synced_run_id: ""
+  last_synced_at: ""
+  last_sync_status: ""
+
+lifecycle_contract:
+  phase: idle
+  required_next:
+    - haxaml_about
+  active_session_id: ""
+  active_task: ""
+  last_tool: ""
+  last_verification_id: ""
+  last_verification_verdict: ""
+  last_record_run_id: ""
+  last_record_result: ""
+  updated_at: ""
 """
 
 EXPECT_TEMPLATE = """\

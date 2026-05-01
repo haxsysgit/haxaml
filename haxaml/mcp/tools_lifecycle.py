@@ -3,6 +3,28 @@
 from haxaml.mcp.base import *
 
 
+def _contract_violation(
+    tool: str,
+    *,
+    project_dir: str,
+    contract: dict[str, Any],
+    reason: str,
+    retry_after: Optional[list[str]] = None,
+    details: Optional[dict[str, Any]] = None,
+) -> dict:
+    payload = {
+        "project_dir": str(Path(project_dir).resolve()),
+        "current_phase": contract.get("phase", "idle"),
+        "expected_next": contract.get("required_next", ["haxaml_about"]),
+        "active_session_id": contract.get("active_session_id", ""),
+        "active_task": contract.get("active_task", ""),
+        "retry_after": retry_after or [],
+    }
+    if details:
+        payload.update(details)
+    return _err(tool, "lifecycle_contract_violation", reason, payload)
+
+
 @mcp_app.tool()
 def haxaml_about(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Return onboarding context for Haxaml and FRAME. Call once per active agent/MCP session."""
@@ -26,6 +48,27 @@ def haxaml_about(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
         about["prompt_version"] = ABOUT_PROMPT_VERSION
         about["haxaml_version"] = get_version()
         state["about"] = about
+        contract = _lifecycle_contract_state(state)
+        required_next = contract.get("required_next", ["haxaml_about"])
+        if required_next == ["haxaml_about"] or str(contract.get("phase", "idle")) in {"idle", ""}:
+            contract = _contract_touch(
+                contract,
+                phase="about",
+                required_next=["haxaml_guidance"],
+                tool_name="haxaml_about",
+                active_session_id="",
+                active_task="",
+            )
+        else:
+            contract = _contract_touch(
+                contract,
+                phase=str(contract.get("phase", "about") or "about"),
+                required_next=list(required_next),
+                tool_name="haxaml_about",
+                active_session_id=str(contract.get("active_session_id", "") or ""),
+                active_task=str(contract.get("active_task", "") or ""),
+            )
+        _set_lifecycle_contract_state(state, contract)
         err = _persist_state(sm, state)
         if err:
             warnings.append(f"Could not persist about acknowledgment: {err}")
@@ -46,7 +89,38 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
     if not frame.get("facts"):
         return _err("haxaml_guidance", "missing_facts", "facts.yaml not found")
 
+    about_required = _require_about("haxaml_guidance", project_dir)
+    if about_required:
+        details = ((about_required.get("error") or {}).get("details") or {})
+        return _gate_error_with_retry_policy(
+            "haxaml_guidance",
+            "about_required",
+            "Call haxaml_about once per active agent/MCP session before governed lifecycle calls.",
+            project_dir=project_dir,
+            task=task,
+            details=details,
+        )
+
     guidance = _guidance_eval(task, frame)
+    if guidance["execution_mode"] == "governed":
+        sm, _ = _get_state_manager(project_dir)
+        if not sm:
+            return _err("haxaml_guidance", "missing_acts", "acts.yaml not found")
+        state = sm.read()
+        contract = _lifecycle_contract_state(state)
+        if not _contract_allows(contract, "haxaml_guidance"):
+            return _contract_violation(
+                "haxaml_guidance",
+                project_dir=project_dir,
+                contract=contract,
+                reason="Guidance is out of lifecycle order.",
+                retry_after=contract.get("required_next", []),
+            )
+    else:
+        sm = None
+        state = {}
+        contract = {}
+
     call_budget = _call_budget_for(guidance["task_type"], guidance["risk_level"])
     status = guidance["status"]
     execution_mode = guidance["execution_mode"]
@@ -91,6 +165,24 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
             "retry_behavior": "If same gate error appears twice, stop retrying and fix root cause.",
         },
     }
+    if guidance["execution_mode"] == "governed" and sm:
+        updated = _contract_touch(
+            contract,
+            phase="guidance",
+            required_next=["haxaml_session_start"],
+            tool_name="haxaml_guidance",
+            active_session_id="",
+            active_task=task,
+        )
+        _set_lifecycle_contract_state(state, updated)
+        err = _persist_state(sm, state)
+        if err:
+            return _err(
+                "haxaml_guidance",
+                "state_persist_error",
+                "Guidance produced output but contract state could not be persisted.",
+                {"persist_error": err},
+            )
     return _ok("haxaml_guidance", payload, detail=detail_mode)
 
 
@@ -125,6 +217,30 @@ def haxaml_session_start(
     if mode_eval["mode"] == "utility":
         return _utility_mode_error("haxaml_session_start", project_dir, task, description)
 
+    sm, _ = _get_state_manager(project_dir)
+    if not sm:
+        return _err("haxaml_session_start", "missing_acts", "acts.yaml not found")
+    state = sm.read()
+    contract = _lifecycle_contract_state(state)
+    if not _contract_allows(contract, "haxaml_session_start"):
+        return _contract_violation(
+            "haxaml_session_start",
+            project_dir=project_dir,
+            contract=contract,
+            reason="Session start is out of lifecycle order.",
+            retry_after=contract.get("required_next", []),
+        )
+    guided_task = str(contract.get("active_task", "") or "").strip()
+    if guided_task and guided_task != task.strip():
+        return _contract_violation(
+            "haxaml_session_start",
+            project_dir=project_dir,
+            contract=contract,
+            reason="Session start task does not match the most recent governed guidance task.",
+            details={"guided_task": guided_task, "requested_task": task.strip()},
+            retry_after=["haxaml_guidance(task='<matching task>', project_dir='.')"],
+        )
+
     try:
         runner = ExecutionRunner(project_dir)
         pre = runner.start_run(task=task, description=description)
@@ -143,10 +259,8 @@ def haxaml_session_start(
     session_id = f"session-{uuid.uuid4().hex[:10]}"
     now = _now_iso()
 
-    sm, _ = _get_state_manager(project_dir)
     warnings = []
     if sm:
-        state = sm.read()
         expect_sync = _expect_sync_state(state)
         if expect_sync["required"]:
             warnings.append(
@@ -185,6 +299,15 @@ def haxaml_session_start(
             started = 0
         compaction["sessions_started"] = started + 1
         state["context_compaction"] = compaction
+        contract = _contract_touch(
+            contract,
+            phase="start",
+            required_next=["haxaml_session_plan"],
+            tool_name="haxaml_session_start",
+            active_session_id=session_id,
+            active_task=task,
+        )
+        _set_lifecycle_contract_state(state, contract)
         err = _persist_state(sm, state)
         if err:
             warnings.append(f"Could not persist session state: {err}")
@@ -233,6 +356,23 @@ def haxaml_session_plan(
         return _err("haxaml_session_plan", "missing_acts", "acts.yaml not found")
 
     state = sm.read()
+    contract = _lifecycle_contract_state(state)
+    if not _contract_allows(contract, "haxaml_session_plan"):
+        return _contract_violation(
+            "haxaml_session_plan",
+            project_dir=project_dir,
+            contract=contract,
+            reason="Session plan is out of lifecycle order.",
+            retry_after=contract.get("required_next", []),
+        )
+    if contract.get("active_session_id", "") != session_id:
+        return _contract_violation(
+            "haxaml_session_plan",
+            project_dir=project_dir,
+            contract=contract,
+            reason="Session plan must target the active governed session.",
+            details={"requested_session_id": session_id},
+        )
     session = _find_session(state, session_id)
     if not session:
         return _err("haxaml_session_plan", "unknown_session", f"Session not found: {session_id}")
@@ -265,6 +405,15 @@ def haxaml_session_plan(
     session["status"] = "planned"
     session["updated"] = _now_iso()
     session["plan"] = plan
+    contract = _contract_touch(
+        contract,
+        phase="plan",
+        required_next=["haxaml_context_pack"],
+        tool_name="haxaml_session_plan",
+        active_session_id=session_id,
+        active_task=str(session.get("task", "") or ""),
+    )
+    _set_lifecycle_contract_state(state, contract)
     err = _persist_state(sm, state)
     warnings = [f"Could not persist session plan: {err}"] if err else []
 
@@ -310,62 +459,99 @@ def haxaml_context_pack(
     if mode_eval["mode"] == "utility":
         return _utility_mode_error("haxaml_context_pack", project_dir, task, "")
 
+    if not session_id:
+        return _err(
+            "haxaml_context_pack",
+            "lifecycle_contract_violation",
+            "session_id is required for governed context-pack calls.",
+            {
+                "project_dir": str(Path(project_dir).resolve()),
+                "expected_next": ["haxaml_context_pack"],
+                "retry_after": ["haxaml_session_plan(session_id=..., project_dir='.')"],
+            },
+        )
+
     sm, _ = _get_state_manager(project_dir)
+    if not sm:
+        return _err("haxaml_context_pack", "missing_acts", "acts.yaml not found")
     warnings = []
     state = sm.read() if sm else {}
+    contract = _lifecycle_contract_state(state)
+    required_next = contract.get("required_next", [])
+    allow_refresh_repeat = (
+        isinstance(required_next, list)
+        and "haxaml_session_verify" in required_next
+        and contract.get("active_session_id", "") == session_id
+    )
+    if not _contract_allows(contract, "haxaml_context_pack") and not allow_refresh_repeat:
+        return _contract_violation(
+            "haxaml_context_pack",
+            project_dir=project_dir,
+            contract=contract,
+            reason="Context pack is out of lifecycle order.",
+            retry_after=contract.get("required_next", []),
+        )
+    if contract.get("active_session_id", "") != session_id:
+        return _contract_violation(
+            "haxaml_context_pack",
+            project_dir=project_dir,
+            contract=contract,
+            reason="Context pack must target the active governed session.",
+            details={"requested_session_id": session_id},
+        )
     session = None
     prior_calls = 0
     refresh_reason = refresh_reason.strip()
-    if session_id:
-        if not sm:
-            return _err("haxaml_context_pack", "missing_acts", "acts.yaml not found")
-        session = _find_session(state, session_id)
-        if not session:
-            return _err("haxaml_context_pack", "unknown_session", f"Session not found: {session_id}")
-        raw_calls = session.get("context_pack_calls", 0)
-        if isinstance(raw_calls, int) and raw_calls > 0:
-            prior_calls = raw_calls
-        if prior_calls >= 1 and not refresh_reason:
-            return _err(
-                "haxaml_context_pack",
-                "context_pack_refresh_reason_required",
-                "Context pack already generated for this session. Repeat only when scope changed or context is stale, and pass refresh_reason.",
-                {
-                    "session_id": session_id,
-                    "context_pack_calls": prior_calls,
-                    "required": "refresh_reason",
-                    "allowed_examples": [
-                        "scope changed to include billing module",
-                        "context stale after major file updates",
-                    ],
-                },
-            )
-    else:
-        warnings.append(
-            "Pass session_id to enforce one-context-pack-per-task anti-bloat policy."
+    session = _find_session(state, session_id)
+    if not session:
+        return _err("haxaml_context_pack", "unknown_session", f"Session not found: {session_id}")
+    raw_calls = session.get("context_pack_calls", 0)
+    if isinstance(raw_calls, int) and raw_calls > 0:
+        prior_calls = raw_calls
+    if prior_calls >= 1 and not refresh_reason:
+        return _err(
+            "haxaml_context_pack",
+            "context_pack_refresh_reason_required",
+            "Context pack already generated for this session. Repeat only when scope changed or context is stale, and pass refresh_reason.",
+            {
+                "session_id": session_id,
+                "context_pack_calls": prior_calls,
+                "required": "refresh_reason",
+                "allowed_examples": [
+                    "scope changed to include billing module",
+                    "context stale after major file updates",
+                ],
+            },
         )
 
     pack_data = build_context_pack(project_dir, task=task, pack=pack, include_state=include_state)
     text = format_context_pack(pack_data)
     tokens = count_tokens(text)
 
-    if sm:
-        compaction = state.get("context_compaction", {})
-        if not isinstance(compaction, dict):
-            compaction = {}
-        compaction["last_pack_tokens"] = tokens
-        compaction["last_window_usage"] = pack_data.get("_meta", {}).get("context_window_usage", {})
-        resolved_pack = pack_data.get("_meta", {}).get("resolved_pack", pack)
-        if resolved_pack in ("minimal", "balanced", "full"):
-            compaction["default_pack"] = resolved_pack
-        state["context_compaction"] = compaction
-        if session_id and session:
-            session["context_pack_calls"] = prior_calls + 1
-            session["last_context_pack_at"] = _now_iso()
-            session["last_context_pack_reason"] = refresh_reason
-        err = _persist_state(sm, state)
-        if err:
-            warnings.append(f"Could not persist context compaction stats: {err}")
+    compaction = state.get("context_compaction", {})
+    if not isinstance(compaction, dict):
+        compaction = {}
+    compaction["last_pack_tokens"] = tokens
+    compaction["last_window_usage"] = pack_data.get("_meta", {}).get("context_window_usage", {})
+    resolved_pack = pack_data.get("_meta", {}).get("resolved_pack", pack)
+    if resolved_pack in ("minimal", "balanced", "full"):
+        compaction["default_pack"] = resolved_pack
+    state["context_compaction"] = compaction
+    session["context_pack_calls"] = prior_calls + 1
+    session["last_context_pack_at"] = _now_iso()
+    session["last_context_pack_reason"] = refresh_reason
+    contract = _contract_touch(
+        contract,
+        phase="context",
+        required_next=["haxaml_session_verify"],
+        tool_name="haxaml_context_pack",
+        active_session_id=session_id,
+        active_task=str(session.get("task", "") or task),
+    )
+    _set_lifecycle_contract_state(state, contract)
+    err = _persist_state(sm, state)
+    if err:
+        warnings.append(f"Could not persist context compaction stats: {err}")
 
     return _ok(
         "haxaml_context_pack",
@@ -405,6 +591,16 @@ def haxaml_session_verify(
         return _err("haxaml_session_verify", "missing_facts", "facts.yaml not found")
     if not session_id and _utility_mode_eval(task)["mode"] == "utility":
         return _utility_mode_error("haxaml_session_verify", project_dir, task, "")
+    if not session_id:
+        return _err(
+            "haxaml_session_verify",
+            "lifecycle_contract_violation",
+            "session_id is required for governed verification calls.",
+            {
+                "project_dir": str(Path(project_dir).resolve()),
+                "expected_next": ["haxaml_session_verify"],
+            },
+        )
 
     rules = frame.get("rules") or {}
     guidance = _guidance_eval(task, frame)
@@ -470,37 +666,68 @@ def haxaml_session_verify(
     timestamp = _now_iso()
 
     sm, _ = _get_state_manager(project_dir)
+    if not sm:
+        return _err("haxaml_session_verify", "missing_acts", "acts.yaml not found")
     warnings = []
-    if sm:
-        state = sm.read()
-        verifications = state.get("verifications", [])
-        if not isinstance(verifications, list):
-            verifications = []
-        verifications.append(
-            {
-                "id": verification_id,
-                "session_id": session_id or "",
-                "task": task,
-                "verdict": verdict,
-                "summary": summary,
-                "unresolved_questions": unresolved_questions,
-                "assumptions": assumptions,
-                "follow_ups": guidance["required_questions"] if verdict in ("fail", "needs_clarification") else [],
-                "checks": check_rows,
-                "evidence_refs": evidence_refs,
-                "timestamp": timestamp,
-            }
+    state = sm.read()
+    contract = _lifecycle_contract_state(state)
+    if not _contract_allows(contract, "haxaml_session_verify"):
+        return _contract_violation(
+            "haxaml_session_verify",
+            project_dir=project_dir,
+            contract=contract,
+            reason="Session verification is out of lifecycle order.",
+            retry_after=contract.get("required_next", []),
         )
-        state["verifications"] = verifications
-        if session_id:
-            session = _find_session(state, session_id)
-            if session:
-                session["phase"] = "verify"
-                session["status"] = "verified" if verdict in ("pass", "pass_with_risks") else "failed"
-                session["updated"] = timestamp
-        err = _persist_state(sm, state)
-        if err:
-            warnings.append(f"Could not persist verification report: {err}")
+    if contract.get("active_session_id", "") != session_id:
+        return _contract_violation(
+            "haxaml_session_verify",
+            project_dir=project_dir,
+            contract=contract,
+            reason="Session verification must target the active governed session.",
+            details={"requested_session_id": session_id},
+        )
+    verifications = state.get("verifications", [])
+    if not isinstance(verifications, list):
+        verifications = []
+    verifications.append(
+        {
+            "id": verification_id,
+            "session_id": session_id or "",
+            "task": task,
+            "verdict": verdict,
+            "summary": summary,
+            "unresolved_questions": unresolved_questions,
+            "assumptions": assumptions,
+            "follow_ups": guidance["required_questions"] if verdict in ("fail", "needs_clarification") else [],
+            "checks": check_rows,
+            "evidence_refs": evidence_refs,
+            "timestamp": timestamp,
+        }
+    )
+    state["verifications"] = verifications
+    session = _find_session(state, session_id)
+    if session:
+        session["phase"] = "verify"
+        session["status"] = "verified" if verdict in ("pass", "pass_with_risks") else "failed"
+        session["updated"] = timestamp
+    next_tools = ["haxaml_session_verify"]
+    if verdict in ("pass", "pass_with_risks"):
+        next_tools = ["haxaml_session_record"]
+    contract = _contract_touch(
+        contract,
+        phase="verify",
+        required_next=next_tools,
+        tool_name="haxaml_session_verify",
+        active_session_id=session_id,
+        active_task=task,
+        last_verification_id=verification_id,
+        last_verification_verdict=verdict,
+    )
+    _set_lifecycle_contract_state(state, contract)
+    err = _persist_state(sm, state)
+    if err:
+        warnings.append(f"Could not persist verification report: {err}")
 
     message = f"Verification {verification_id}: {verdict}"
     if failures:
@@ -564,26 +791,25 @@ def haxaml_session_record(
     frame = load_frame_data(project_dir)
     if not session_id and _utility_mode_eval(task)["mode"] == "utility":
         return _utility_mode_error("haxaml_session_record", project_dir, task, "")
+    if not session_id:
+        return _err(
+            "haxaml_session_record",
+            "lifecycle_contract_violation",
+            "session_id is required for governed session recording.",
+            {
+                "project_dir": str(Path(project_dir).resolve()),
+                "expected_next": ["haxaml_session_record"],
+            },
+        )
     rules = frame.get("rules") or {}
     lifecycle = _rules_policy(rules, "lifecycle", {"enforce_verify_before_record": True})
     enforce_verify = bool(lifecycle.get("enforce_verify_before_record", True))
 
     sm, _ = _get_state_manager(project_dir)
-    state = sm.read() if sm else {}
-    expect_sync = _expect_sync_state(state)
-    if expect_sync["required"]:
-        return _gate_error_with_retry_policy(
-            "haxaml_session_record",
-            "expect_sync_required",
-            "Previous record is not synced to expect.yaml. Call haxaml_expect_sync before recording another governed result.",
-            project_dir=project_dir,
-            task=task,
-            session_id=session_id,
-            details={
-                "pending_sync": expect_sync,
-                "retry_after": ["haxaml_expect_sync(project_dir='.')", "haxaml_session_record(...)"],
-            },
-        )
+    if not sm:
+        return _err("haxaml_session_record", "missing_acts", "acts.yaml not found")
+    state = sm.read()
+    contract = _lifecycle_contract_state(state)
 
     latest_verdict = None
     latest_verification_id = ""
@@ -599,6 +825,57 @@ def haxaml_session_record(
             latest_verdict = item.get("verdict")
             latest_verification_id = str(item.get("id", ""))
             break
+    required_next = contract.get("required_next", [])
+    if not _contract_allows(contract, "haxaml_session_record"):
+        if (
+            isinstance(required_next, list)
+            and "haxaml_session_verify" in required_next
+            and result in ("success", "partial")
+        ):
+            return _gate_error_with_retry_policy(
+                "haxaml_session_record",
+                "verification_required",
+                "Verification is required before recording success/partial results.",
+                project_dir=project_dir,
+                task=task,
+                session_id=session_id,
+                details={
+                    "task": task,
+                    "session_id": session_id,
+                    "latest_verdict": latest_verdict,
+                    "allowed_verdicts": ["pass", "pass_with_risks"],
+                },
+            )
+        if not (isinstance(required_next, list) and "haxaml_session_verify" in required_next and result == "failed"):
+            return _contract_violation(
+                "haxaml_session_record",
+                project_dir=project_dir,
+                contract=contract,
+                reason="Session record is out of lifecycle order.",
+                retry_after=required_next if isinstance(required_next, list) else [],
+            )
+    if contract.get("active_session_id", "") != session_id:
+        return _contract_violation(
+            "haxaml_session_record",
+            project_dir=project_dir,
+            contract=contract,
+            reason="Session record must target the active governed session.",
+            details={"requested_session_id": session_id},
+        )
+    expect_sync = _expect_sync_state(state)
+    if expect_sync["required"]:
+        return _gate_error_with_retry_policy(
+            "haxaml_session_record",
+            "expect_sync_required",
+            "Previous record is not synced to expect.yaml. Call haxaml_expect_sync before recording another governed result.",
+            project_dir=project_dir,
+            task=task,
+            session_id=session_id,
+            details={
+                "pending_sync": expect_sync,
+                "retry_after": ["haxaml_expect_sync(project_dir='.')", "haxaml_session_record(...)"],
+            },
+        )
 
     reconcile = reconcile_derivation(project_dir)
     blocking_conflicts = reconcile["severity_totals"]["blocking"]
@@ -667,32 +944,43 @@ def haxaml_session_record(
         )
 
     warnings = list(run_result.warnings)
-    if sm:
-        state = sm.read()
-        context_compaction = state.get("context_compaction", {})
-        if not isinstance(context_compaction, dict):
-            context_compaction = {}
-        sync_state = _expect_sync_state(state)
-        sync_state.update(
-            {
-                "required": True,
-                "pending_run_id": run_result.run_id,
-                "pending_task": task,
-                "pending_result": result,
-                "pending_recorded_at": _now_iso(),
-            }
-        )
-        state["expect_sync"] = sync_state
-        if session_id:
-            session = _find_session(state, session_id)
-            if session:
-                session["phase"] = "record"
-                session["status"] = "recorded"
-                session["updated"] = _now_iso()
-                session["ended"] = _now_iso()
-        err = _persist_state(sm, state)
-        if err:
-            warnings.append(f"Could not persist session close state: {err}")
+    state = sm.read()
+    context_compaction = state.get("context_compaction", {})
+    if not isinstance(context_compaction, dict):
+        context_compaction = {}
+    sync_state = _expect_sync_state(state)
+    sync_state.update(
+        {
+            "required": True,
+            "pending_run_id": run_result.run_id,
+            "pending_task": task,
+            "pending_result": result,
+            "pending_recorded_at": _now_iso(),
+        }
+    )
+    state["expect_sync"] = sync_state
+    session = _find_session(state, session_id)
+    if session:
+        session["phase"] = "record"
+        session["status"] = "recorded"
+        session["updated"] = _now_iso()
+        session["ended"] = _now_iso()
+    contract = _contract_touch(
+        contract,
+        phase="record",
+        required_next=["haxaml_expect_sync"],
+        tool_name="haxaml_session_record",
+        active_session_id=session_id,
+        active_task=task,
+        last_verification_id=latest_verification_id,
+        last_verification_verdict=str(latest_verdict or ""),
+        last_record_run_id=run_result.run_id,
+        last_record_result=result,
+    )
+    _set_lifecycle_contract_state(state, contract)
+    err = _persist_state(sm, state)
+    if err:
+        warnings.append(f"Could not persist session close state: {err}")
 
     stale = export_if_stale(project_dir, agents=["generic"])
     _retry_guard_clear(
@@ -741,6 +1029,15 @@ def haxaml_expect_sync(
         return _err("haxaml_expect_sync", "missing_acts", "acts.yaml not found")
 
     state = sm.read()
+    contract = _lifecycle_contract_state(state)
+    if not _contract_allows(contract, "haxaml_expect_sync"):
+        return _contract_violation(
+            "haxaml_expect_sync",
+            project_dir=project_dir,
+            contract=contract,
+            reason="Expect sync is out of lifecycle order.",
+            retry_after=contract.get("required_next", []),
+        )
     sync_state = _expect_sync_state(state)
     if not sync_state["required"]:
         return _ok(
@@ -885,6 +1182,17 @@ def haxaml_expect_sync(
     sync_state["pending_result"] = ""
     sync_state["pending_recorded_at"] = ""
     state["expect_sync"] = sync_state
+    contract = _contract_touch(
+        contract,
+        phase="sync",
+        required_next=["haxaml_guidance"],
+        tool_name="haxaml_expect_sync",
+        active_session_id="",
+        active_task="",
+        last_record_run_id=sync_state["last_synced_run_id"],
+        last_record_result="",
+    )
+    _set_lifecycle_contract_state(state, contract)
     err = _persist_state(sm, state)
     warnings = [f"Could not persist expect sync state: {err}"] if err else []
 
@@ -924,6 +1232,17 @@ def haxaml_run(
     if detail_err:
         return detail_err
 
+    guided = haxaml_guidance(task=task, project_dir=project_dir, detail=detail_mode)
+    if not guided.get("ok"):
+        dep = _wrapper_deprecation("haxaml_run", ["haxaml_guidance", "haxaml_session_start"])
+        return _err(
+            "haxaml_run",
+            guided.get("error", {}).get("code", "guidance_failed"),
+            guided.get("error", {}).get("message", "Guidance failed."),
+            guided.get("error", {}).get("details", {}),
+            warnings=[dep["message"]],
+        )
+
     started = haxaml_session_start(task=task, description=description, project_dir=project_dir, detail=detail_mode)
     dep = _wrapper_deprecation("haxaml_run", ["haxaml_session_start"])
     if not started.get("ok"):
@@ -936,8 +1255,36 @@ def haxaml_run(
         )
 
     payload = started.get("data", {})
+    session_id = payload.get("session_id", "")
+    planned = haxaml_session_plan(session_id=session_id, project_dir=project_dir, detail=detail_mode)
+    if not planned.get("ok"):
+        return _err(
+            "haxaml_run",
+            planned.get("error", {}).get("code", "session_plan_failed"),
+            planned.get("error", {}).get("message", "Session plan failed."),
+            planned.get("error", {}).get("details", {}),
+            warnings=[dep["message"]],
+        )
+    packed = haxaml_context_pack(
+        task=task,
+        project_dir=project_dir,
+        pack="minimal",
+        include_state=True,
+        session_id=session_id,
+        refresh_reason="wrapper bootstrap context for compatibility",
+        detail=detail_mode,
+    )
+    if not packed.get("ok"):
+        return _err(
+            "haxaml_run",
+            packed.get("error", {}).get("code", "context_pack_failed"),
+            packed.get("error", {}).get("message", "Context pack failed."),
+            packed.get("error", {}).get("details", {}),
+            warnings=[dep["message"]],
+        )
+
     lines = [f"✓ Run started: {task}"]
-    lines.append(f"  Session: {payload.get('session_id', '')}")
+    lines.append(f"  Session: {session_id}")
     lines.append(f"  Status: {payload.get('status', 'proceed')}")
     lines.append("  → Work on the task, then call haxaml_done (or haxaml_session_verify + haxaml_session_record)")
     return _ok(
@@ -945,7 +1292,7 @@ def haxaml_run(
         {
             "message": "\n".join(lines),
             "task": task,
-            "session_id": payload.get("session_id", ""),
+            "session_id": session_id,
             "warnings": started.get("warnings", []),
             "deprecation": dep,
         },
@@ -962,6 +1309,7 @@ def haxaml_done(
     decisions: str = "",
     risks: str = "",
     project_dir: str = ".",
+    session_id: str = "",
     detail: str = DETAIL_SHORT,
 ) -> dict:
     """Record task completion in the project diary (acts.yaml).
@@ -979,9 +1327,27 @@ def haxaml_done(
     if detail_err:
         return detail_err
 
+    if not session_id:
+        sm, _ = _get_state_manager(project_dir)
+        if sm:
+            state = sm.read()
+            sessions = state.get("sessions", [])
+            if isinstance(sessions, list):
+                for item in reversed(sessions):
+                    if not isinstance(item, dict):
+                        continue
+                    if str(item.get("task", "")).strip() != task.strip():
+                        continue
+                    if str(item.get("status", "")).strip() not in {"started", "planned", "verified"}:
+                        continue
+                    session_id = str(item.get("id", "")).strip()
+                    if session_id:
+                        break
+
     verify = haxaml_session_verify(
         task=task,
         project_dir=project_dir,
+        session_id=session_id,
         summary=changes or decisions or risks or f"Completed task: {task}",
         changed_files=[],
         unresolved_questions=[],
@@ -1002,6 +1368,7 @@ def haxaml_done(
         task=task,
         result=result,
         project_dir=project_dir,
+        session_id=session_id,
         changes=changes,
         decisions=decisions,
         risks=risks,
