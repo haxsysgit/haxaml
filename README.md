@@ -54,7 +54,49 @@ Official docs:
 - OpenAI Codex MCP docs: https://developers.openai.com/docs/mcp
 - MCP architecture: https://modelcontextprotocol.io/docs/learn/architecture
 
-### Claude Code (`.mcp.json`)
+### Project-scoped (recommended)
+
+Place config in the project root. The server uses cwd as the project directory — no env var needed.
+
+**Claude Code** — `.mcp.json` in project root:
+
+```json
+{
+  "mcpServers": {
+    "haxaml": {
+      "command": "uvx",
+      "args": ["haxaml-mcp"]
+    }
+  }
+}
+```
+
+**Codex CLI** — `.codex/config.toml` in project root:
+
+```toml
+[mcp_servers.haxaml]
+command = "haxaml-mcp"
+```
+
+**Generic MCP JSON** (Windsurf, Cursor, etc.):
+
+```json
+{
+  "mcpServers": {
+    "haxaml": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["haxaml-mcp"]
+    }
+  }
+}
+```
+
+### User-wide
+
+Set `HAXAML_PROJECT_DIR` to pin the server to a specific project regardless of cwd. Useful for global configs that live outside the project.
+
+**Claude Code** — `~/.claude.json`:
 
 ```json
 {
@@ -70,7 +112,7 @@ Official docs:
 }
 ```
 
-### Codex CLI (`~/.codex/config.toml`)
+**Codex CLI** — `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.haxaml]
@@ -78,7 +120,7 @@ command = "haxaml-mcp"
 env = { HAXAML_PROJECT_DIR = "/absolute/path/to/project" }
 ```
 
-### Generic MCP JSON (many clients)
+**Generic MCP JSON**:
 
 ```json
 {
