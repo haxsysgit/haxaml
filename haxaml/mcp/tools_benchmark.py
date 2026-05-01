@@ -172,53 +172,55 @@ def _benchmark_workflow_mode() -> dict[str, Any]:
         "expanded_short_max_payload_tokens": 2600,
         "essential_full_max_payload_tokens": 3200,
     }
-    with tempfile.TemporaryDirectory(prefix="haxaml-benchmark-workflow-") as td:
-        project_dir = str(Path(td))
-        init_result = tools_frame.haxaml_init(directory=project_dir, detail=DETAIL_SHORT)
-        if not init_result.get("ok"):
-            raise RuntimeError(f"workflow benchmark fixture init failed: {init_result}")
+    def _run_isolated_profile(name: str, detail: str) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory(prefix=f"haxaml-benchmark-workflow-{name}-") as td:
+            project_dir = str(Path(td))
+            init_result = tools_frame.haxaml_init(directory=project_dir, detail=DETAIL_SHORT)
+            if not init_result.get("ok"):
+                raise RuntimeError(f"workflow benchmark fixture init failed for {name}: {init_result}")
+            return _benchmark_run_profile(project_dir, name, detail)
 
-        profiles = {
-            "essential_short": _benchmark_run_profile(project_dir, "essential_short", DETAIL_SHORT),
-            "expanded_short": _benchmark_run_profile(project_dir, "expanded_short", DETAIL_SHORT),
-            "essential_full": _benchmark_run_profile(project_dir, "essential_full", DETAIL_FULL),
+    profiles = {
+        "essential_short": _run_isolated_profile("essential_short", DETAIL_SHORT),
+        "expanded_short": _run_isolated_profile("expanded_short", DETAIL_SHORT),
+        "essential_full": _run_isolated_profile("essential_full", DETAIL_FULL),
+    }
+    essential = profiles["essential_short"]["payload_tokens"]
+    expanded = profiles["expanded_short"]["payload_tokens"]
+    full = profiles["essential_full"]["payload_tokens"]
+    comparisons = {
+        "expanded_vs_essential": {
+            "extra_tokens": expanded - essential,
+            "pct_over_essential": round(((expanded - essential) / essential) * 100, 2) if essential else 0.0,
+            "extra_calls": profiles["expanded_short"]["call_count"] - profiles["essential_short"]["call_count"],
+        },
+        "full_vs_essential": {
+            "extra_tokens": full - essential,
+            "pct_over_essential": round(((full - essential) / essential) * 100, 2) if essential else 0.0,
+            "extra_calls": profiles["essential_full"]["call_count"] - profiles["essential_short"]["call_count"],
+        },
+    }
+    transport = {
+        name: {
+            "payload_tokens": prof["payload_tokens"],
+            "envelope_tokens": prof["envelope_tokens"],
+            "overhead_tokens": prof["transport_overhead_tokens"],
+            "overhead_pct": prof["transport_overhead_pct"],
         }
-        essential = profiles["essential_short"]["payload_tokens"]
-        expanded = profiles["expanded_short"]["payload_tokens"]
-        full = profiles["essential_full"]["payload_tokens"]
-        comparisons = {
-            "expanded_vs_essential": {
-                "extra_tokens": expanded - essential,
-                "pct_over_essential": round(((expanded - essential) / essential) * 100, 2) if essential else 0.0,
-                "extra_calls": profiles["expanded_short"]["call_count"] - profiles["essential_short"]["call_count"],
-            },
-            "full_vs_essential": {
-                "extra_tokens": full - essential,
-                "pct_over_essential": round(((full - essential) / essential) * 100, 2) if essential else 0.0,
-                "extra_calls": profiles["essential_full"]["call_count"] - profiles["essential_short"]["call_count"],
-            },
-        }
-        transport = {
-            name: {
-                "payload_tokens": prof["payload_tokens"],
-                "envelope_tokens": prof["envelope_tokens"],
-                "overhead_tokens": prof["transport_overhead_tokens"],
-                "overhead_pct": prof["transport_overhead_pct"],
-            }
-            for name, prof in profiles.items()
-        }
-        guardrail_results = {
-            "essential_short_pass": profiles["essential_short"]["payload_tokens"] <= guardrails["essential_short_max_payload_tokens"],
-            "expanded_short_pass": profiles["expanded_short"]["payload_tokens"] <= guardrails["expanded_short_max_payload_tokens"],
-            "essential_full_pass": profiles["essential_full"]["payload_tokens"] <= guardrails["essential_full_max_payload_tokens"],
-        }
-        guardrail_results["all_pass"] = all(guardrail_results.values())
-        return {
-            "profiles": profiles,
-            "comparisons": comparisons,
-            "transport_overhead": transport,
-            "guardrails": {"ceilings": guardrails, "results": guardrail_results},
-        }
+        for name, prof in profiles.items()
+    }
+    guardrail_results = {
+        "essential_short_pass": profiles["essential_short"]["payload_tokens"] <= guardrails["essential_short_max_payload_tokens"],
+        "expanded_short_pass": profiles["expanded_short"]["payload_tokens"] <= guardrails["expanded_short_max_payload_tokens"],
+        "essential_full_pass": profiles["essential_full"]["payload_tokens"] <= guardrails["essential_full_max_payload_tokens"],
+    }
+    guardrail_results["all_pass"] = all(guardrail_results.values())
+    return {
+        "profiles": profiles,
+        "comparisons": comparisons,
+        "transport_overhead": transport,
+        "guardrails": {"ceilings": guardrails, "results": guardrail_results},
+    }
 
 
 @mcp_app.tool()
