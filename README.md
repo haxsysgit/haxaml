@@ -38,7 +38,7 @@ uv tool install haxaml-mcp
 
 ## MCP Start
 
-Configure your MCP client to launch `haxaml-mcp` with `HAXAML_PROJECT_DIR` set to the project root. See [MCP.md](https://github.com/haxsysgit/haxaml/blob/main/MCP.md) for the human/operator guide.
+Configure your MCP client to launch `haxaml-mcp` with `HAXAML_PROJECT_DIR` set to the project root. See [learn/haxaml-mcp.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml-mcp.md) for the full MCP/architecture guide.
 
 Once connected, agents can initialize and validate through MCP tools:
 
@@ -46,6 +46,54 @@ Once connected, agents can initialize and validate through MCP tools:
 - `haxaml_validate`
 
 Optional fallback: run `haxaml init` / `haxaml validate` directly when MCP is unavailable.
+
+## MCP Config
+
+Official docs:
+- Claude Code MCP docs: https://docs.claude.com/en/docs/claude-code/mcp
+- OpenAI Codex MCP docs: https://developers.openai.com/docs/mcp
+- MCP architecture: https://modelcontextprotocol.io/docs/learn/architecture
+
+### Claude Code (`.mcp.json`)
+
+```json
+{
+  "mcpServers": {
+    "haxaml": {
+      "command": "uvx",
+      "args": ["haxaml-mcp"],
+      "env": {
+        "HAXAML_PROJECT_DIR": "/absolute/path/to/project"
+      }
+    }
+  }
+}
+```
+
+### Codex CLI (`~/.codex/config.toml`)
+
+```toml
+[mcp_servers.haxaml]
+command = "haxaml-mcp"
+env = { HAXAML_PROJECT_DIR = "/absolute/path/to/project" }
+```
+
+### Generic MCP JSON (many clients)
+
+```json
+{
+  "mcpServers": {
+    "haxaml": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["haxaml-mcp"],
+      "env": {
+        "HAXAML_PROJECT_DIR": "/absolute/path/to/project"
+      }
+    }
+  }
+}
+```
 
 ## Bootstrap Prompt
 
@@ -73,8 +121,7 @@ Do not edit .haxaml/* for utility or side tasks that are not governed project wo
 
 - [learn/FRAME.md](https://github.com/haxsysgit/haxaml/blob/main/learn/FRAME.md) - FRAME memory model
 - [learn/haxaml.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml.md) - how Haxaml makes FRAME operational
-- [learn/mcp-architecture-for-haxaml.md](https://github.com/haxsysgit/haxaml/blob/main/learn/mcp-architecture-for-haxaml.md) - plain-language MCP architecture mapped to Haxaml
-- [MCP.md](https://github.com/haxsysgit/haxaml/blob/main/MCP.md) - MCP setup and operator guide
+- [learn/haxaml-mcp.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml-mcp.md) - MCP setup, architecture mapping, and lifecycle contract
 - [v1.0_Roadmap.md](https://github.com/haxsysgit/haxaml/blob/main/v1.0_Roadmap.md) - roadmap from `0.6.0` to `1.0`
 - [docs/architecture.md](https://github.com/haxsysgit/haxaml/blob/main/docs/architecture.md) - module layout and MCP split overview
 - [docs/mcp-tool-reference.md](https://github.com/haxsysgit/haxaml/blob/main/docs/mcp-tool-reference.md) - compact MCP tool and resource index

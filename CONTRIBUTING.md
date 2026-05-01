@@ -123,7 +123,7 @@ Maintainers may request:
 
 When you change behavior, update the matching docs:
 
-- `MCP.md` for operator flow and usage patterns.
+- `learn/haxaml-mcp.md` for operator flow and usage patterns.
 - `docs/mcp-tool-reference.md` for tool inventory changes.
 - `docs/architecture.md` if module boundaries moved.
 - `README.md` for user-facing setup/entry changes.

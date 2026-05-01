@@ -507,7 +507,7 @@ It is meant to stop the most expensive kinds of confusion:
 - Recording success while project state is inconsistent.
 - Forgetting why a decision was made.
 
-For exact operator commands and response signals, use [MCP.md](MCP.md). This
+For exact operator commands and response signals, use [haxaml-mcp.md](haxaml-mcp.md). This
 file is explaining why the flow exists.
 
 ## Why Utility Mode Exists

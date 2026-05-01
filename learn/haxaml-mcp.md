@@ -1,9 +1,71 @@
-# MCP: Haxaml Operator Guide (0.5.x)
+# MCP: Haxaml Operator + Architecture Guide (0.5.x)
 
-Haxaml is MCP-first.
-Use MCP tools for lifecycle, adoption, and reconciliation gates.
-CLI commands mirror MCP tools as thin wrappers.
-Audience: human operators and integrators. Agents should primarily rely on tool contracts and a short startup prompt, not by loading this full doc into routine context.
+Haxaml is MCP-first and agent-first.
+
+This file merges:
+- the original MCP operator contract and lifecycle usage guide, and
+- a plain-language mapping to official MCP architecture primitives.
+
+Official architecture reference:
+https://modelcontextprotocol.io/docs/learn/architecture
+
+## Why This Matters
+
+Haxaml being "new" to many models is expected.
+
+MCP is runtime integration, not training-time dependency. The model does not need prior training on Haxaml internals if:
+
+1. the host actually connects to the Haxaml MCP server, and
+2. Haxaml hard-fails when lifecycle contract is violated.
+
+Haxaml 0.5.2 tightened those hard gates.
+
+## Architecture Mapping (Official MCP -> Haxaml)
+
+### Participants
+
+- **Host**: Codex CLI, Claude Code, Cursor, Windsurf, etc.
+- **MCP client**: host-side MCP connector that discovers/calls tools.
+- **MCP server**: `haxaml-mcp` (`haxaml.mcp_server:main`).
+- **Data/state**: repo + `.haxaml/*` FRAME files.
+
+### Layers
+
+- **Transport layer**: usually stdio for local Haxaml (`uvx haxaml-mcp`).
+- **Data layer**: JSON-RPC capability discovery + tool/resource calls.
+
+Haxaml governance logic lives in tool contracts and state transitions at the data layer.
+
+### MCP Primitives and Haxaml Decisions
+
+- **Tools**: primary governance surface in Haxaml.
+- **Resources**: optional read surfaces (`haxaml://frame/*`, `haxaml://context`).
+- **Prompts**: supported by MCP generally, but not a required Haxaml governance control surface.
+
+Why Haxaml is tool-first (not prompt-primitive-first):
+- governance needs deterministic state transitions
+- governance needs structured, machine-checkable failure codes
+- governance needs hard blocking when sequence is wrong
+
+Prompt primitives are useful instruction surfaces but are advisory; they are not deterministic lifecycle gates.
+
+Why Haxaml does not depend on elicitation as a required primitive:
+- host support is uneven
+- many runs are headless or autonomous
+- mandatory human-interrupt loops reduce cross-client reliability
+
+Haxaml instead encodes clarification and next actions in deterministic tool payloads (`required_questions`, `expected_next`, `retry_after`).
+
+## Agent-First Rule
+
+Audience: human operators and integrators configuring runtime.
+
+Execution is agent-first:
+- agents call lifecycle tools,
+- agents maintain governed state through tool contracts,
+- humans mainly configure MCP availability and review outcomes.
+
+Avoid manual FRAME surgery as a default workflow. Prefer agent-governed reconcile/validate loops.
 
 ## Response Envelope
 
@@ -51,7 +113,7 @@ Compatibility wrappers (deprecated in 0.4.x):
 ## Operating Modes
 
 - Governed mode: project work. Use Haxaml lifecycle and FRAME journal updates.
-- Utility mode: side task or unrelated request. Do not call lifecycle tools and do not edit `.haxaml/*`.
+- Utility mode: side task or unrelated request. Do not run governed lifecycle.
 - Resume rule: after utility work, return to governed flow with `haxaml_guidance` then `haxaml_session_start`.
 
 ## MCP Client Config Examples (Bootstrap-Aligned)
@@ -160,7 +222,7 @@ Scenario:
 Recovery path:
 
 1. Run `haxaml_reconcile(project_dir=".")`.
-2. Use reconcile conflict metadata (`canonical_path`, `derived_path`, `suggested_fix_action`, `gate_reasons`) to update FRAME files.
+2. Have the agent apply reconcile conflict guidance (`canonical_path`, `derived_path`, `suggested_fix_action`, `gate_reasons`) through a governed task.
 3. Re-run `haxaml_reconcile(project_dir=".")` until blocking conflicts are zero.
 4. Re-run `haxaml_validate(project_dir=".")` and confirm `ok=true`.
 5. Retry `haxaml_session_record(..., result="success"|"partial")`.
@@ -189,7 +251,7 @@ Note:
 ## Troubleshooting
 
 1. Symptom: `error.code="missing_facts"` on guidance/start/context tools.
-- Fix: run `haxaml_init(project_dir='.')` or create `.haxaml/facts.yaml`, then `haxaml_validate(project_dir='.')`.
+- Fix: run `haxaml_init(project_dir='.')`, then `haxaml_validate(project_dir='.')`.
 
 2. Symptom: `error.code="about_required"` on `haxaml_session_start`.
 - Fix: call `haxaml_about(project_dir='.')` once in the active agent/MCP session, then retry.
@@ -214,7 +276,7 @@ Note:
 - Fix: execute the governed flow and record+sync before validating again.
 
 9. Symptom: `error.code="utility_mode_task"` on lifecycle tools.
-- Fix: treat the request as utility mode (no lifecycle calls, no `.haxaml/*` edits). Resume governed flow only when back to project work.
+- Fix: treat the request as utility mode (no governed lifecycle calls). Resume governed flow only when back to project work.
 
 10. Symptom: `error.code="retry_policy_blocked"`.
 - Fix: stop looped retries, resolve root cause, then retry once.
@@ -251,7 +313,7 @@ Recommended sequence:
 
 1. `haxaml_adopt_plan(project_dir='.')`
 2. `haxaml_reconcile(project_dir='.')`
-3. edit FRAME files
+3. have the agent apply required FRAME adjustments
 4. `haxaml_validate(project_dir='.')`
 5. optional `haxaml_adopt(write=True)` and export
 
