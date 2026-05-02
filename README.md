@@ -2,32 +2,39 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/haxaml.svg)](https://pypi.org/project/haxaml/)
 
-**Git-style project memory and governance for AI coding agents.**
+***MCP-first, Git-style workflow governance for AI coding agents.**
 
-Most AI coding problems do not start when the agent writes bad code. They start earlier, when the agent jumps from a vague request straight into implementation — without understanding the job, without asking what is missing, without knowing what "done" means.
+Most AI coding issues do not begin when an agent writes bad code. They begin earlier, when the agent jumps from a vague request straight into implementation without understanding the project, the missing context, the risks, or what “done” actually means.
 
-Haxaml gives AI coding agents a governed workflow they have to follow before they touch your code. It keeps project memory in versioned files, enforces a preparation phase before any build, requires verification evidence before success can be recorded, and works across Claude Code, Codex CLI, Cursor, Copilot, Windsurf, and any MCP-compatible agent.
+Haxaml is a token and context-efficient engine built on top of FRAME: a simple model that splits project understanding into five parts: Facts, Rules, Acts, Map, and Expect.
+
+Instead of dumping the whole project into an agent and hoping it figures things out, Haxaml gives the agent a governed workflow. It helps the agent prepare before coding, pull only the context needed for the task, verify the work with evidence, and record useful state for the next agent.
+
+The result is a calmer agent workflow: less guessing, less context bloat, better handoffs, and a project state that can travel across Claude Code, Codex CLI, Cursor, Copilot, Windsurf, and any MCP-compatible agent.
 
 ## What Haxaml Is Not
 
-- **Not another AI memory backpack.** Haxaml is not about storing and recalling facts. It is about making agents prepare, plan, and govern their work at runtime.
-- **Not a prompt file.** `AGENTS.md` and `CLAUDE.md` are adapters. Haxaml is the governed workflow underneath them.
-- **Not a replacement for your agent.** Haxaml supervises the agent lifecycle. The agent still does the work.
+- **Not an AI memory backpack.** Haxaml is not mainly about storing random facts for an agent to recall later. It is about shaping project understanding so agents can prepare, plan, verify, and record their work properly.
+- **Not just a prompt file.** `AGENTS.md`, `CLAUDE.md`, Cursor rules, Copilot instructions, and similar files are adapters. Haxaml is the governed engine underneath them.
+- **Not a replacement for your agent.** Haxaml does not write the code for the agent. It gives the agent a workflow spine so the work starts with context, follows project rules, and ends with verification.
+- **Not a giant context dump.** Haxaml is built to reduce context noise by giving the agent the right project signals at the right time.
 
 ## How It Works
 
-Haxaml exposes six lifecycle phases through MCP tools. The agent follows them in order:
+Haxaml exposes a lifecycle through MCP tools. The agent follows this flow before, during, and after implementation:
 
 | Phase | Tool(s) | What happens |
 |---|---|---|
-| **about** | `haxaml_about` | Agent learns what Haxaml is and how to operate |
-| **guidance** | `haxaml_guidance` | Haxaml classifies the request, determines governed vs utility mode |
-| **prebuild** | `haxaml_session_start` → `haxaml_session_plan` → `haxaml_context_pack` | Agent prepares before coding: opens session, plans, gathers task-specific project signals |
-| **build** | *(no Haxaml tool)* | Agent edits files, writes code, runs commands |
-| **verify** | `haxaml_session_verify` | Agent proves what it inspected, changed, and what risks remain |
-| **record** | `haxaml_session_record` → `haxaml_expect_sync` | Agent writes outcome into project history and syncs expectations |
+| **about** | `haxaml_about` | The agent learns what Haxaml is, what FRAME means, and how to operate inside the project |
+| **guidance** | `haxaml_guidance` | Haxaml classifies the request and decides whether it is governed project work or a utility task |
+| **prebuild** | `haxaml_session_start` → `haxaml_session_plan` → `haxaml_context_pack` | The agent opens a session, plans the work, and gathers task-specific project context before coding |
+| **build** | *(no Haxaml tool)* | The agent edits files, writes code, runs commands, answers a question and performs the actual implementation |
+| **verify** | `haxaml_session_verify` | The agent records what it inspected, what it changed, what was checked, and what risks remain |
+| **record** | `haxaml_session_record` → `haxaml_expect_sync` | The outcome is written into project history and expectations are synced for future work |
 
-```
+In short:
+
+```text
 about → guidance → prebuild → build → verify → record
 ```
 
