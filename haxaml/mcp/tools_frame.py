@@ -181,6 +181,15 @@ def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     if reconcile["severity_totals"]["blocking"] > 0:
         all_valid = False
 
+    sem = semantic_validate(FrameModel.load(project_dir))
+    if sem.blocking:
+        lines.append(f"\n✗ {len(sem.blocking)} semantic error(s):")
+        for b in sem.blocking:
+            lines.append(f"  → {b}")
+        all_valid = False
+    if sem.warnings:
+        lines.append(f"\n⚠ {len(sem.warnings)} semantic warning(s) (see haxaml_doctor for details)")
+
     if all_valid:
         lines.append("\n✓ All FRAME files valid")
     else:
@@ -252,17 +261,15 @@ def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     )
 
 
-@mcp_app.tool()
+# Deprecated compatibility helper.
+# Not registered as an MCP tool.
+# Remove fully in v0.7 after dogfooding.
 def haxaml_context(
     project_dir: str = ".",
     include_state: bool = True,
     detail: str = DETAIL_SHORT,
 ) -> dict:
-    """Get the current project context for the AI agent.
-
-    Returns a compact summary of facts, rules, acts, and expect.
-    This is what the agent reads to understand the project.
-    """
+    """Deprecated wrapper. Use haxaml_context_pack instead."""
     detail_mode, detail_err = _normalize_detail("haxaml_context", detail)
     if detail_err:
         return detail_err
@@ -381,7 +388,8 @@ def haxaml_health(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
 def haxaml_doctor(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Check facts completeness beyond schema validation.
 
-    Finds missing recommended fields and blocking unresolved items.
+    Finds missing recommended fields, blocking unresolved items, and semantic
+    quality gaps across all FRAME files.
     """
     detail_mode, detail_err = _normalize_detail("haxaml_doctor", detail)
     if detail_err:
@@ -404,19 +412,44 @@ def haxaml_doctor(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
             {"message": "\n".join(lines), "errors": errors},
         )
 
+    lines: list[str] = []
+    all_recommendations: list[str] = []
+
     missing = detect_missing_facts_fields(str(facts_path))
     if missing:
-        lines = [f"⚠ {len(missing)} recommendation(s):"]
+        lines.append(f"⚠ {len(missing)} facts field recommendation(s):")
         for m in missing:
             lines.append(f"  → {m}")
+            all_recommendations.append(m)
+
+    sem = semantic_validate(FrameModel.load(project_dir))
+    if sem.blocking:
+        lines.append(f"✗ {len(sem.blocking)} blocking semantic issue(s):")
+        for b in sem.blocking:
+            lines.append(f"  → {b}")
+    if sem.warnings:
+        lines.append(f"⚠ {len(sem.warnings)} semantic quality warning(s):")
+        for w in sem.warnings:
+            lines.append(f"  → {w}")
+            all_recommendations.append(w)
+
+    has_issues = bool(sem.blocking or all_recommendations)
+    if not has_issues:
         return _ok(
             "haxaml_doctor",
-            {"message": "\n".join(lines), "recommendations": missing, "has_recommendations": True},
+            {"message": "✓ FRAME is complete — no recommendations", "has_recommendations": False},
             detail=detail_mode,
         )
 
     return _ok(
         "haxaml_doctor",
-        {"message": "✓ facts.yaml is complete — no recommendations", "has_recommendations": False},
+        {
+            "message": "\n".join(lines) if lines else "⚠ Issues found",
+            "recommendations": all_recommendations,
+            "blocking": sem.blocking,
+            "warnings": sem.warnings,
+            "has_recommendations": bool(all_recommendations),
+            "has_blocking": bool(sem.blocking),
+        },
         detail=detail_mode,
     )

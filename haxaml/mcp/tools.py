@@ -4,8 +4,10 @@ from haxaml.mcp.tools_frame import *
 from haxaml.mcp.tools_lifecycle import *
 from haxaml.mcp.tools_ops import *
 from haxaml.mcp.tools_benchmark import *
+from haxaml.mcp.tools_prebuild import *
 
 __all__ = [
+    "haxaml_prebuild",
     "haxaml_about",
     "haxaml_guidance",
     "haxaml_session_start",
@@ -14,8 +16,8 @@ __all__ = [
     "haxaml_session_verify",
     "haxaml_session_record",
     "haxaml_expect_sync",
-    "haxaml_run",
-    "haxaml_done",
+    "haxaml_run",  # deprecated
+    "haxaml_done",  # deprecated
     "haxaml_init",
     "haxaml_validate",
     "haxaml_context",

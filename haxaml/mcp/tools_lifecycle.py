@@ -169,7 +169,7 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
         updated = _contract_touch(
             contract,
             phase="guidance",
-            required_next=["haxaml_session_start"],
+            required_next=["haxaml_prebuild", "haxaml_session_start"],
             tool_name="haxaml_guidance",
             active_session_id="",
             active_task=task,
@@ -1216,18 +1216,16 @@ def haxaml_expect_sync(
     )
 
 
-@mcp_app.tool()
+# Deprecated compatibility helper.
+# Not registered as an MCP tool.
+# Remove fully in v0.7 after dogfooding.
 def haxaml_run(
     task: str,
     description: str = "",
     project_dir: str = ".",
     detail: str = DETAIL_SHORT,
 ) -> dict:
-    """Start a governed execution run.
-
-    Sets the active task in acts.yaml and runs preflight validation.
-    Call this before starting work on a task.
-    """
+    """Deprecated wrapper. Use haxaml_guidance + haxaml_prebuild instead."""
     detail_mode, detail_err = _normalize_detail("haxaml_run", detail)
     if detail_err:
         return detail_err
@@ -1301,7 +1299,9 @@ def haxaml_run(
     )
 
 
-@mcp_app.tool()
+# Deprecated compatibility helper.
+# Not registered as an MCP tool.
+# Remove fully in v0.7 after dogfooding.
 def haxaml_done(
     task: str,
     result: str = "success",
@@ -1312,17 +1312,7 @@ def haxaml_done(
     session_id: str = "",
     detail: str = DETAIL_SHORT,
 ) -> dict:
-    """Record task completion in the project diary (acts.yaml).
-
-    Call this after finishing work on a task.
-
-    Args:
-        task: The task that was completed
-        result: success, partial, or failed
-        changes: Summary of what changed
-        decisions: Key decisions made during this task
-        risks: Any risks or concerns identified
-    """
+    """Deprecated wrapper. Use haxaml_session_verify + haxaml_session_record instead."""
     detail_mode, detail_err = _normalize_detail("haxaml_done", detail)
     if detail_err:
         return detail_err

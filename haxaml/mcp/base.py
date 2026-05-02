@@ -20,6 +20,9 @@ from typing import Any, Optional
 
 from mcp.server.fastmcp import FastMCP
 
+# FrameModel — normalized FRAME loader. Use this in new code.
+from haxaml.frame_model import FrameModel
+
 # Core haxaml imports kept for wildcard-import compatibility.
 from haxaml.adoption import (
     analyze_adoption_instructions,
@@ -53,8 +56,10 @@ from haxaml.runner import ExecutionRunner
 from haxaml.state_manager import StateError, StateManager
 from haxaml.supervision import render_impact, render_needs
 from haxaml.validator import (
+    SemanticValidationResult,
     detect_missing_facts_fields,
     load_yaml,
+    semantic_validate,
     validate_acts,
     validate_expect,
     validate_facts,
@@ -136,3 +141,8 @@ __all__ = [
     for name in globals()
     if not (name.startswith("__") and name.endswith("__"))
 ]
+
+# Convenience: route old load_frame_data callers through FrameModel.as_dict().
+# This keeps all existing tool call-sites working without change.
+def load_frame_data(project_dir: str = ".") -> dict:  # type: ignore[override]
+    return FrameModel.load(project_dir).as_dict()

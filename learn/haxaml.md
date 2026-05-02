@@ -466,7 +466,7 @@ Same governance model underneath.
 The Haxaml lifecycle can look like ceremony if you only see the names:
 
 ```text
-about -> guidance -> start -> plan -> context_pack -> verify -> record
+about -> guidance -> [prebuild] -> start -> plan -> context_pack -> verify -> record
 ```
 
 But each step exists because agents commonly fail in a specific way.
@@ -479,6 +479,13 @@ recommended, and what not to do.
 are implementation work. Some are strategy. Some are side tasks. Some need
 clarification. The agent should not guess the mode if Haxaml can help classify
 it.
+
+`prebuild` (optional, introduced in 0.6) exists because guidance alone does not
+classify the task type or check FRAME quality before work begins. Prebuild
+classifies the task against 12 domain templates, runs semantic validation, and
+produces a readiness report with blocking issues, advisory warnings, required
+questions, and a recommended context pack level. It stops the agent from
+starting high-risk work in a broken FRAME state.
 
 `start` exists because governed work should create an actual session. It marks
 the active task, applies preflight checks, and gives the agent a session ID.
@@ -502,6 +509,7 @@ It is meant to stop the most expensive kinds of confusion:
 
 - Acting without onboarding.
 - Treating a side task like governed project work.
+- Starting complex work in a semantically broken FRAME state.
 - Pulling too much context.
 - Skipping verification.
 - Recording success while project state is inconsistent.
@@ -755,19 +763,26 @@ Or:
 
 Each file might look fine by itself. The project state is still not coherent.
 
-That is why Haxaml has reconcile behavior.
+That is why Haxaml has three layers of validation:
 
-Validation checks file shape.
+**Schema validation** checks file shape. Does this form have the right fields?
 
-Reconcile checks derivation boundaries and cross-file consistency.
+**Semantic validation** (introduced in 0.6) checks meaning beyond structure.
+Are required fields actually filled in? Is the lifecycle state consistent? Does
+the active task have a matching open session? These are things the JSON schema
+cannot catch but that will break agent workflows at runtime if ignored.
 
-In plain English:
+Semantic validation produces two classes of findings:
 
-Validation asks, "Does this form have the right fields?"
+- Blocking issues prevent `haxaml_prebuild` from advancing and surface as
+  validation errors in `haxaml_validate`.
+- Advisory warnings surface in `haxaml_doctor` as quality gaps the agent
+  should address before complex work.
 
-Reconcile asks, "Do these forms agree with each other?"
-
-That second question is where a lot of real project bugs live.
+**Reconcile** checks derivation boundaries and cross-file consistency. It asks
+"Do these forms agree with each other?" — catching conflicts like a module
+existing in `rules.yaml` but missing from `map.yaml`, or `expect.yaml`
+referencing a run that has no matching `acts` record.
 
 Haxaml blocks success/partial recording when there are blocking derivation
 conflicts because a broken project memory should not accept a clean success
@@ -902,6 +917,17 @@ AGENTS.md says another
 Cursor says another
 Copilot says another
 ```
+
+In 0.6, the export engine was refactored around a `PromptRecipe` pipeline:
+
+```text
+FrameModel.load() -> build_recipe(frame, agent) -> _render_recipe(recipe) -> Markdown
+```
+
+`PromptRecipe` is a normalised intermediate representation. Sections are keyed,
+ordered, and filterable — so a caller can inspect which sections will appear,
+exclude sections for a custom adapter, or toggle individual sections before
+rendering. This makes export deterministic and testable without a filesystem.
 
 Export keeps the project portable.
 
@@ -1275,10 +1301,11 @@ Haxaml makes it move.
 FRAME says project memory should be split into Facts, Rules, Acts, Map, and
 Expect.
 
-Haxaml stores that memory in YAML, validates it with schemas, exposes it through
-MCP tools, mirrors it through CLI commands, exports it into native agent files,
-checks consistency, builds compact context packs, records work into Acts, and
-keeps state from growing forever.
+Haxaml stores that memory in YAML, validates it with schemas and semantic
+checks, exposes it through MCP tools, mirrors it through CLI commands, exports
+it into native agent files via the `PromptRecipe` pipeline, classifies tasks
+before build, checks cross-file consistency, builds compact context packs,
+records work into Acts, and keeps state from growing forever.
 
 The design choices are not random:
 
@@ -1290,8 +1317,11 @@ The design choices are not random:
 - CLI-second because humans and CI still need commands.
 - Five FRAME files because different memory types should not be mashed
   together.
-- Lifecycle gates because agent work needs onboarding, scope, context,
-  verification, and recording.
+- Lifecycle gates because agent work needs onboarding, scope, classification,
+  context, verification, and recording.
+- Semantic validation because schema correctness is not the same as lifecycle
+  correctness or FRAME completeness.
+- PromptRecipe pipeline because export should be deterministic and testable.
 
 That is the thought behind Haxaml.
 

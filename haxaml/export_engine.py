@@ -11,13 +11,27 @@ Supported agents:
 - cursor   → .cursor/rules/haxaml.mdc
 - gemini   → GEMINI.md
 - generic  → HAXAML.md
+
+v0.6 PromptRecipe pipeline
+--------------------------
+All exports go through:
+  FrameModel.load() → build_recipe() → _render_recipe() → Markdown
+
+PromptRecipe is the normalised intermediate representation.
+Downstream rendering helpers (_render_facts, _render_rules, etc.) operate
+on PromptRecipe.sections[], not the raw FRAME dicts directly.  This keeps
+rendering deterministic and testable without a filesystem.
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
 import yaml
 
+from haxaml.frame_model import FrameModel
 from haxaml.paths import resolve_frame_file
 
 
@@ -71,6 +85,143 @@ AGENT_CONFIGS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# PromptRecipe — normalised intermediate representation for export pipeline
+# ---------------------------------------------------------------------------
+
+@dataclass
+class RecipeSection:
+    """One rendered section of the export output."""
+    key: str
+    title: str
+    content: str
+    included: bool = True
+
+
+@dataclass
+class PromptRecipe:
+    """Normalised export recipe produced from a FrameModel.
+
+    Sections are ordered and keyed.  Renderers downstream consume sections
+    directly; callers can inspect, filter, or override sections before
+    handing off to _render_recipe().
+    """
+    agent: str
+    style: str
+    sections: list[RecipeSection] = field(default_factory=list)
+    header: str = ""
+    footer: str = ""
+
+    def get(self, key: str) -> Optional[RecipeSection]:
+        for s in self.sections:
+            if s.key == key:
+                return s
+        return None
+
+    def exclude(self, *keys: str) -> "PromptRecipe":
+        """Return a copy of this recipe with the named sections excluded."""
+        import copy
+        r = copy.copy(self)
+        r.sections = [
+            s for s in self.sections if s.key not in keys
+        ]
+        return r
+
+
+def build_recipe(frame: FrameModel, agent: str = "generic") -> PromptRecipe:
+    """Build a PromptRecipe from a FrameModel.
+
+    All export rendering is deterministic from the recipe, so golden tests
+    can compare recipe sections without writing files.
+    """
+    if agent not in AGENT_CONFIGS:
+        raise ValueError(f"Unknown agent: {agent}. Supported: {', '.join(AGENT_CONFIGS)}")
+
+    config = AGENT_CONFIGS[agent]
+    style = config["style"]
+    frame_dict = frame.as_dict()
+
+    sections: list[RecipeSection] = []
+
+    if frame.has_facts():
+        sections.append(RecipeSection(
+            key="facts",
+            title="Project Facts",
+            content=_render_facts(frame_dict["facts"], style),
+        ))
+
+    profile = _agent_profile(frame_dict.get("rules"))
+    if profile:
+        sections.append(RecipeSection(
+            key="persona",
+            title="Working Profile",
+            content=_render_agent_persona(frame_dict.get("rules")),
+        ))
+        sections.append(RecipeSection(
+            key="reasoning",
+            title="Reasoning & Response Style",
+            content=_render_agent_reasoning_policy(frame_dict.get("rules")),
+        ))
+        few_shot = _render_agent_few_shot_examples(frame_dict.get("rules"), frame_dict.get("acts"))
+        if few_shot:
+            sections.append(RecipeSection(
+                key="examples",
+                title="Reference Examples",
+                content=few_shot,
+            ))
+
+    if frame.has_rules():
+        sections.append(RecipeSection(
+            key="rules",
+            title="Rules & Conventions",
+            content=_render_rules(frame_dict["rules"], style),
+        ))
+
+    if frame.has_acts():
+        sections.append(RecipeSection(
+            key="acts",
+            title="Current State",
+            content=_render_acts(frame_dict["acts"], style),
+        ))
+
+    if frame.has_map():
+        sections.append(RecipeSection(
+            key="map",
+            title="Module Map",
+            content=_render_map(frame_dict["map"], style),
+        ))
+
+    if frame.has_expect():
+        sections.append(RecipeSection(
+            key="expect",
+            title="What's Expected Next",
+            content=_render_expect(frame_dict["expect"], style),
+        ))
+
+    recipe = PromptRecipe(
+        agent=agent,
+        style=style,
+        sections=sections,
+        header=_agent_header(config, agent),
+        footer=_agent_footer(agent),
+    )
+    return recipe
+
+
+def _render_recipe(recipe: PromptRecipe) -> str:
+    """Render a PromptRecipe to a Markdown string."""
+    parts = [recipe.header]
+    for section in recipe.sections:
+        if section.included and section.content.strip():
+            parts.append(_section(section.title, section.content))
+    parts.append(recipe.footer)
+    return "\n\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Backward-compat helpers kept for internal callers
+# ---------------------------------------------------------------------------
+
 DEFAULT_EXAMPLE_POLICY = {
     "max_examples": 4,
     "max_input_chars": 320,
@@ -100,22 +251,11 @@ def load_frame(project_dir: str) -> dict:
 
     Returns a dict with keys: facts, rules, acts, map, expect.
     Missing files are None.
+
+    Delegates to FrameModel for normalised loading.  Kept for internal
+    callers that still use the dict API directly.
     """
-    p = Path(project_dir)
-
-    facts_path = _resolve_frame_file(p, "facts.yaml", "brain.yaml")
-    rules_path = _resolve_frame_file(p, "rules.yaml", "mind.yaml")
-    acts_path = _resolve_frame_file(p, "acts.yaml", "state.yaml")
-    map_path = resolve_frame_file(p, "map.yaml")
-    expect_path = resolve_frame_file(p, "expect.yaml")
-
-    return {
-        "facts": _load_yaml_safe(facts_path) if facts_path else None,
-        "rules": _load_yaml_safe(rules_path) if rules_path else None,
-        "acts": _load_yaml_safe(acts_path) if acts_path else None,
-        "map": _load_yaml_safe(map_path) if map_path else None,
-        "expect": _load_yaml_safe(expect_path) if expect_path else None,
-    }
+    return FrameModel.load(project_dir).as_dict()
 
 
 def _section(title: str, content: str) -> str:
@@ -765,6 +905,9 @@ def _agent_footer(agent: str) -> str:
 def export_frame_to_markdown(project_dir: str, agent: str = "generic") -> str:
     """Export FRAME files to agent-specific markdown.
 
+    Routes through the PromptRecipe pipeline:
+      FrameModel.load() → build_recipe() → _render_recipe() → str
+
     Args:
         project_dir: Path to the project directory.
         agent: Target agent (claude, windsurf, copilot, codex, cursor, gemini, generic).
@@ -772,54 +915,9 @@ def export_frame_to_markdown(project_dir: str, agent: str = "generic") -> str:
     Returns:
         Markdown string ready to write to file.
     """
-    if agent not in AGENT_CONFIGS:
-        raise ValueError(f"Unknown agent: {agent}. Supported: {', '.join(AGENT_CONFIGS)}")
-
-    config = AGENT_CONFIGS[agent]
-    style = config["style"]
-    frame = load_frame(project_dir)
-    parts = []
-
-    # Header
-    parts.append(_agent_header(config, agent))
-
-    # Facts
-    if frame["facts"]:
-        parts.append(_section("Project Facts", _render_facts(frame["facts"], style)))
-
-    profile = _agent_profile(frame["rules"])
-    if profile:
-        parts.append(_section("Working Profile", _render_agent_persona(frame["rules"])))
-        parts.append(
-            _section(
-                "Reasoning & Response Style",
-                _render_agent_reasoning_policy(frame["rules"]),
-            )
-        )
-        few_shot = _render_agent_few_shot_examples(frame["rules"], frame["acts"])
-        if few_shot:
-            parts.append(_section("Reference Examples", few_shot))
-
-    # Rules
-    if frame["rules"]:
-        parts.append(_section("Rules & Conventions", _render_rules(frame["rules"], style)))
-
-    # Current State
-    if frame["acts"]:
-        parts.append(_section("Current State", _render_acts(frame["acts"], style)))
-
-    # Module Map
-    if frame["map"]:
-        parts.append(_section("Module Map", _render_map(frame["map"], style)))
-
-    # Plan
-    if frame["expect"]:
-        parts.append(_section("What's Expected Next", _render_expect(frame["expect"], style)))
-
-    # Footer
-    parts.append(_agent_footer(agent))
-
-    return "\n\n".join(parts)
+    frame = FrameModel.load(project_dir)
+    recipe = build_recipe(frame, agent)
+    return _render_recipe(recipe)
 
 
 def export_to_file(project_dir: str, agent: str = "generic",
