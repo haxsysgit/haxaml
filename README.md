@@ -4,8 +4,6 @@
 
 **Git-style project memory and governance for AI coding agents.**
 
-Latest release: `0.5.2`.
-
 Most AI coding problems do not start when the agent writes bad code. They start earlier, when the agent jumps from a vague request straight into implementation — without understanding the job, without asking what is missing, without knowing what "done" means.
 
 Haxaml gives AI coding agents a governed workflow they have to follow before they touch your code. It keeps project memory in versioned files, enforces a preparation phase before any build, requires verification evidence before success can be recorded, and works across Claude Code, Codex CLI, Cursor, Copilot, Windsurf, and any MCP-compatible agent.
