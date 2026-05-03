@@ -2,7 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/haxaml.svg)](https://pypi.org/project/haxaml/)
 
-***MCP-first, Git-style workflow governance for AI coding agents.**
+**MCP-first, Git-style workflow governance for AI coding agents.**
 
 Most AI coding issues do not begin when an agent writes bad code. They begin earlier, when the agent jumps from a vague request straight into implementation without understanding the project, the missing context, the risks, or what “done” actually means.
 
