@@ -1,7 +1,7 @@
 """haxaml_prebuild MCP tool — prebuild phase for v0.6.
 
 Lifecycle position:
-    about -> guidance -> prebuild -> context_pack -> build -> verify -> record
+    about -> guidance -> prebuild -> context_pack -> build -> verify -> record -> expect_sync
 
 haxaml_prebuild replaces the recommended use of session_start + session_plan.
 It classifies the task, runs semantic validation, produces a structured readiness

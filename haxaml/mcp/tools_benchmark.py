@@ -28,23 +28,23 @@ def _benchmark_profile_steps(name: str) -> list[str]:
         return [
             "haxaml_about",
             "haxaml_guidance",
-            "haxaml_session_start",
-            "haxaml_session_plan",
+            "haxaml_prebuild",
             "haxaml_context_pack",
             "haxaml_session_verify",
             "haxaml_session_record",
+            "haxaml_expect_sync",
         ]
     if name == "expanded_short":
         return [
             "haxaml_about",
             "haxaml_guidance",
-            "haxaml_session_start",
-            "haxaml_session_plan",
+            "haxaml_prebuild",
             "haxaml_context_pack",
             "haxaml_health",
             "haxaml_needs",
             "haxaml_session_verify",
             "haxaml_session_record",
+            "haxaml_expect_sync",
             "haxaml_reconcile",
             "haxaml_state_show",
         ]
@@ -52,11 +52,11 @@ def _benchmark_profile_steps(name: str) -> list[str]:
         return [
             "haxaml_about",
             "haxaml_guidance",
-            "haxaml_session_start",
-            "haxaml_session_plan",
+            "haxaml_prebuild",
             "haxaml_context_pack",
             "haxaml_session_verify",
             "haxaml_session_record",
+            "haxaml_expect_sync",
         ]
     raise ValueError(f"Unknown workflow benchmark profile: {name}")
 
@@ -64,16 +64,16 @@ def _benchmark_profile_steps(name: str) -> list[str]:
 
 
 def _benchmark_tool_registry() -> dict[str, Any]:
-    from haxaml.mcp import tools_frame, tools_lifecycle, tools_ops
+    from haxaml.mcp import tools_frame, tools_lifecycle, tools_ops, tools_prebuild
 
     return {
         "haxaml_about": tools_lifecycle.haxaml_about,
         "haxaml_guidance": tools_lifecycle.haxaml_guidance,
-        "haxaml_session_start": tools_lifecycle.haxaml_session_start,
-        "haxaml_session_plan": tools_lifecycle.haxaml_session_plan,
+        "haxaml_prebuild": tools_prebuild.haxaml_prebuild,
         "haxaml_context_pack": tools_lifecycle.haxaml_context_pack,
         "haxaml_session_verify": tools_lifecycle.haxaml_session_verify,
         "haxaml_session_record": tools_lifecycle.haxaml_session_record,
+        "haxaml_expect_sync": tools_lifecycle.haxaml_expect_sync,
         "haxaml_health": tools_frame.haxaml_health,
         "haxaml_needs": tools_ops.haxaml_needs,
         "haxaml_reconcile": tools_ops.haxaml_reconcile,
@@ -93,10 +93,8 @@ def _benchmark_run_profile(project_dir: str, name: str, detail: str) -> dict[str
             kwargs = common
         elif tool_name == "haxaml_guidance":
             kwargs = {"task": "workflow benchmark profile", **common}
-        elif tool_name == "haxaml_session_start":
+        elif tool_name == "haxaml_prebuild":
             kwargs = {"task": "workflow benchmark profile", "description": "benchmark profile run", **common}
-        elif tool_name == "haxaml_session_plan":
-            kwargs = {"session_id": session_id, **common}
         elif tool_name == "haxaml_context_pack":
             kwargs = {
                 "task": "workflow benchmark profile",
@@ -129,6 +127,8 @@ def _benchmark_run_profile(project_dir: str, name: str, detail: str) -> dict[str
                 "risks": "Transport numbers include envelope estimates only.",
                 **common,
             }
+        elif tool_name == "haxaml_expect_sync":
+            kwargs = common
         else:
             kwargs = common
 
@@ -142,7 +142,7 @@ def _benchmark_run_profile(project_dir: str, name: str, detail: str) -> dict[str
         envelope_total += entry["envelope_tokens"]
         elapsed_total += entry["elapsed_ms"]
 
-        if tool_name == "haxaml_session_start":
+        if tool_name == "haxaml_prebuild":
             session_id = str((result.get("data") or {}).get("session_id", ""))
         if not result.get("ok"):
             break

@@ -54,3 +54,12 @@ node_modules/
 .netlify/
 deploy/
 planning/
+temp/
+implementation_details/
+0.6.x_roadmap.md
+HAXAML_GOVERNANCE_GAPS_AND_OPPORTUNITIES.md
+docs/expect-outcome-absorption-proposal.md
+docs/expect-progress-and-ui-direction.md
+enforce
+haxaml-skill-short.md
+temp.txt

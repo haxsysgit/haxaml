@@ -133,7 +133,7 @@ def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
         has_evidence = _has_governed_evidence_for_changes(acts, governed_changed)
         if not has_evidence:
             lines.append("✗ governance evidence missing: code changes exist without governed lifecycle evidence")
-            lines.append("  → fix: run governed flow (about -> guidance -> start -> plan -> context_pack -> verify -> record -> expect_sync)")
+            lines.append("  → fix: run governed flow (about -> guidance -> prebuild -> context_pack -> verify -> record -> expect_sync)")
             all_valid = False
 
     expect_path = resolve_frame_file(p, "expect.yaml")
@@ -238,8 +238,7 @@ def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
                         "retry_after": [
                             "haxaml_about(project_dir='.')",
                             "haxaml_guidance(task=..., project_dir='.')",
-                            "haxaml_session_start(task=..., description=..., project_dir='.')",
-                            "haxaml_session_plan(session_id=..., project_dir='.')",
+                            "haxaml_prebuild(task=..., description=..., project_dir='.')",
                             "haxaml_context_pack(task=..., session_id=..., project_dir='.')",
                             "haxaml_session_verify(task=..., session_id=..., project_dir='.')",
                             "haxaml_session_record(task=..., session_id=..., result='success'|'partial'|'failed', project_dir='.')",

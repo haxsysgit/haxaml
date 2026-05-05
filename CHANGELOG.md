@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.2 - 2026-05-05
+
+### Changed
+
+- Unified the public governed lifecycle story around `about -> guidance -> prebuild -> context_pack -> verify -> record -> expect_sync`.
+- Repositioned `haxaml_session_start` and `haxaml_session_plan` as advanced/manual tools across README, learning docs, CLI help text, and MCP reference docs.
+- Updated validation guidance, about payload workflow metadata, and benchmark workflow profiles to use the recommended `prebuild` path.
+- Updated compatibility wrapper deprecation metadata to target `0.7.0` instead of an already-past release.
+- Aligned `haxaml` and `haxaml-mcp` package versions at `0.6.2`.
+
 ## 0.6.1 - 2026-05-02
 
 ### Changed

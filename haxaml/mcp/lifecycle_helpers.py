@@ -147,7 +147,7 @@ def _guidance_eval(task: str, frame: dict[str, Any]) -> dict[str, Any]:
     if status == "action_required":
         if mode_eval["mode"] == "utility":
             safer_path.append("Use utility mode: do not call lifecycle tools and do not edit .haxaml/*.")
-            safer_path.append("When you return to project work, resume with guidance -> session_start.")
+            safer_path.append("When you return to project work, resume with guidance -> prebuild.")
         else:
             safer_path.append("Resolve required clarification questions before code changes.")
             safer_path.append("Use `haxaml_context_pack` to gather only task-relevant context.")
@@ -241,8 +241,8 @@ def _wrapper_deprecation(tool: str, replacement: list[str]) -> dict[str, Any]:
         "tool": tool,
         "status": "deprecated",
         "replacement": replacement,
-        "removal_target": "0.5.0",
-        "message": f"{tool} is a compatibility wrapper and will be removed in 0.5.0.",
+        "removal_target": "0.7.0",
+        "message": f"{tool} is a compatibility wrapper and is planned for removal in 0.7.0.",
     }
 
 

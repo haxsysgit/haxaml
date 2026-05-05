@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "haxaml"
-version = "0.6.1"
+version = "0.6.2"
 description = "Deterministic agent-management framework that implements FRAME governance for AI-assisted software development."
 readme = "README.md"
 requires-python = ">=3.11"

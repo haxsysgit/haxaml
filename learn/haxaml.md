@@ -466,7 +466,7 @@ Same governance model underneath.
 The Haxaml lifecycle can look like ceremony if you only see the names:
 
 ```text
-about -> guidance -> [prebuild] -> start -> plan -> context_pack -> verify -> record
+about -> guidance -> prebuild -> context_pack -> verify -> record -> expect_sync
 ```
 
 But each step exists because agents commonly fail in a specific way.
@@ -480,18 +480,16 @@ are implementation work. Some are strategy. Some are side tasks. Some need
 clarification. The agent should not guess the mode if Haxaml can help classify
 it.
 
-`prebuild` (optional, introduced in 0.6) exists because guidance alone does not
-classify the task type or check FRAME quality before work begins. Prebuild
-classifies the task against 12 domain templates, runs semantic validation, and
-produces a readiness report with blocking issues, advisory warnings, required
-questions, and a recommended context pack level. It stops the agent from
-starting high-risk work in a broken FRAME state.
+`prebuild` exists because guidance alone does not classify the task type or
+check FRAME quality before work begins. Prebuild classifies the task against
+domain templates, runs semantic validation, opens the governed session
+internally, and produces a readiness report with blocking issues, advisory
+warnings, required questions, and a recommended context pack level. It stops
+the agent from starting high-risk work in a broken FRAME state.
 
-`start` exists because governed work should create an actual session. It marks
-the active task, applies preflight checks, and gives the agent a session ID.
-
-`plan` exists because the agent should pause long enough to identify the task
-shape, expected checks, and risks before editing.
+`start` and `plan` still exist, but they are now the advanced/manual path. Use
+them when you intentionally want lower-level control over session creation and
+planning instead of the recommended `prebuild` entry path.
 
 `context_pack` exists because the agent should pull task-relevant memory, not
 the whole project every time.
@@ -502,6 +500,10 @@ followed rules, and logged unresolved risk.
 
 `record` exists because project memory should survive the session. A completed
 task should leave behind changes, decisions, risks, and result status.
+
+`expect_sync` exists because recording the result is not enough by itself. The
+forward plan should be updated so the next agent sees what changed in project
+direction, not just what happened historically.
 
 That flow is not meant to slow the agent down.
 

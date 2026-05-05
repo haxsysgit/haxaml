@@ -376,7 +376,7 @@ def prebuild(project_dir, task, description):
 @click.option("--task", required=True, help="Task to execute")
 @click.option("--description", default="", help="Task description")
 def session_start(project_dir, task, description):
-    """Start MCP-first lifecycle session."""
+    """Start a governed session manually (advanced/manual path)."""
     result = _mcp_tools().haxaml_session_start(task=task, description=description, project_dir=project_dir)
     click.echo(_result_text(result))
     if _is_failure(result):
@@ -387,7 +387,7 @@ def session_start(project_dir, task, description):
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 @click.option("--session-id", required=True, help="Session ID from session-start")
 def session_plan(project_dir, session_id):
-    """Generate short execution plan and risk checks for a session."""
+    """Generate a session plan manually after session-start (advanced/manual path)."""
     result = _mcp_tools().haxaml_session_plan(session_id=session_id, project_dir=project_dir)
     click.echo(_result_text(result))
     if _is_failure(result):

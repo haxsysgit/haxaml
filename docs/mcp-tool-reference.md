@@ -15,7 +15,6 @@ Compact operator reference for the public Haxaml MCP surface in `0.6.x`.
 
 - `haxaml_init`
 - `haxaml_validate`
-- `haxaml_context`
 - `haxaml_health`
 - `haxaml_doctor`
 
@@ -30,8 +29,12 @@ Compact operator reference for the public Haxaml MCP surface in `0.6.x`.
 - `haxaml_session_verify`
 - `haxaml_session_record`
 - `haxaml_expect_sync`
-- `haxaml_run` (compatibility wrapper)
-- `haxaml_done` (compatibility wrapper)
+
+### Compatibility Wrappers (not part of the recommended MCP flow)
+
+- `haxaml_context` (compatibility wrapper, deprecated)
+- `haxaml_run` (compatibility wrapper, deprecated)
+- `haxaml_done` (compatibility wrapper, deprecated)
 
 ### Ops Tools (`tools_ops.py`)
 
@@ -89,6 +92,7 @@ Use this only when you intentionally need low-level control over session creatio
 - Governed lifecycle order is hard-enforced.
 - Out-of-order governed calls fail with `lifecycle_contract_violation`.
 - `haxaml_prebuild` is the recommended consolidation point for task classification, semantic validation, readiness checks, and governed session creation.
+- `haxaml_session_start` and `haxaml_session_plan` remain available for advanced/manual flows when you intentionally need lower-level control over session creation and planning.
 - `session_id` is required for governed `context_pack`, `session_verify`, and `session_record`.
 - `haxaml_validate` can fail with `governance_evidence_missing` when code changes exist without governed evidence in `acts.yaml`.
 - Repeated `haxaml_context_pack` calls require `refresh_reason`.

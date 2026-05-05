@@ -18,7 +18,7 @@ MCP is runtime integration, not training-time dependency. The model does not nee
 1. the host actually connects to the Haxaml MCP server, and
 2. Haxaml hard-fails when lifecycle contract is violated.
 
-Haxaml 0.5.2 tightened those hard gates. Haxaml 0.6 adds `haxaml_prebuild` for task classification and semantic validation before build, and makes it the recommended entrypoint for the preparation phase.
+Haxaml 0.5.2 tightened the hard lifecycle gates. Haxaml 0.6 adds `haxaml_prebuild` for task classification and semantic validation before build, and `0.6.2` unifies the public lifecycle story around that recommended preparation path.
 
 ## Architecture Mapping (Official MCP -> Haxaml)
 

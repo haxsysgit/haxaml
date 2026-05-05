@@ -1,7 +1,5 @@
 # haxaml_prebuild — Task Classification & Semantic Validation
 
-New in Haxaml 0.6.
-
 `haxaml_prebuild` is the recommended high-level lifecycle phase that runs after `haxaml_guidance`. It classifies the task, runs semantic validation against FRAME, opens the governed session internally, and produces a readiness report.
 
 ## When to Call It
@@ -76,20 +74,20 @@ Each template defines: required context questions, done criteria, risk signals, 
 
 | Task Type | Template Key |
 |-----------|--------------|
-| Feature implementation | `feature_implementation` |
+| Authentication | `authentication` |
+| Payment | `payment` |
+| API endpoint | `api_endpoint` |
+| Database migration | `database_migration` |
 | Bug fix | `bug_fix` |
-| Refactoring | `refactoring` |
+| Refactor | `refactor` |
 | Testing | `testing` |
 | Documentation | `documentation` |
-| Configuration | `configuration` |
-| Database migration | `database_migration` |
-| API design | `api_design` |
-| Performance optimization | `performance_optimization` |
-| Security audit | `security_audit` |
-| Dependency upgrade | `dependency_upgrade` |
-| Architecture decision | `architecture_decision` |
+| CLI command | `cli_command` |
+| MCP integration | `mcp_integration` |
+| Frontend feature | `frontend_feature` |
+| Deployment | `deployment` |
 
-Classification is keyword-based. If no template matches, `feature_implementation` is used as the fallback.
+Classification is keyword-based. If no template matches, `api_endpoint` is used as the fallback.
 
 ## Semantic Validation
 
@@ -130,7 +128,7 @@ haxaml_prebuild(
 
 Expected response pattern:
 - `data.readiness_status` == `"ready_to_build"` or `"ready_to_build_with_warnings"`
-- `data.task_type` == `"refactoring"`
+- `data.task_type` matches the classified template, for example `"authentication"` or `"api_endpoint"`
 - `data.guidance_type` maps to the abstract workflow profile
 - `data.session_id` — use this in subsequent `haxaml_context_pack` / verify / record calls
 - `data.required_questions` — answer before coding if present

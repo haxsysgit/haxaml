@@ -35,7 +35,7 @@ Haxaml exposes a lifecycle through MCP tools. The agent follows this flow before
 In short:
 
 ```text
-about → guidance → prebuild → context_pack → build → verify → record
+about → guidance → prebuild → context_pack → build → verify → record → expect_sync
 ```
 
 Lower-level tools like `haxaml_session_start` and `haxaml_session_plan` still exist, but they are now the advanced/manual path. The recommended public flow uses `haxaml_prebuild`.

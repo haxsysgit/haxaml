@@ -242,7 +242,7 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
             "contract": [
                 "Call haxaml_about once per active agent/MCP session.",
                 "Use FRAME files as operating truth.",
-                "Run the governed lifecycle in order: about → guidance → prebuild → context_pack → build → verify → record.",
+                "Run the governed lifecycle in order: about → guidance → prebuild → context_pack → build → verify → record → expect_sync.",
                 "Treat visibility calls as optional diagnostics, not default every run.",
             ],
         },
@@ -258,7 +258,7 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
             "retry_behavior": "If the same gate error appears twice, stop retries, fix root cause, then retry once.",
         },
         "recommended_workflow": {
-            "phase_summary": "about → guidance → prebuild → context_pack → build → verify → record",
+            "phase_summary": "about → guidance → prebuild → context_pack → build → verify → record → expect_sync",
             "phase_groups": {
                 "about": ["haxaml_about"],
                 "guidance": ["haxaml_guidance"],
