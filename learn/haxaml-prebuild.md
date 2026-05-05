@@ -2,7 +2,7 @@
 
 New in Haxaml 0.6.
 
-`haxaml_prebuild` is an optional lifecycle phase that runs between `haxaml_guidance` and `haxaml_session_start`. It classifies the task, runs semantic validation against FRAME, and produces a readiness report.
+`haxaml_prebuild` is the recommended high-level lifecycle phase that runs after `haxaml_guidance`. It classifies the task, runs semantic validation against FRAME, opens the governed session internally, and produces a readiness report.
 
 ## When to Call It
 
@@ -17,10 +17,12 @@ Skip for simple utility tasks (fix a typo, run a command). Utility mode detectio
 ## Lifecycle Position
 
 ```
-about -> guidance -> prebuild (optional) -> session_start -> session_plan -> context_pack -> ...
+about -> guidance -> prebuild -> context_pack -> ...
 ```
 
-When `haxaml_prebuild` is called successfully, the lifecycle contract advances to allow `haxaml_context_pack` to be called directly (skipping the normal session_start/plan requirement only for context pack ordering; session_start is still required before verify/record).
+When `haxaml_prebuild` succeeds, it already creates the governed session and advances the lifecycle contract to `haxaml_context_pack`. In the recommended path, you do not need a separate `session_start` or `session_plan` call afterward.
+
+The lower-level `session_start` and `session_plan` tools still exist for advanced/manual flows.
 
 ## Parameters
 
@@ -37,28 +39,35 @@ When `haxaml_prebuild` is called successfully, the lifecycle contract advances t
   "ok": true,
   "tool": "haxaml_prebuild",
   "data": {
-    "readiness": "ready",
-    "task_type": "feature",
-    "template": "feature_implementation",
-    "session_id": "ses-abc123",
-    "blocking_issues": [],
-    "advisory_warnings": ["facts.goal.scope is missing"],
+    "readiness_status": "ready_to_build_with_warnings",
+    "task_type": "api_endpoint",
+    "guidance_type": "implementation",
+    "session_id": "session-abc123",
+    "frame_health": {
+      "blocking": [],
+      "warnings": ["facts.goal.scope is missing"]
+    },
     "required_questions": ["What is the expected interface contract for this feature?"],
-    "context_policy": "balanced",
+    "context_policy": {
+      "recommended_pack": "balanced"
+    },
     "message": "..."
   }
 }
 ```
 
-When `detail="full"`, `data.template_detail` includes the full template definition.
+The full payload also includes `classification_reason`, `materials_needed`, `done_criteria`, `likely_impact`, `risks`, `plan`, `verification_expectations`, and `next_step`.
 
 ## Readiness Values
 
 | Value | Meaning |
 |-------|---------|
-| `ready` | FRAME is valid and complete; proceed to session_start |
-| `ready_with_warnings` | FRAME has advisory gaps; agent should note warnings |
-| `blocked` | FRAME has semantic blocking issues; fix before proceeding |
+| `ready_to_build` | FRAME is ready; proceed to `haxaml_context_pack` |
+| `ready_to_build_with_warnings` | FRAME has advisory gaps; proceed, but carry the warnings |
+| `needs_user_input` | Required questions must be answered before governed build work |
+| `needs_project_inspection` | More local inspection is needed before the task is ready |
+| `blocked_by_missing_context` | FRAME is missing blocking information |
+| `blocked_by_policy` | Lifecycle or policy issues block the task |
 | `utility_mode` | Task is off-topic or utility; skip governed lifecycle |
 
 ## Task Types (12 Templates)
@@ -86,7 +95,7 @@ Classification is keyword-based. If no template matches, `feature_implementation
 
 `haxaml_prebuild` runs `semantic_validate(FrameModel.load(project_dir))` before the readiness report.
 
-**Blocking issues** (surfaced in `data.blocking_issues`):
+**Blocking issues** (surfaced in `data.frame_health.blocking`):
 - `facts.identity` section absent
 - `facts.identity.name` key absent
 - `facts.goal` section absent
@@ -94,7 +103,7 @@ Classification is keyword-based. If no template matches, `feature_implementation
 - `active_task` set but all sessions closed (stale lifecycle state)
 - `expect.yaml` run marked active but no matching `acts` record
 
-**Advisory warnings** (surfaced in `data.advisory_warnings`):
+**Advisory warnings** (surfaced in `data.frame_health.warnings`):
 - Empty `identity.name` or `goal.purpose` (valid for fresh scaffolds, should be filled in)
 - Missing `identity.description`, `goal.scope`, `goal.out_of_scope`
 - Very short (≤2 word) rule values
@@ -105,9 +114,9 @@ Classification is keyword-based. If no template matches, `feature_implementation
 
 | Code | Cause |
 |------|-------|
-| `lifecycle_contract_violation` | Called before `haxaml_guidance` |
+| `about_required` | `haxaml_about` was not called in the active MCP session |
+| `lifecycle_contract_violation` | Called out of order, usually before `haxaml_guidance` |
 | `missing_facts` | `facts.yaml` not found |
-| `semantic_blocking` | Blocking semantic issues; see `error.details.blocking_issues` |
 
 ## Example Call
 
@@ -120,12 +129,12 @@ haxaml_prebuild(
 ```
 
 Expected response pattern:
-- `data.readiness` == `"ready"` or `"ready_with_warnings"`
+- `data.readiness_status` == `"ready_to_build"` or `"ready_to_build_with_warnings"`
 - `data.task_type` == `"refactoring"`
-- `data.template` == `"refactoring"`
-- `data.session_id` — use this in subsequent `haxaml_session_start` call
+- `data.guidance_type` maps to the abstract workflow profile
+- `data.session_id` — use this in subsequent `haxaml_context_pack` / verify / record calls
 - `data.required_questions` — answer before coding if present
-- `data.context_policy` — suggested pack level (`minimal`, `balanced`, `comprehensive`)
+- `data.context_policy` — suggested context scope and pack policy
 
 ## Integration with haxaml_validate and haxaml_doctor
 

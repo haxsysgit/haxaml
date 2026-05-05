@@ -4,7 +4,7 @@
 
 **MCP-first, Git-style workflow governance for AI coding agents.**
 
-Most AI coding issues do not begin when an agent writes bad code. They begin earlier, when the agent jumps from a vague request straight into implementation without understanding the project, the missing context, the risks, or what “done” actually means.
+Most AI coding issues do not begin when an agent writes bad code. They begin earlier, when the agent jumps from a vague request straight into implementation without understanding the project, the missing context, the risks, or what "done" actually means.
 
 Haxaml is a token and context-efficient engine built on top of FRAME: a simple model that splits project understanding into five parts: Facts, Rules, Acts, Map, and Expect.
 
@@ -27,7 +27,7 @@ Haxaml exposes a lifecycle through MCP tools. The agent follows this flow before
 |---|---|---|
 | **about** | `haxaml_about` | The agent learns what Haxaml is, what FRAME means, and how to operate inside the project |
 | **guidance** | `haxaml_guidance` | Haxaml classifies the request and decides whether it is governed project work or a utility task |
-| **prebuild** | `haxaml_session_start` → `haxaml_session_plan` → `haxaml_context_pack` | The agent opens a session, plans the work, and gathers task-specific project context before coding |
+| **prebuild** | `haxaml_prebuild` → `haxaml_context_pack` | Agent classifies the task, checks FRAME readiness, opens a governed session, then pulls task-scoped context |
 | **build** | *(no Haxaml tool)* | The agent edits files, writes code, runs commands, answers a question and performs the actual implementation |
 | **verify** | `haxaml_session_verify` | The agent records what it inspected, what it changed, what was checked, and what risks remain |
 | **record** | `haxaml_session_record` → `haxaml_expect_sync` | The outcome is written into project history and expectations are synced for future work |
@@ -35,8 +35,10 @@ Haxaml exposes a lifecycle through MCP tools. The agent follows this flow before
 In short:
 
 ```text
-about → guidance → prebuild → build → verify → record
+about → guidance → prebuild → context_pack → build → verify → record
 ```
+
+Lower-level tools like `haxaml_session_start` and `haxaml_session_plan` still exist, but they are now the advanced/manual path. The recommended public flow uses `haxaml_prebuild`.
 
 Project memory lives in `.haxaml/` — versioned files your agent uses at runtime, not a static wall of text.
 
@@ -54,7 +56,7 @@ uv tool install haxaml-mcp
 
 ## MCP Start
 
-Configure your MCP client to launch `haxaml-mcp` with `HAXAML_PROJECT_DIR` set to the project root. See [learn/haxaml-mcp.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml-mcp.md) for the full MCP/architecture guide.
+Configure your MCP client to launch `haxaml-mcp`. For project-scoped configs, cwd is enough. For user-wide configs, set `HAXAML_PROJECT_DIR` to the project root. See [learn/haxaml-mcp.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml-mcp.md) for the full MCP/architecture guide.
 
 Once connected, agents can initialize and validate through MCP tools:
 

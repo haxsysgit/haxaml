@@ -18,7 +18,7 @@ MCP is runtime integration, not training-time dependency. The model does not nee
 1. the host actually connects to the Haxaml MCP server, and
 2. Haxaml hard-fails when lifecycle contract is violated.
 
-Haxaml 0.5.2 tightened those hard gates. Haxaml 0.6 adds `haxaml_prebuild` for task classification and semantic validation before build, and retires the deprecated compatibility wrappers from MCP discovery.
+Haxaml 0.5.2 tightened those hard gates. Haxaml 0.6 adds `haxaml_prebuild` for task classification and semantic validation before build, and makes it the recommended entrypoint for the preparation phase.
 
 ## Architecture Mapping (Official MCP -> Haxaml)
 
@@ -102,13 +102,14 @@ For full payloads on a specific call, pass `detail="full"`.
 
 Strict lifecycle contract (0.6.x):
 - Governed calls are hard-gated by order.
-- Expected order: `about -> guidance -> prebuild (optional) -> session_start -> session_plan -> context_pack -> session_verify -> session_record -> expect_sync`.
-- `haxaml_prebuild` is optional but recommended for non-trivial tasks. When called, it advances the contract to allow `context_pack` directly.
+- Recommended order: `about -> guidance -> prebuild -> context_pack -> session_verify -> session_record -> expect_sync`.
+- Advanced/manual order remains available: `about -> guidance -> session_start -> session_plan -> context_pack -> session_verify -> session_record -> expect_sync`.
+- `haxaml_prebuild` opens the governed session internally and advances the contract to `haxaml_context_pack`.
 - Out-of-order governed calls fail with `error.code="lifecycle_contract_violation"`.
 
-Deprecated compatibility wrappers (removed from MCP discovery in 0.6, functions kept internally until 0.7):
+Deprecated compatibility wrappers (not part of the recommended MCP workflow):
 
-- `haxaml_run` — use `haxaml_guidance` + `haxaml_prebuild` + `haxaml_session_start`
+- `haxaml_run` — use `haxaml_guidance` + `haxaml_prebuild`
 - `haxaml_done` — use `haxaml_session_verify` + `haxaml_session_record`
 - `haxaml_context` — use `haxaml_context_pack`
 
@@ -116,7 +117,7 @@ Deprecated compatibility wrappers (removed from MCP discovery in 0.6, functions 
 
 - Governed mode: project work. Use Haxaml lifecycle and FRAME journal updates.
 - Utility mode: side task or unrelated request. Do not run governed lifecycle.
-- Resume rule: after utility work, return to governed flow with `haxaml_guidance` then `haxaml_session_start`.
+- Resume rule: after utility work, return to governed flow with `haxaml_guidance` then `haxaml_prebuild`.
 
 ## MCP Client Config Examples (Bootstrap-Aligned)
 
@@ -159,32 +160,28 @@ If the task is utility/off-topic, skip this flow and keep `.haxaml/*` unchanged.
 
 1. `haxaml_about(project_dir='.')`
 2. `haxaml_guidance(task=..., project_dir='.')`
-3. _(optional but recommended for non-trivial tasks)_ `haxaml_prebuild(task=..., project_dir='.')`
-4. `haxaml_session_start(task=..., description=..., project_dir='.')`
-5. `haxaml_session_plan(session_id=..., project_dir='.')`
-6. `haxaml_context_pack(task=..., project_dir='.', pack='balanced', include_state=True, session_id=...)`
-7. `haxaml_session_verify(task=..., project_dir='.', session_id=..., inspected_context=[...], changed_files=[...], summary=...)`
-8. `haxaml_session_record(task=..., result='success'|'partial'|'failed', project_dir='.', session_id=..., changes=..., decisions=..., risks=...)`
-9. `haxaml_expect_sync(project_dir='.', run=<optional>)`
-10. `haxaml_reconcile(project_dir='.')` when boundary/derivation risk appears (or before retrying blocked record/validate).
+3. `haxaml_prebuild(task=..., project_dir='.')`
+4. `haxaml_context_pack(task=..., project_dir='.', pack='balanced', include_state=True, session_id=...)`
+5. `haxaml_session_verify(task=..., project_dir='.', session_id=..., inspected_context=[...], changed_files=[...], summary=...)`
+6. `haxaml_session_record(task=..., result='success'|'partial'|'failed', project_dir='.', session_id=..., changes=..., decisions=..., risks=...)`
+7. `haxaml_expect_sync(project_dir='.', run=<optional>)`
+8. `haxaml_reconcile(project_dir='.')` when boundary/derivation risk appears (or before retrying blocked record/validate).
 
 Expected signals:
 
 - Step 1: `data.recommended_workflow`, `data.call_budgets`.
 - Step 2: `data.status`, `data.call_budget`, `data.visibility_calls_optional`.
-- Step 3 (prebuild): `data.readiness`, `data.task_type`, `data.template`, `data.blocking_issues`, `data.session_id`.
-- Step 4: `data.session_id`, `data.required_reads`.
-- Step 5: `data.plan`, `data.verification_expectations`.
-- Step 6 (short default): `data.tokens`, `data.context_window_usage`, `data.included_sections`, `data.omitted_sections`, `data.omitted_context`.
-- Step 6 policy: one context-pack call per session/task by default; repeats require `refresh_reason`.
-- Step 6 (full): `data.context_pack` is included.
-- Step 7: `data.verdict` should be `pass` or `pass_with_risks` before recording `success`/`partial`.
-- Step 8: `data.run_id` on success; gate failures return `error.code`.
-- Step 9: sync acts->expect lifecycle status (`success->done`, `partial->active`, `failed->blocked`).
-- Step 10: confirm `severity_totals.blocking == 0` before expecting record/validate success.
+- Step 3 (prebuild): `data.readiness_status`, `data.task_type`, `data.guidance_type`, `data.frame_health`, `data.session_id`.
+- Step 4 (short default): `data.tokens`, `data.context_window_usage`, `data.included_sections`, `data.omitted_sections`, `data.omitted_context`.
+- Step 4 policy: one context-pack call per session/task by default; repeats require `refresh_reason`.
+- Step 4 (full): `data.context_pack` is included.
+- Step 5: `data.verdict` should be `pass` or `pass_with_risks` before recording `success`/`partial`.
+- Step 6: `data.run_id` on success; gate failures return `error.code`.
+- Step 7: sync acts->expect lifecycle status (`success->done`, `partial->active`, `failed->blocked`).
+- Step 8: confirm `severity_totals.blocking == 0` before expecting record/validate success.
 
 Lean default:
-- Keep to `about -> guidance -> [prebuild] -> start -> plan -> context_pack -> verify -> record -> expect_sync`.
+- Keep to `about -> guidance -> prebuild -> context_pack -> verify -> record -> expect_sync`.
 - Visibility calls are optional diagnostics: `haxaml_health`, `haxaml_needs`, `haxaml_reconcile`, `haxaml_state_show`.
 - Retry rule: if the same gate error appears twice, stop retries, fix root cause, then retry once.
 - Contract rule: governed steps out of order are not warnings; they are blocking errors.
@@ -203,17 +200,15 @@ Flow and expected response signals:
 - signal: `ok=true`; onboarding prompt and lean workflow are returned.
 2. `haxaml_guidance(task="Add parser tests for empty-input handling.", project_dir=".")`
 - signal: `ok=true`; use `data.required_questions` if present.
-3. `haxaml_session_start(task="Add parser tests for empty-input handling.", description="Add tests only.", project_dir=".")`
-- signal: `ok=true`; capture `data.session_id`.
-4. `haxaml_session_plan(session_id="<session_id>", project_dir=".")`
-- signal: `ok=true`; non-empty `data.plan`.
-5. `haxaml_context_pack(task="Add parser tests for empty-input handling.", pack="standard", include_state=True, session_id="<session_id>", project_dir=".")`
+3. `haxaml_prebuild(task="Add parser tests for empty-input handling.", project_dir=".")`
+- signal: `ok=true`; capture `data.session_id`, `data.readiness_status`, and `data.plan`.
+4. `haxaml_context_pack(task="Add parser tests for empty-input handling.", pack="standard", include_state=True, session_id="<session_id>", project_dir=".")`
 - signal: `ok=true`; short mode returns context text + `tokens` + included/omitted metadata. (`standard` resolves to `balanced`)
-6. `haxaml_session_verify(task="Add parser tests for empty-input handling.", session_id="<session_id>", inspected_context=[".haxaml/facts.yaml",".haxaml/rules.yaml"], changed_files=["tests/test_parser.py"], summary="Added empty-input test coverage.", project_dir=".")`
+5. `haxaml_session_verify(task="Add parser tests for empty-input handling.", session_id="<session_id>", inspected_context=[".haxaml/facts.yaml",".haxaml/rules.yaml"], changed_files=["tests/test_parser.py"], summary="Added empty-input test coverage.", project_dir=".")`
 - signal: `ok=true`; `data.verdict` is `pass` or `pass_with_risks`.
-7. `haxaml_session_record(task="Add parser tests for empty-input handling.", result="success", session_id="<session_id>", changes="Added parser empty-input tests.", decisions="Reuse existing test fixtures.", risks="None.", project_dir=".")`
+6. `haxaml_session_record(task="Add parser tests for empty-input handling.", result="success", session_id="<session_id>", changes="Added parser empty-input tests.", decisions="Reuse existing test fixtures.", risks="None.", project_dir=".")`
 - signal: `ok=true`; `data.run_id` starts with `run-`.
-8. `haxaml_expect_sync(project_dir=".")`
+7. `haxaml_expect_sync(project_dir=".")`
 - signal: `ok=true`; lifecycle drift marker clears and runbook status is updated.
 
 ### Gate-Failure Branch (Derivation Conflict)
@@ -240,7 +235,7 @@ Note:
 1. Verify gate
 - Bad: `haxaml_guidance -> haxaml_session_start -> haxaml_session_record(result="success")`
 - Result: `error.code="about_required"` first, then `error.code="verification_required"` if verify is skipped.
-- Good: `haxaml_about -> haxaml_guidance -> haxaml_session_start -> haxaml_session_plan -> haxaml_context_pack -> haxaml_session_verify(verdict=pass|pass_with_risks) -> haxaml_session_record`
+- Good: `haxaml_about -> haxaml_guidance -> haxaml_prebuild -> haxaml_context_pack -> haxaml_session_verify(verdict=pass|pass_with_risks) -> haxaml_session_record`
 
 2. Reconcile gate
 - Bad: `haxaml_session_verify -> haxaml_session_record(result="success")` while blocking map/rules conflicts exist
@@ -253,9 +248,9 @@ Note:
 - Good: `haxaml_context_pack(task=..., pack="minimal"|"balanced", session_id=...)` once; repeat only with `refresh_reason`
 
 4. Prebuild skipping for complex tasks
-- Bad: going straight to `haxaml_session_start` on a refactor or migration task without prebuild
-- Result: missing semantic validation, incomplete context policy signals, generic guidance instead of task-type-specific checks
-- Good: `haxaml_prebuild(task=..., project_dir='.')` before start for non-trivial tasks
+- Bad: going straight to `haxaml_session_start` on a refactor or migration task when you want the high-level governed path
+- Result: you lose the consolidated readiness report, task classification, and prebuild-owned session creation
+- Good: `haxaml_prebuild(task=..., project_dir='.')` for the standard high-level flow
 
 ## Troubleshooting
 

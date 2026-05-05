@@ -295,3 +295,36 @@ def test_cli_about_and_workflow_benchmark_mode():
         benchmark = runner.invoke(cli, ["benchmark", "--mode", "workflow", "--dir", "."])
         assert benchmark.exit_code == 0, benchmark.output
         assert "Workflow benchmark complete" in benchmark.output
+
+
+def test_cli_prebuild_command_invokes_mcp_tool(monkeypatch):
+    runner = CliRunner()
+    calls = {}
+
+    class DummyMcpTools:
+        def haxaml_prebuild(self, *, task, description, project_dir):
+            calls["task"] = task
+            calls["description"] = description
+            calls["project_dir"] = project_dir
+            return {
+                "ok": True,
+                "tool": "haxaml_prebuild",
+                "data": {
+                    "message": "Prebuild complete: ready_to_build",
+                },
+            }
+
+    monkeypatch.setattr("haxaml.cli._mcp_tools", lambda: DummyMcpTools())
+
+    result = runner.invoke(
+        cli,
+        ["prebuild", "--dir", ".", "--task", "Refactor auth", "--description", "Tighten token flow"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Prebuild complete: ready_to_build" in result.output
+    assert calls == {
+        "task": "Refactor auth",
+        "description": "Tighten token flow",
+        "project_dir": ".",
+    }

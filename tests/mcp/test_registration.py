@@ -1,6 +1,6 @@
 """Tests for MCP server registration and compatibility entrypoint."""
 
-from haxaml.mcp_server import main, mcp_app
+from haxaml.mcp_server import haxaml_prebuild, main, mcp_app
 
 
 class TestServerRegistration:
@@ -46,3 +46,6 @@ class TestServerRegistration:
 class TestCompatibilityEntrypoint:
     def test_main_entrypoint_is_importable(self):
         assert callable(main)
+
+    def test_prebuild_is_importable_from_compat_entrypoint(self):
+        assert callable(haxaml_prebuild)

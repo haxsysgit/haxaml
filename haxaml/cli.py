@@ -359,6 +359,18 @@ def guidance(project_dir, task):
         sys.exit(1)
 
 
+@cli.command("prebuild")
+@click.option("--dir", "project_dir", default=".", help="Project directory")
+@click.option("--task", required=True, help="Task description")
+@click.option("--description", default="", help="Optional task description")
+def prebuild(project_dir, task, description):
+    """Classify task, run semantic validation, and open a governed prebuild session."""
+    result = _mcp_tools().haxaml_prebuild(task=task, description=description, project_dir=project_dir)
+    click.echo(_result_text(result))
+    if _is_failure(result):
+        sys.exit(1)
+
+
 @cli.command("session-start")
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 @click.option("--task", required=True, help="Task to execute")

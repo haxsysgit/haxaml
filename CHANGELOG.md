@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.6.1 - 2026-05-02
+
+### Changed
+
+- Fixed version alignment so runtime metadata, package metadata, and MCP launcher metadata stay in sync.
+- Added centralized version helpers in `haxaml/versioning.py`.
+- Added `scripts/bump_version.py` to keep `haxaml` and `haxaml-mcp` bumps consistent.
+- Updated release checks and tests around package/version consistency.
+
+## 0.6.0 - 2026-05-02
+
+### Added
+
+- New `FrameModel` loader and normalized in-memory representation for FRAME files.
+- New semantic validation layer on top of schema validation.
+- New MCP tool: `haxaml_prebuild` for task classification, readiness checks, and governed session preparation.
+- New prebuild templates for task typing, risk heuristics, context policy, and done-criteria guidance.
+- New `PromptRecipe` export pipeline for deterministic agent export rendering.
+- New learning docs for MCP and prebuild flow in `learn/`.
+
+### Changed
+
+- Recommended governed lifecycle now uses `about -> guidance -> prebuild -> context_pack -> verify -> record -> expect_sync`.
+- `haxaml_prebuild` replaces the recommended use of `session_start + session_plan` for standard governed flows.
+- Export rendering now routes through a normalized recipe instead of ad hoc markdown assembly.
+- Validation and readiness checks now use the same semantic FRAME quality signals.
+
 ## 0.5.2 - 2026-05-01
 
 ### Added

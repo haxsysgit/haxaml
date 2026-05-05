@@ -8,6 +8,7 @@ import shutil  # backward-compatible patch target (tests/integrations)
 
 from haxaml.mcp.base import mcp_app
 from haxaml.mcp.tools import (
+    haxaml_prebuild,
     haxaml_about,
     haxaml_init,
     haxaml_validate,
@@ -47,6 +48,7 @@ from haxaml.mcp.resources import (
 
 __all__ = [
     "mcp_app",
+    "haxaml_prebuild",
     "haxaml_about",
     "haxaml_init",
     "haxaml_validate",

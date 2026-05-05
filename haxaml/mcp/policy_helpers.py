@@ -55,8 +55,7 @@ def _call_budget_for(task_type: str, risk_level: str) -> dict[str, Any]:
     base["workflow"] = [
         "haxaml_about",
         "haxaml_guidance",
-        "haxaml_session_start",
-        "haxaml_session_plan",
+        "haxaml_prebuild",
         "haxaml_context_pack",
         "haxaml_session_verify",
         "haxaml_session_record",
@@ -177,7 +176,7 @@ def _utility_mode_error(tool: str, project_dir: str, task: str, description: str
             "policy": {
                 "governed_mode": "Use Haxaml lifecycle only for project work.",
                 "utility_mode": "Run task directly without Haxaml lifecycle and keep FRAME unchanged.",
-                "resume_rule": "When you return to project work, resume with haxaml_guidance then haxaml_session_start.",
+                "resume_rule": "When you return to project work, resume with haxaml_guidance then haxaml_prebuild.",
             },
         },
     )
@@ -202,9 +201,9 @@ def _require_about(tool: str, project_dir: str) -> Optional[dict]:
     return _err(
         tool,
         "about_required",
-        "Call haxaml_about once per active agent/MCP session before haxaml_session_start.",
+        "Call haxaml_about once per active agent/MCP session before governed lifecycle tools.",
         {
-            "required_before": "haxaml_session_start",
+            "required_before": "haxaml_prebuild",
             "project_dir": str(Path(project_dir).resolve()),
             "about_status": status,
             "retry_after": [
@@ -243,7 +242,7 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
             "contract": [
                 "Call haxaml_about once per active agent/MCP session.",
                 "Use FRAME files as operating truth.",
-                "Run the governed lifecycle in order: about → guidance → prebuild (session_start, session_plan, context_pack) → build → verify → record (session_record, expect_sync).",
+                "Run the governed lifecycle in order: about → guidance → prebuild → context_pack → build → verify → record.",
                 "Treat visibility calls as optional diagnostics, not default every run.",
             ],
         },
@@ -259,11 +258,11 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
             "retry_behavior": "If the same gate error appears twice, stop retries, fix root cause, then retry once.",
         },
         "recommended_workflow": {
-            "phase_summary": "about → guidance → prebuild → build → verify → record",
+            "phase_summary": "about → guidance → prebuild → context_pack → build → verify → record",
             "phase_groups": {
                 "about": ["haxaml_about"],
                 "guidance": ["haxaml_guidance"],
-                "prebuild": ["haxaml_session_start", "haxaml_session_plan", "haxaml_context_pack"],
+                "prebuild": ["haxaml_prebuild", "haxaml_context_pack"],
                 "build": [],
                 "verify": ["haxaml_session_verify"],
                 "record": ["haxaml_session_record", "haxaml_expect_sync"],
@@ -271,8 +270,7 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
             "lean_default": [
                 "haxaml_about",
                 "haxaml_guidance",
-                "haxaml_session_start",
-                "haxaml_session_plan",
+                "haxaml_prebuild",
                 "haxaml_context_pack",
                 "haxaml_session_verify",
                 "haxaml_session_record",
