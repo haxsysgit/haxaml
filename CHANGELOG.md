@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.3 - 2026-05-05
+
+### Changed
+
+- Reduced lifecycle response noise by adding a compact short response for `haxaml_prebuild` and cleaner utility-mode guidance output.
+- Tightened repeated `haxaml_context_pack` calls so follow-up refreshes require a contextual reason and reject vague retries.
+- Added refresh-reason categories and policy metadata to context-pack responses and repeat-call errors.
+- Reused already-loaded FRAME data during context-pack generation to avoid an unnecessary reread in the MCP path.
+- Fixed workflow benchmark fixtures so the preferred `prebuild` path completes and expanded workflow profiles actually exercise more calls than the essential profile.
+- Aligned `acts.yaml` and `rules.yaml` lifecycle phase enums with the current governed flow by adding `prebuild` and `context`.
+- Aligned `haxaml` and `haxaml-mcp` package versions at `0.6.3`.
+
 ## 0.6.2 - 2026-05-05
 
 ### Changed

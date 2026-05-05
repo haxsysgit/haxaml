@@ -76,7 +76,7 @@ def _readiness_from_health(
             return "blocked_by_policy", "fix_frame_health"
         return "blocked_by_missing_context", "fix_frame_health"
 
-    if required_questions:
+    if required_questions and risk == "high":
         return "needs_user_input", "ask_user"
 
     if risk == "high" and health_warnings:
@@ -139,8 +139,8 @@ def haxaml_prebuild(
                 "message": "Utility task detected. No governed session required.",
                 "readiness_status": "utility_mode",
                 "task": task,
-                "next_step": "utility_mode",
-                "note": "Proceed directly with the task. Do not write to .haxaml/.",
+                "next_step": "run_outside_governed_flow",
+                "policy": _utility_mode_policy(),
             },
             detail=detail_mode,
         )

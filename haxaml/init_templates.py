@@ -111,8 +111,10 @@ lifecycle:
   enforce_verify_before_record: true
   enforce_governed_evidence_on_validate: true
   phases:
+    - prebuild
     - start
     - plan
+    - context
     - act
     - verify
     - record

@@ -40,7 +40,7 @@ properties:
         type: array
         items:
           type: string
-          enum: [start, plan, act, verify, record, export]
+          enum: [prebuild, start, plan, context, act, verify, record, export]
 
   context_policy:
     type: object

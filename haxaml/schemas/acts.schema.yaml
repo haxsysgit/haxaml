@@ -145,7 +145,7 @@ properties:
           enum: [started, planned, acting, verified, recorded, failed]
         phase:
           type: string
-          enum: [start, plan, act, verify, record, export]
+          enum: [prebuild, start, plan, context, act, verify, record, export]
         risk_level:
           type: string
           enum: [low, medium, high]

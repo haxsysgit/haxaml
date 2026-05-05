@@ -284,6 +284,7 @@ def haxaml_context(
         task="General project context",
         pack=default_pack,
         include_state=include_state,
+        frame_data=frame,
     )
     ctx = "## Project Facts\n\n" + format_context_pack(pack_data)
     tokens = pack_data.get("_meta", {}).get("token_count", count_tokens(ctx))

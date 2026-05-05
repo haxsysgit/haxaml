@@ -146,8 +146,8 @@ def _guidance_eval(task: str, frame: dict[str, Any]) -> dict[str, Any]:
     safer_path = []
     if status == "action_required":
         if mode_eval["mode"] == "utility":
-            safer_path.append("Use utility mode: do not call lifecycle tools and do not edit .haxaml/*.")
-            safer_path.append("When you return to project work, resume with guidance -> prebuild.")
+            safer_path.append("Use utility mode: run the task directly and keep FRAME untouched.")
+            safer_path.append("When you return to project work, call guidance, then prebuild.")
         else:
             safer_path.append("Resolve required clarification questions before code changes.")
             safer_path.append("Use `haxaml_context_pack` to gather only task-relevant context.")

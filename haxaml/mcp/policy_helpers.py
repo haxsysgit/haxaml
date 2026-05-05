@@ -12,6 +12,29 @@ from haxaml.mcp.app_core import (
 from haxaml.mcp.response_helpers import _err
 from haxaml.versioning import get_version
 
+CONTEXT_PACK_LIMIT_TEXT = "One context_pack per task by default; repeat only with scope-change or stale-context reason."
+VISIBILITY_POLICY_TEXT = "Optional diagnostics only; use on failure, uncertainty, or pre-final check."
+RETRY_POLICY_TEXT = "If the same gate error appears twice, stop retrying and fix the root cause."
+UTILITY_RESUME_RULE = "When you return to project work, resume with haxaml_guidance then haxaml_prebuild."
+CONTEXT_REFRESH_REASON_EXAMPLES = {
+    "scope_change": [
+        "scope changed to include billing module",
+        "need context for the queue worker added to this task",
+    ],
+    "stale_context": [
+        "context stale after major file updates",
+        "tests changed after review and the pack is stale",
+    ],
+    "review_follow_up": [
+        "follow-up after review comments changed the task focus",
+        "verification found new files to inspect before record",
+    ],
+    "user_redirect": [
+        "user redirected the task to auth cleanup",
+        "new requirement added by the user changed the scope",
+    ],
+}
+
 
 def _workflow_budget_catalog() -> dict[str, dict[str, Any]]:
     return {
@@ -115,6 +138,54 @@ def _retry_guard_clear(
             _RETRY_GUARD_CACHE.pop(key, None)
 
 
+def _context_refresh_policy() -> dict[str, Any]:
+    return {
+        "summary": CONTEXT_PACK_LIMIT_TEXT,
+        "reason_categories": list(CONTEXT_REFRESH_REASON_EXAMPLES.keys()),
+        "examples": CONTEXT_REFRESH_REASON_EXAMPLES,
+    }
+
+
+def _normalize_context_refresh_reason(refresh_reason: str) -> dict[str, Any]:
+    normalized = " ".join(str(refresh_reason or "").strip().split())
+    if not normalized:
+        return {"reason": "", "category": "", "too_vague": False}
+
+    lower = normalized.lower()
+    vague_tokens = {
+        "again",
+        "retry",
+        "refresh",
+        "more context",
+        "update",
+        "updated",
+        "stale",
+        "scope changed",
+    }
+    if len(lower) < 16 or lower in vague_tokens:
+        return {"reason": normalized, "category": "", "too_vague": True}
+
+    if any(word in lower for word in ("scope", "include", "expand", "module", "component")):
+        category = "scope_change"
+    elif any(word in lower for word in ("stale", "updated", "changed", "after edit", "after update", "new file", "tests")):
+        category = "stale_context"
+    elif any(word in lower for word in ("review", "follow-up", "verify", "verification", "reconcile")):
+        category = "review_follow_up"
+    elif any(word in lower for word in ("user", "requirement", "redirect", "requested")):
+        category = "user_redirect"
+    else:
+        category = "other_context_shift"
+    return {"reason": normalized, "category": category, "too_vague": False}
+
+
+def _utility_mode_policy() -> dict[str, Any]:
+    return {
+        "governed_mode": "Use the Haxaml lifecycle only for real project work.",
+        "utility_mode": "Run the task directly and keep FRAME unchanged.",
+        "resume_rule": UTILITY_RESUME_RULE,
+    }
+
+
 def _gate_error_with_retry_policy(
     tool: str,
     error_code: str,
@@ -173,11 +244,7 @@ def _utility_mode_error(tool: str, project_dir: str, task: str, description: str
         {
             "mode": mode,
             "project_dir": str(Path(project_dir).resolve()),
-            "policy": {
-                "governed_mode": "Use Haxaml lifecycle only for project work.",
-                "utility_mode": "Run task directly without Haxaml lifecycle and keep FRAME unchanged.",
-                "resume_rule": "When you return to project work, resume with haxaml_guidance then haxaml_prebuild.",
-            },
+            "policy": _utility_mode_policy(),
         },
     )
 
@@ -249,13 +316,14 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
         "modes": {
             "governed": "Project work. Use Haxaml lifecycle and FRAME journaling.",
             "utility": "Side task or unrelated request. Do not call lifecycle tools; do not edit .haxaml/*.",
-            "resume_rule": "After utility work, resume governed lifecycle when returning to project tasks.",
+            "resume_rule": UTILITY_RESUME_RULE,
         },
         "safety_rule": "Only read/write FRAME files when the task is explicitly project-governed.",
         "anti_bloat_policy": {
-            "context_pack_limit": "One context_pack per task by default; repeat only with scope-change/stale-context reason.",
+            "context_pack_limit": CONTEXT_PACK_LIMIT_TEXT,
             "visibility_calls": "health/needs/reconcile/state_show are optional diagnostics, not default loop calls.",
             "retry_behavior": "If the same gate error appears twice, stop retries, fix root cause, then retry once.",
+            "context_refresh_policy": _context_refresh_policy(),
         },
         "recommended_workflow": {
             "phase_summary": "about → guidance → prebuild → context_pack → build → verify → record → expect_sync",

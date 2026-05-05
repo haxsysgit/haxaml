@@ -70,6 +70,7 @@ def build_context_pack(
     task: str,
     pack: str = "balanced",
     include_state: bool = True,
+    frame_data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic task-specific context pack.
 
@@ -82,7 +83,7 @@ def build_context_pack(
     - unresolved questions/dependencies
     - task risks
     """
-    frame = load_frame_data(project_dir)
+    frame = frame_data if isinstance(frame_data, dict) else load_frame_data(project_dir)
     facts = frame.get("facts") or {}
     rules = frame.get("rules") or {}
     acts = frame.get("acts") or {}

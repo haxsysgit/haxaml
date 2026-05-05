@@ -129,11 +129,16 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
         f"Task type: {guidance['task_type']}",
         f"Risk: {guidance['risk_level']}",
         f"Status: {status}",
-        (
-            f"Call budget: target {call_budget['target_calls']} calls "
-            f"(max {call_budget['max_calls_without_visibility']} without visibility calls)"
-        ),
     ]
+    if execution_mode == "governed":
+        msg_lines.append(
+            f"Call budget: target {call_budget['target_calls']} calls "
+            f"(max {call_budget['max_calls_without_visibility']} before optional diagnostics)"
+        )
+        next_step = "haxaml_prebuild"
+    else:
+        msg_lines.append("Next step: run the task directly and keep FRAME unchanged.")
+        next_step = "run_outside_governed_flow"
     if guidance["mode_reason"]:
         msg_lines.append(f"Mode reason: {guidance['mode_reason']}")
     if guidance["required_questions"]:
@@ -157,14 +162,19 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
         "suggested_questions": guidance["suggested_questions"],
         "safer_path": guidance["safer_path"],
         "recommended_packs": guidance["recommended_packs"],
-        "call_budget": call_budget,
-        "visibility_calls_optional": call_budget["optional_visibility_calls"],
-        "anti_bloat_policy": {
-            "context_pack_limit": "One context_pack per task by default. Repeat only with scope/staleness reason.",
-            "visibility_calls": "Optional diagnostics only; use on failure, uncertainty, or pre-final check.",
-            "retry_behavior": "If same gate error appears twice, stop retrying and fix root cause.",
-        },
+        "next_step": next_step,
     }
+    if execution_mode == "governed":
+        payload["call_budget"] = call_budget
+        payload["visibility_calls_optional"] = call_budget["optional_visibility_calls"]
+        payload["anti_bloat_policy"] = {
+            "context_pack_limit": CONTEXT_PACK_LIMIT_TEXT,
+            "visibility_calls": VISIBILITY_POLICY_TEXT,
+            "retry_behavior": RETRY_POLICY_TEXT,
+            "context_refresh_policy": _context_refresh_policy(),
+        }
+    else:
+        payload["policy"] = _utility_mode_policy()
     if guidance["execution_mode"] == "governed" and sm:
         updated = _contract_touch(
             contract,
@@ -467,7 +477,7 @@ def haxaml_context_pack(
             {
                 "project_dir": str(Path(project_dir).resolve()),
                 "expected_next": ["haxaml_context_pack"],
-                "retry_after": ["haxaml_session_plan(session_id=..., project_dir='.')"],
+                "retry_after": ["haxaml_prebuild(task=..., description=..., project_dir='.')"],
             },
         )
 
@@ -499,16 +509,15 @@ def haxaml_context_pack(
             reason="Context pack must target the active governed session.",
             details={"requested_session_id": session_id},
         )
-    session = None
     prior_calls = 0
-    refresh_reason = refresh_reason.strip()
+    refresh_info = _normalize_context_refresh_reason(refresh_reason)
     session = _find_session(state, session_id)
     if not session:
         return _err("haxaml_context_pack", "unknown_session", f"Session not found: {session_id}")
     raw_calls = session.get("context_pack_calls", 0)
     if isinstance(raw_calls, int) and raw_calls > 0:
         prior_calls = raw_calls
-    if prior_calls >= 1 and not refresh_reason:
+    if prior_calls >= 1 and not refresh_info["reason"]:
         return _err(
             "haxaml_context_pack",
             "context_pack_refresh_reason_required",
@@ -517,14 +526,29 @@ def haxaml_context_pack(
                 "session_id": session_id,
                 "context_pack_calls": prior_calls,
                 "required": "refresh_reason",
-                "allowed_examples": [
-                    "scope changed to include billing module",
-                    "context stale after major file updates",
-                ],
+                "refresh_policy": _context_refresh_policy(),
+            },
+        )
+    if prior_calls >= 1 and refresh_info["too_vague"]:
+        return _err(
+            "haxaml_context_pack",
+            "context_pack_refresh_reason_too_vague",
+            "Refresh reason is too vague. Explain what changed in scope or why the current context is stale.",
+            {
+                "session_id": session_id,
+                "context_pack_calls": prior_calls,
+                "received": refresh_info["reason"],
+                "refresh_policy": _context_refresh_policy(),
             },
         )
 
-    pack_data = build_context_pack(project_dir, task=task, pack=pack, include_state=include_state)
+    pack_data = build_context_pack(
+        project_dir,
+        task=task,
+        pack=pack,
+        include_state=include_state,
+        frame_data=frame,
+    )
     text = format_context_pack(pack_data)
     tokens = count_tokens(text)
 
@@ -539,7 +563,8 @@ def haxaml_context_pack(
     state["context_compaction"] = compaction
     session["context_pack_calls"] = prior_calls + 1
     session["last_context_pack_at"] = _now_iso()
-    session["last_context_pack_reason"] = refresh_reason
+    session["last_context_pack_reason"] = refresh_info["reason"]
+    session["last_context_pack_reason_category"] = refresh_info["category"]
     contract = _contract_touch(
         contract,
         phase="context",
@@ -562,7 +587,8 @@ def haxaml_context_pack(
             "pack": pack_data.get("_meta", {}).get("resolved_pack", pack),
             "session_id": session_id,
             "context_pack_calls": (prior_calls + 1) if session_id else 0,
-            "refresh_reason": refresh_reason,
+            "refresh_reason": refresh_info["reason"],
+            "refresh_reason_category": refresh_info["category"],
         },
         warnings=warnings,
         detail=detail_mode,

@@ -9,6 +9,7 @@ from haxaml.mcp_server import (
     haxaml_expect_sync,
     haxaml_guidance,
     haxaml_init,
+    haxaml_prebuild,
     haxaml_needs,
     haxaml_run,
     haxaml_session_plan,
@@ -218,6 +219,9 @@ class TestSessionLifecycle:
     def test_session_start_rejects_utility_mode_tasks(self, governed_project):
         guided = haxaml_guidance(task="sort files in this folder", project_dir=str(governed_project))
         assert guided["ok"] is True
+        assert guided["data"]["execution_mode"] == "utility"
+        assert guided["data"]["next_step"] == "run_outside_governed_flow"
+        assert "call_budget" not in guided["data"]
         result = haxaml_session_start(
             task="sort files in this folder",
             description="side task",
@@ -259,6 +263,17 @@ class TestSessionLifecycle:
         assert second["ok"] is False
         assert second["error"]["code"] == "context_pack_refresh_reason_required"
 
+        vague = haxaml_context_pack(
+            task="implement auth module",
+            project_dir=str(governed_project),
+            pack="balanced",
+            include_state=True,
+            session_id=session_id,
+            refresh_reason="again",
+        )
+        assert vague["ok"] is False
+        assert vague["error"]["code"] == "context_pack_refresh_reason_too_vague"
+
         third = haxaml_context_pack(
             task="implement auth module",
             project_dir=str(governed_project),
@@ -268,6 +283,25 @@ class TestSessionLifecycle:
             refresh_reason="context stale after updated tests",
         )
         assert third["ok"] is True
+        assert third["data"]["refresh_reason_category"] == "stale_context"
+
+    def test_prebuild_short_response_is_compact(self, governed_project):
+        about = haxaml_about(str(governed_project))
+        assert about["ok"] is True
+        guided = haxaml_guidance(task="update lifecycle guidance docs", project_dir=str(governed_project))
+        assert guided["ok"] is True
+
+        prebuild = haxaml_prebuild(
+            task="update lifecycle guidance docs",
+            description="workflow benchmark profile",
+            project_dir=str(governed_project),
+        )
+        assert prebuild["ok"] is True
+        data = prebuild["data"]
+        assert data["readiness_status"] in ("ready_to_build", "ready_to_build_with_warnings")
+        assert data["next_step"] == "haxaml_context_pack"
+        assert "frame_health" not in data
+        assert "plan" not in data
 
     def test_session_record_requires_verification_for_success(self, governed_project):
         session_id = _start_governed_session(

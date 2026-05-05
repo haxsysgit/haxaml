@@ -89,6 +89,7 @@ def _compact_context_pack_payload(payload: dict) -> dict:
         compact["session_id"] = payload.get("session_id")
         compact["context_pack_calls"] = payload.get("context_pack_calls", 0)
         compact["refresh_reason"] = payload.get("refresh_reason", "")
+        compact["refresh_reason_category"] = payload.get("refresh_reason_category", "")
     return compact
 
 
@@ -103,7 +104,7 @@ def _compact_success(tool: str, payload: dict) -> dict:
         return _pick_fields(payload, ["message", "tokens", "include_state", "deprecation"])
 
     if tool == "haxaml_guidance":
-        return _pick_fields(
+        compact = _pick_fields(
             payload,
             [
                 "message",
@@ -113,9 +114,36 @@ def _compact_success(tool: str, payload: dict) -> dict:
                 "risk_level",
                 "required_questions",
                 "recommended_packs",
-                "call_budget",
-                "visibility_calls_optional",
-                "anti_bloat_policy",
+                "next_step",
+            ],
+        )
+        if payload.get("execution_mode") == "governed":
+            compact.update(
+                _pick_fields(
+                    payload,
+                    [
+                        "call_budget",
+                        "visibility_calls_optional",
+                        "anti_bloat_policy",
+                    ],
+                )
+            )
+        else:
+            compact["policy"] = payload.get("policy", {})
+        return compact
+
+    if tool == "haxaml_prebuild":
+        return _pick_fields(
+            payload,
+            [
+                "message",
+                "session_id",
+                "readiness_status",
+                "task_type",
+                "guidance_type",
+                "required_questions",
+                "next_step",
+                "policy",
             ],
         )
 

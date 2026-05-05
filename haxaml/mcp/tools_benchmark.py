@@ -2,6 +2,9 @@
 
 from haxaml.mcp.base import *
 
+WORKFLOW_BENCHMARK_TASK = "update lifecycle guidance docs"
+WORKFLOW_BENCHMARK_DESCRIPTION = "workflow benchmark profile"
+
 
 def _benchmark_call_entry(index: int, tool: str, detail: str, result: dict, elapsed_ms: float) -> dict[str, Any]:
     data = result.get("data") if isinstance(result.get("data"), dict) else {}
@@ -92,12 +95,16 @@ def _benchmark_run_profile(project_dir: str, name: str, detail: str) -> dict[str
         if tool_name == "haxaml_about":
             kwargs = common
         elif tool_name == "haxaml_guidance":
-            kwargs = {"task": "workflow benchmark profile", **common}
+            kwargs = {"task": WORKFLOW_BENCHMARK_TASK, **common}
         elif tool_name == "haxaml_prebuild":
-            kwargs = {"task": "workflow benchmark profile", "description": "benchmark profile run", **common}
+            kwargs = {
+                "task": WORKFLOW_BENCHMARK_TASK,
+                "description": WORKFLOW_BENCHMARK_DESCRIPTION,
+                **common,
+            }
         elif tool_name == "haxaml_context_pack":
             kwargs = {
-                "task": "workflow benchmark profile",
+                "task": WORKFLOW_BENCHMARK_TASK,
                 "pack": "balanced",
                 "include_state": True,
                 "session_id": session_id,
@@ -105,7 +112,7 @@ def _benchmark_run_profile(project_dir: str, name: str, detail: str) -> dict[str
             }
         elif tool_name == "haxaml_session_verify":
             kwargs = {
-                "task": "workflow benchmark profile",
+                "task": WORKFLOW_BENCHMARK_TASK,
                 "session_id": session_id,
                 "inspected_context": [
                     ".haxaml/facts.yaml",
@@ -119,7 +126,7 @@ def _benchmark_run_profile(project_dir: str, name: str, detail: str) -> dict[str
             }
         elif tool_name == "haxaml_session_record":
             kwargs = {
-                "task": "workflow benchmark profile",
+                "task": WORKFLOW_BENCHMARK_TASK,
                 "session_id": session_id,
                 "result": "success",
                 "changes": "Captured workflow benchmark metrics.",
