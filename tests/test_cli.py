@@ -290,7 +290,8 @@ def test_cli_about_and_workflow_benchmark_mode():
 
         about = runner.invoke(cli, ["about", "--dir", "."])
         assert about.exit_code == 0, about.output
-        assert "Haxaml onboarding brief loaded" in about.output
+        assert "Haxaml is the governance layer." in about.output
+        assert "Next: haxaml_guidance." in about.output
 
         benchmark = runner.invoke(cli, ["benchmark", "--mode", "workflow", "--dir", "."])
         assert benchmark.exit_code == 0, benchmark.output

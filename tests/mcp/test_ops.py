@@ -224,10 +224,24 @@ class TestAdoptPlan:
 
 class TestReconcile:
     def test_optional_map_deferred_when_absent(self, governed_project):
-        result = haxaml_reconcile(str(governed_project))
+        result = haxaml_reconcile(str(governed_project), detail="full")
         assert result["ok"] is True
         assert result["data"]["deferred_map_canonical_checks"] is True
         assert result["data"]["conflict_counts"]["blocking"] == 0
+
+    def test_done_phase_with_active_run_is_advisory_only(self, governed_project):
+        expect_path = governed_project / ".haxaml" / "expect.yaml"
+        expect = yaml.safe_load(expect_path.read_text())
+        expect["phases"][0]["status"] = "done"
+        expect_path.write_text(yaml.dump(expect, default_flow_style=False, sort_keys=False))
+
+        result = haxaml_reconcile(str(governed_project), detail="full")
+        assert result["ok"] is True
+        assert result["data"]["warning_counts"]["total"] >= 1
+        assert any(
+            conflict["category"] == "phase_run_sync"
+            for conflict in result["data"]["conflicts"]
+        )
 
     def test_returns_blocking_conflicts_when_map_present_and_misaligned(self, governed_project):
         map_data = {

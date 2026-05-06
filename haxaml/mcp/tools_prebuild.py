@@ -23,6 +23,7 @@ from haxaml.prebuild_templates import (
     get_template,
 )
 from haxaml.validator import semantic_validate
+from haxaml.validator import frame_consistency_report
 
 from haxaml.mcp.base import (
     _contract_allows,
@@ -30,6 +31,7 @@ from haxaml.mcp.base import (
     _err,
     _get_state_manager,
     _guidance_eval,
+    _lifecycle_hint,
     _lifecycle_contract_state,
     _normalize_detail,
     _now_iso,
@@ -157,6 +159,11 @@ def haxaml_prebuild(
 
     # --- semantic validation ---
     sem = semantic_validate(frame)
+    consistency = frame_consistency_report(frame)
+    progress_summary = {
+        "status": consistency["status"],
+        "reason": consistency["reason"],
+    }
     frame_health = {
         "blocking": list(sem.blocking),
         "warnings": list(sem.warnings),
@@ -176,6 +183,8 @@ def haxaml_prebuild(
         risk,
         required_questions,
     )
+    if readiness_status == "ready_to_build" and consistency["status"] != "on_track":
+        readiness_status = "ready_to_build_with_warnings"
 
     # --- context policy ---
     ctx_policy = context_policy_for(task_type, risk)
@@ -303,7 +312,7 @@ def haxaml_prebuild(
     payload: dict = {
         "message": (
             f"Prebuild complete: {readiness_status}\n"
-            f"Task type: {task_type} ({guidance_type})\n"
+            f"Progress: {progress_summary['status']} — {progress_summary['reason']}\n"
             f"Next step: {next_step}"
         ),
         "session_id": session_id,
@@ -318,9 +327,18 @@ def haxaml_prebuild(
         "risks": list(tmpl.get("risks") or []),
         "context_policy": ctx_policy,
         "frame_health": frame_health,
+        "progress_summary": progress_summary,
         "plan": plan,
         "verification_expectations": verification_expectations,
         "next_step": next_step,
+        "lifecycle": _lifecycle_hint(
+            tool="haxaml_prebuild",
+            phase="prebuild",
+            depends_on=["haxaml_about", "haxaml_guidance"],
+            preferred_next=next_step,
+            allowed_next=[next_step] if next_step.startswith("haxaml_") else [],
+            contract_enforced=next_step.startswith("haxaml_"),
+        ),
     }
 
     return _ok("haxaml_prebuild", payload, warnings=warnings, detail=detail_mode)

@@ -177,7 +177,7 @@ def _benchmark_workflow_mode() -> dict[str, Any]:
     guardrails = {
         "essential_short_max_payload_tokens": 2100,
         "expanded_short_max_payload_tokens": 2600,
-        "essential_full_max_payload_tokens": 3200,
+        "essential_full_max_payload_tokens": 3500,
     }
     def _run_isolated_profile(name: str, detail: str) -> dict[str, Any]:
         with tempfile.TemporaryDirectory(prefix=f"haxaml-benchmark-workflow-{name}-") as td:

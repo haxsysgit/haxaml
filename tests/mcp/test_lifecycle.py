@@ -48,7 +48,9 @@ class TestAbout:
         data = result["data"]
         assert data["about_version"]
         assert "lean_workflow" in data
-        assert "call_budget_targets" in data
+        assert data["next_step"] == "haxaml_guidance"
+        assert data["lifecycle"]["preferred_next"] == "haxaml_guidance"
+        assert "allowed_next" not in data["lifecycle"]
 
     def test_session_start_requires_about_first(self, tmp_path):
         init = haxaml_init(str(tmp_path))
@@ -300,8 +302,59 @@ class TestSessionLifecycle:
         data = prebuild["data"]
         assert data["readiness_status"] in ("ready_to_build", "ready_to_build_with_warnings")
         assert data["next_step"] == "haxaml_context_pack"
+        assert data["lifecycle"]["preferred_next"] == "haxaml_context_pack"
         assert "frame_health" not in data
         assert "plan" not in data
+
+    def test_lifecycle_tools_point_to_next_step(self, governed_project):
+        about = haxaml_about(str(governed_project))
+        assert about["ok"] is True
+        assert about["data"]["lifecycle"]["preferred_next"] == "haxaml_guidance"
+
+        guidance = haxaml_guidance(task="update lifecycle guidance docs", project_dir=str(governed_project))
+        assert guidance["ok"] is True
+        assert guidance["data"]["lifecycle"]["preferred_next"] == "haxaml_prebuild"
+
+        prebuild = haxaml_prebuild(
+            task="update lifecycle guidance docs",
+            description="workflow benchmark profile",
+            project_dir=str(governed_project),
+        )
+        assert prebuild["ok"] is True
+        session_id = prebuild["data"]["session_id"]
+        assert prebuild["data"]["lifecycle"]["preferred_next"] == "haxaml_context_pack"
+
+        packed = haxaml_context_pack(
+            task="update lifecycle guidance docs",
+            project_dir=str(governed_project),
+            pack="balanced",
+            include_state=True,
+            session_id=session_id,
+        )
+        assert packed["ok"] is True
+        assert packed["data"]["lifecycle"]["preferred_next"] == "haxaml_session_verify"
+
+    def test_prebuild_surfaces_blocked_progress_as_warning(self, governed_project):
+        expect_path = governed_project / ".haxaml" / "expect.yaml"
+        expect = yaml.safe_load(expect_path.read_text())
+        expect["runbook"][0]["depends_on"] = [99]
+        expect_path.write_text(yaml.dump(expect, default_flow_style=False, sort_keys=False))
+
+        about = haxaml_about(str(governed_project))
+        assert about["ok"] is True
+        guided = haxaml_guidance(task="update lifecycle guidance docs", project_dir=str(governed_project))
+        assert guided["ok"] is True
+
+        prebuild = haxaml_prebuild(
+            task="update lifecycle guidance docs",
+            description="workflow note",
+            project_dir=str(governed_project),
+            detail="full",
+        )
+        assert prebuild["ok"] is True
+        assert prebuild["data"]["progress_summary"]["status"] == "blocked"
+        assert prebuild["data"]["readiness_status"] == "ready_to_build_with_warnings"
+        assert "Progress: blocked" in prebuild["data"]["message"]
 
     def test_session_record_requires_verification_for_success(self, governed_project):
         session_id = _start_governed_session(

@@ -218,6 +218,14 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
         "safer_path": guidance["safer_path"],
         "recommended_packs": guidance["recommended_packs"],
         "next_step": next_step,
+        "lifecycle": _lifecycle_hint(
+            tool="haxaml_guidance",
+            phase="guidance",
+            depends_on=["haxaml_about"],
+            preferred_next=next_step,
+            allowed_next=["haxaml_prebuild", "haxaml_session_start"] if execution_mode == "governed" else ["run_outside_governed_flow"],
+            contract_enforced=(execution_mode == "governed"),
+        ),
     }
     if execution_mode == "governed":
         payload["call_budget"] = call_budget
@@ -226,7 +234,7 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
             "context_pack_limit": CONTEXT_PACK_LIMIT_TEXT,
             "visibility_calls": VISIBILITY_POLICY_TEXT,
             "retry_behavior": RETRY_POLICY_TEXT,
-            "context_refresh_policy": _context_refresh_policy(),
+            "context_refresh_policy": _compact_context_refresh_policy(),
         }
     else:
         payload["policy"] = _utility_mode_policy()
@@ -400,6 +408,14 @@ def haxaml_session_start(
             "sessions_started": read_policy["sessions_started"],
             "onboarding_full_reads": read_policy["onboarding_full_reads"],
         },
+        "next_step": "haxaml_session_plan",
+        "lifecycle": _lifecycle_hint(
+            tool="haxaml_session_start",
+            phase="start",
+            depends_on=["haxaml_about", "haxaml_guidance"],
+            preferred_next="haxaml_session_plan",
+            allowed_next=["haxaml_session_plan"],
+        ),
     }
     _retry_guard_clear(project_dir, tool="haxaml_session_start", error_code="about_required", task=task)
     return _ok("haxaml_session_start", payload, warnings=warnings, detail=detail_mode)
@@ -493,6 +509,14 @@ def haxaml_session_plan(
             "verification_expectations": verify_expect,
             "visibility_policy": "Optional diagnostics only; call health/needs/reconcile/state_show on failure, uncertainty, or pre-final check.",
             "retry_policy": "If same gate error appears twice, stop retrying and fix root cause before retrying once.",
+            "next_step": "haxaml_context_pack",
+            "lifecycle": _lifecycle_hint(
+                tool="haxaml_session_plan",
+                phase="plan",
+                depends_on=["haxaml_session_start"],
+                preferred_next="haxaml_context_pack",
+                allowed_next=["haxaml_context_pack"],
+            ),
         },
         warnings=warnings,
         detail=detail_mode,
@@ -641,6 +665,14 @@ def haxaml_context_pack(
             "context_pack_calls": (prior_calls + 1) if session_id else 0,
             "refresh_reason": refresh_info["reason"],
             "refresh_reason_category": refresh_info["category"],
+            "next_step": "haxaml_session_verify",
+            "lifecycle": _lifecycle_hint(
+                tool="haxaml_context_pack",
+                phase="context",
+                depends_on=["haxaml_prebuild", "haxaml_session_plan"],
+                preferred_next="haxaml_session_verify",
+                allowed_next=["haxaml_session_verify"],
+            ),
         },
         warnings=warnings,
         detail=detail_mode,
@@ -835,6 +867,14 @@ def haxaml_session_verify(
             "unresolved_questions": unresolved_questions,
             "assumptions": assumptions,
             "follow_ups": guidance["required_questions"] if verdict in ("fail", "needs_clarification") else [],
+            "next_step": "haxaml_session_record" if verdict in ("pass", "pass_with_risks") else "haxaml_session_verify",
+            "lifecycle": _lifecycle_hint(
+                tool="haxaml_session_verify",
+                phase="verify",
+                depends_on=["haxaml_context_pack"],
+                preferred_next="haxaml_session_record" if verdict in ("pass", "pass_with_risks") else "haxaml_session_verify",
+                allowed_next=["haxaml_session_record"] if verdict in ("pass", "pass_with_risks") else ["haxaml_session_verify"],
+            ),
         },
         warnings=warnings,
         detail=detail_mode,
@@ -1074,6 +1114,14 @@ def haxaml_session_record(
             "last_context_window_usage": context_compaction.get("last_window_usage", {}) if sm else {},
             "auto_exported": stale,
             "expect_sync_required": True,
+            "next_step": "haxaml_expect_sync",
+            "lifecycle": _lifecycle_hint(
+                tool="haxaml_session_record",
+                phase="record",
+                depends_on=["haxaml_session_verify"],
+                preferred_next="haxaml_expect_sync",
+                allowed_next=["haxaml_expect_sync"],
+            ),
         },
         warnings=warnings,
         detail=detail_mode,
@@ -1275,6 +1323,14 @@ def haxaml_expect_sync(
             "run": target_run,
             "applied_status": expected_status,
             "expect_sync": sync_state,
+            "next_step": "haxaml_guidance",
+            "lifecycle": _lifecycle_hint(
+                tool="haxaml_expect_sync",
+                phase="sync",
+                depends_on=["haxaml_session_record"],
+                preferred_next="haxaml_guidance",
+                allowed_next=["haxaml_guidance"],
+            ),
         },
         warnings=warnings,
         detail=detail_mode,

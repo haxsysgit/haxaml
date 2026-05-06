@@ -320,8 +320,57 @@ def haxaml_health(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     except FileNotFoundError as e:
         return _err("haxaml_health", "missing_frame", str(e))
 
+    frame = FrameModel.load(project_dir)
     report = runner.get_project_health()
+    sem = semantic_validate(frame)
+    consistency = frame_consistency_report(frame)
+    reconcile = reconcile_derivation(project_dir)
     project_name = str(report.get("project", "")).strip() or "(unnamed)"
+    health_errors = list(report.get("errors", []))
+    health_warnings = list(report.get("warnings", []))
+
+    def _append_unique(items: list[str], extra: list[str]) -> None:
+        for item in extra:
+            if item not in items:
+                items.append(item)
+
+    _append_unique(health_errors, list(sem.blocking))
+    consistency_messages = [finding["message"] for finding in consistency["findings"]]
+    _append_unique(health_warnings, [warning for warning in sem.warnings if warning not in consistency_messages])
+    _append_unique(health_warnings, consistency_messages)
+
+    sync_state = _expect_sync_state(frame.acts or {})
+    if sync_state["required"]:
+        _append_unique(
+            health_errors,
+            [
+                "Lifecycle drift: expect.yaml sync is pending "
+                f"for run '{sync_state['pending_run_id'] or 'unknown'}'."
+            ],
+        )
+
+    rules_blob = frame.rules or {}
+    lifecycle_rules = _rules_policy(rules_blob, "lifecycle", {})
+    enforce_governed_evidence = bool(lifecycle_rules.get("enforce_governed_evidence_on_validate", True))
+    governed_changed = _governed_code_changes(project_dir)
+    if enforce_governed_evidence and governed_changed and not _has_governed_evidence_for_changes(frame.acts or {}, governed_changed):
+        _append_unique(
+            health_errors,
+            [
+                "Governance evidence missing: code changes exist without matching governed lifecycle evidence."
+            ],
+        )
+
+    blocking_conflicts = [item["message"] for item in reconcile["conflicts"] if item["severity"] == "blocking"]
+    warning_conflicts = [item["message"] for item in reconcile["conflicts"] if item["severity"] == "warning"]
+    _append_unique(health_errors, [f"Reconcile: {message}" for message in blocking_conflicts])
+    _append_unique(health_warnings, [f"Reconcile: {message}" for message in warning_conflicts])
+
+    report["errors"] = health_errors
+    report["warnings"] = health_warnings
+    report["ready"] = not health_errors
+    report["progress_summary"] = consistency
+    report["reconcile"] = reconcile
     lines = [
         f"Project:    {project_name}",
         f"Ready:      {'✓' if report['ready'] else '✗'}",
@@ -329,28 +378,28 @@ def haxaml_health(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
         f"Acts:       {'✓ valid' if report['acts_valid'] else '✗ invalid'}",
         f"Complete:   {'✓' if report['facts_complete'] else '✗ incomplete'}",
         f"Context:    {report['context_tokens']} tokens",
+        f"Derived:    {consistency['status']} — {consistency['reason']}",
     ]
 
     p = Path(project_dir).resolve()
     rules_path = resolve_frame_file(p, "rules.yaml", "mind.yaml")
-    if rules_path:
-        errors = validate_rules(str(rules_path))
-        lines.append(f"Rules:      {'✓ valid' if not errors else '✗ invalid'}")
-
+    rules_errors = validate_rules(str(rules_path)) if rules_path else []
     expect_path = resolve_frame_file(p, "expect.yaml")
-    if expect_path:
-        errors = validate_expect(str(expect_path))
-        lines.append(f"Expect:     {'✓ valid' if not errors else '✗ invalid'}")
-
+    expect_errors = validate_expect(str(expect_path)) if expect_path else []
     map_path = resolve_frame_file(p, "map.yaml")
-    if map_path:
-        errors = validate_map(str(map_path))
-        lines.append(f"Map:        {'✓ valid' if not errors else '✗ invalid'}")
+    map_schema_errors = validate_map(str(map_path)) if map_path else []
 
     map_assessment = evaluate_map_complexity(p)
     map_errors, map_warnings = map_complexity_issues(map_assessment)
-    lines.append(f"Map policy: {format_map_complexity_summary(map_assessment)}")
-    if map_assessment.reasons:
+    if detail_mode == "full" or rules_errors:
+        lines.append(f"Rules:      {'✓ valid' if not rules_errors else '✗ invalid'}")
+    if detail_mode == "full" or expect_errors:
+        lines.append(f"Expect:     {'✓ valid' if not expect_errors else '✗ invalid'}")
+    if map_path and (detail_mode == "full" or map_schema_errors):
+        lines.append(f"Map:        {'✓ valid' if not map_schema_errors else '✗ invalid'}")
+    if detail_mode == "full" or map_errors or map_warnings:
+        lines.append(f"Map policy: {format_map_complexity_summary(map_assessment)}")
+    if detail_mode == "full" and map_assessment.reasons:
         lines.append("Map signals:")
         for reason in map_assessment.reasons:
             lines.append(f"  → {reason}")
@@ -358,6 +407,8 @@ def haxaml_health(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
         lines.append(f"  ✗ {err}")
     for warning in map_warnings:
         lines.append(f"  ⚠ {warning}")
+
+    lines.append(f"Reconcile:  {reconcile['human_summary']}")
 
     if report.get("phase"):
         lines.extend([
@@ -367,6 +418,10 @@ def haxaml_health(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
             f"Blocked:    {report['blocked_tasks']}",
             f"Total runs: {report['total_runs']}",
         ])
+    if consistency.get("open_session_count") is not None:
+        lines.append(f"Open sess:  {consistency['open_session_count']}")
+    if consistency.get("active_run") is not None:
+        lines.append(f"Active run: {consistency['active_run']}")
 
     if report["errors"]:
         lines.append(f"\n✗ {len(report['errors'])} error(s):")
@@ -414,6 +469,13 @@ def haxaml_doctor(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
 
     lines: list[str] = []
     all_recommendations: list[str] = []
+    frame = FrameModel.load(project_dir)
+    consistency = frame_consistency_report(frame)
+    reconcile = reconcile_derivation(project_dir)
+
+    lines.append(
+        f"Derived progress: {consistency['status']} — {consistency['reason']}"
+    )
 
     missing = detect_missing_facts_fields(str(facts_path))
     if missing:
@@ -422,22 +484,51 @@ def haxaml_doctor(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
             lines.append(f"  → {m}")
             all_recommendations.append(m)
 
-    sem = semantic_validate(FrameModel.load(project_dir))
+    sem = semantic_validate(frame)
+    consistency_messages = {finding["message"] for finding in consistency["findings"]}
     if sem.blocking:
         lines.append(f"✗ {len(sem.blocking)} blocking semantic issue(s):")
         for b in sem.blocking:
             lines.append(f"  → {b}")
-    if sem.warnings:
-        lines.append(f"⚠ {len(sem.warnings)} semantic quality warning(s):")
-        for w in sem.warnings:
+    general_sem_warnings = [warning for warning in sem.warnings if warning not in consistency_messages]
+    if general_sem_warnings:
+        lines.append(f"⚠ {len(general_sem_warnings)} semantic quality warning(s):")
+        for w in general_sem_warnings:
             lines.append(f"  → {w}")
             all_recommendations.append(w)
 
-    has_issues = bool(sem.blocking or all_recommendations)
+    if consistency["findings"]:
+        lines.append(f"⚠ {len(consistency['findings'])} consistency advisory finding(s):")
+        for finding in consistency["findings"]:
+            lines.append(f"  → {finding['message']}")
+            if finding["hint"]:
+                lines.append(f"    fix: {finding['hint']}")
+            all_recommendations.append(finding["message"])
+
+    reconcile_blocking = [item for item in reconcile["conflicts"] if item["severity"] == "blocking"]
+    reconcile_warnings = [item for item in reconcile["conflicts"] if item["severity"] == "warning"]
+    if reconcile_blocking:
+        lines.append(f"✗ {len(reconcile_blocking)} blocking reconcile conflict(s):")
+        for conflict in reconcile_blocking:
+            lines.append(f"  → {conflict['message']}")
+            lines.append(f"    fix: {conflict['suggested_fix_action']}")
+    if reconcile_warnings:
+        lines.append(f"⚠ {len(reconcile_warnings)} reconcile warning(s):")
+        for conflict in reconcile_warnings:
+            lines.append(f"  → {conflict['message']}")
+            lines.append(f"    fix: {conflict['suggested_fix_action']}")
+            all_recommendations.append(conflict["message"])
+
+    has_blocking = bool(sem.blocking or reconcile_blocking)
+    has_issues = bool(has_blocking or all_recommendations)
     if not has_issues:
         return _ok(
             "haxaml_doctor",
-            {"message": "✓ FRAME is complete — no recommendations", "has_recommendations": False},
+            {
+                "message": "✓ FRAME is complete — no recommendations",
+                "has_recommendations": False,
+                "progress_summary": consistency,
+            },
             detail=detail_mode,
         )
 
@@ -446,10 +537,13 @@ def haxaml_doctor(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
         {
             "message": "\n".join(lines) if lines else "⚠ Issues found",
             "recommendations": all_recommendations,
-            "blocking": sem.blocking,
-            "warnings": sem.warnings,
+            "blocking": [*sem.blocking, *[item["message"] for item in reconcile_blocking]],
+            "warnings": [*general_sem_warnings, *[item["message"] for item in consistency["findings"]], *[item["message"] for item in reconcile_warnings]],
             "has_recommendations": bool(all_recommendations),
-            "has_blocking": bool(sem.blocking),
+            "has_blocking": has_blocking,
+            "progress_summary": consistency,
+            "reconcile": reconcile,
+            "consistency_findings": consistency["findings"],
         },
         detail=detail_mode,
     )

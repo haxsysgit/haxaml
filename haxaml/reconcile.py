@@ -19,6 +19,7 @@ _CATEGORY_FIX_CONFIDENCE = {
     "map_dependency_integrity": "high",
     "dependency_sync": "medium",
     "impact_integrity": "medium",
+    "phase_run_sync": "medium",
 }
 
 _CATEGORY_WHY_IT_MATTERS = {
@@ -29,6 +30,7 @@ _CATEGORY_WHY_IT_MATTERS = {
     "map_dependency_integrity": "Dependencies that reference undeclared modules make impact analysis and gate decisions unreliable.",
     "dependency_sync": "Dependency drift between map and rules causes inconsistent boundary enforcement across tools.",
     "impact_integrity": "Impact triggers must point to declared modules so verification can enforce the correct checks.",
+    "phase_run_sync": "Runbook and phase drift makes current progress harder to trust, which weakens planning and operator visibility.",
 }
 
 
@@ -225,6 +227,78 @@ def reconcile_derivation(project_dir: str | Path) -> dict[str, Any]:
 
     conflicts: list[dict[str, Any]] = []
     add = _ConflictBuilder(conflicts)
+    phases = [item for item in (expect.get("phases") or []) if isinstance(item, dict)]
+    phase_names = {
+        _normalize_name(item.get("name", ""))
+        for item in phases
+        if _normalize_name(item.get("name", ""))
+    }
+    active_phase_names = {
+        _normalize_name(item.get("name", ""))
+        for item in phases
+        if _normalize_name(item.get("status", "")) == "active" and _normalize_name(item.get("name", ""))
+    }
+    done_phase_names = {
+        _normalize_name(item.get("name", ""))
+        for item in phases
+        if _normalize_name(item.get("status", "")) == "done" and _normalize_name(item.get("name", ""))
+    }
+    runbook = [item for item in (expect.get("runbook") or []) if isinstance(item, dict)]
+
+    def _add_expect_phase_conflicts() -> None:
+        for run in runbook:
+            run_no = run.get("run", "?")
+            phase_name = _normalize_name(run.get("phase", ""))
+            run_status = _normalize_name(run.get("status", ""))
+            if phase_name and phase_names and phase_name not in phase_names:
+                add.add(
+                    category="phase_run_sync",
+                    severity="warning",
+                    canonical_path=".haxaml/expect.yaml:phases",
+                    derived_path=f".haxaml/expect.yaml:runbook[run={run_no}].phase",
+                    canonical_value=sorted(phase_names),
+                    derived_value=phase_name,
+                    message=f"Runbook run {run_no} references unknown phase '{phase_name}'.",
+                    suggested_fix_action=f"Add phase '{phase_name}' to expect.phases or move run {run_no} to a declared phase.",
+                )
+            if run_status == "active" and phase_name and active_phase_names and phase_name not in active_phase_names:
+                add.add(
+                    category="phase_run_sync",
+                    severity="warning",
+                    canonical_path=".haxaml/expect.yaml:phases[status=active]",
+                    derived_path=f".haxaml/expect.yaml:runbook[run={run_no}]",
+                    canonical_value=sorted(active_phase_names),
+                    derived_value={"run": run_no, "phase": phase_name, "status": run_status},
+                    message=(
+                        f"Runbook run {run_no} is active in phase '{phase_name}' while "
+                        f"the active phase set is {sorted(active_phase_names)}."
+                    ),
+                    suggested_fix_action=f"Align run {run_no} with the active phase, or update the phase status to match the run.",
+                )
+
+        for phase_name in sorted(done_phase_names):
+            conflicting_runs = [
+                item.get("run", "?")
+                for item in runbook
+                if _normalize_name(item.get("phase", "")) == phase_name
+                and _normalize_name(item.get("status", "")) in {"planned", "active"}
+            ]
+            if conflicting_runs:
+                add.add(
+                    category="phase_run_sync",
+                    severity="warning",
+                    canonical_path=f".haxaml/expect.yaml:phases[name={phase_name}]",
+                    derived_path=".haxaml/expect.yaml:runbook",
+                    canonical_value={"phase": phase_name, "status": "done"},
+                    derived_value={"runs": conflicting_runs, "statuses": ["planned", "active"]},
+                    message=(
+                        f"Phase '{phase_name}' is marked done while run(s) {conflicting_runs} "
+                        "under that phase are still planned or active."
+                    ),
+                    suggested_fix_action=f"Reopen phase '{phase_name}' or close the remaining runs under it.",
+                )
+
+    _add_expect_phase_conflicts()
 
     if not map_path:
         if assessment.required:
@@ -245,6 +319,10 @@ def reconcile_derivation(project_dir: str | Path) -> dict[str, Any]:
             "blocking": sum(1 for c in conflicts if c["severity"] == "blocking"),
             "warning": sum(1 for c in conflicts if c["severity"] == "warning"),
         }
+        if not assessment.required and severity_totals["warning"]:
+            human_summary = (
+                f"{human_summary} Found {severity_totals['warning']} advisory planning warning(s)."
+            )
         gate_reasons = [c["message"] for c in conflicts if c["severity"] == "blocking"]
         return {
             "project_dir": str(project),

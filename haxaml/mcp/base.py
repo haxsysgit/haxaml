@@ -58,6 +58,7 @@ from haxaml.supervision import render_impact, render_needs
 from haxaml.validator import (
     SemanticValidationResult,
     detect_missing_facts_fields,
+    frame_consistency_report,
     load_yaml,
     semantic_validate,
     validate_acts,
@@ -99,6 +100,7 @@ from haxaml.mcp.lifecycle_helpers import (
     _get_state_manager,
     _governed_code_changes,
     _has_governed_evidence_for_changes,
+    _lifecycle_hint,
     _guidance_eval,
     _has_conflict_stop_reason,
     _lifecycle_contract_state,
@@ -117,6 +119,7 @@ from haxaml.mcp.policy_helpers import (
     _about_ack_status,
     _about_payload,
     _call_budget_for,
+    _compact_context_refresh_policy,
     _context_refresh_policy,
     _gate_error_with_retry_policy,
     _normalize_context_refresh_reason,

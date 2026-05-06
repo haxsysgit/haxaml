@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,8 @@ import yaml
 
 from haxaml.validator import (
     detect_missing_facts_fields,
+    frame_consistency_report,
+    semantic_validate,
     validate_acts,
     validate_facts,
     validate_rules,
@@ -177,6 +180,97 @@ class TestRulesValidation:
         path = _write_yaml(str(tmp_path), "rules.yaml", rules)
         errors = validate_rules(path)
         assert errors == [], f"Expected no errors, got: {errors}"
+
+
+class TestConsistencyReport:
+    def _frame(self, *, facts=None, rules=None, acts=None, expect=None):
+        return SimpleNamespace(
+            load_errors=[],
+            facts=facts or {},
+            rules=rules or {},
+            acts=acts or {},
+            expect=expect or {},
+            map={},
+        )
+
+    def test_progress_summary_reports_sync_pending(self):
+        frame = self._frame(
+            acts={
+                "active_task": {"name": "implement auth"},
+                "runs": [{"id": "run-1", "task": "implement auth", "result": "success"}],
+                "expect_sync": {
+                    "required": True,
+                    "pending_run_id": "run-1",
+                    "pending_task": "implement auth",
+                    "pending_result": "success",
+                },
+            },
+            expect={"phases": [], "runbook": []},
+        )
+        report = frame_consistency_report(frame)
+        assert report["status"] == "sync_pending"
+        assert report["pending_expect_sync"] is True
+
+    def test_progress_summary_reports_blocked_for_unmet_active_run_dependencies(self):
+        frame = self._frame(
+            acts={"active_task": {"name": "implement auth"}},
+            expect={
+                "phases": [{"name": "Phase 1", "status": "active"}],
+                "runbook": [
+                    {
+                        "run": 2,
+                        "phase": "Phase 1",
+                        "status": "active",
+                        "goal": "Build auth",
+                        "outcome": "Auth shipped",
+                        "depends_on": [1],
+                        "verify": ["tests"],
+                    }
+                ],
+            },
+        )
+        report = frame_consistency_report(frame)
+        assert report["status"] == "blocked"
+        assert any(item["code"] == "active_run_unmet_dependencies" for item in report["findings"])
+
+    def test_progress_summary_reports_stale_state_for_active_task_session_mismatch(self):
+        frame = self._frame(
+            acts={
+                "active_task": {"name": "implement auth"},
+                "sessions": [{"id": "session-1", "task": "update docs", "status": "acting", "started": "2026-01-01T00:00:00+00:00"}],
+            },
+            expect={"phases": [], "runbook": []},
+        )
+        report = frame_consistency_report(frame)
+        assert report["status"] == "stale_state"
+        assert any(item["code"] == "active_task_session_mismatch" for item in report["findings"])
+
+    def test_semantic_validate_keeps_consistency_findings_advisory(self):
+        frame = self._frame(
+            acts={"runs": [{"id": "run-1", "task": "task", "result": "success"}]},
+            rules={"after_task": {"verify": ["Run tests"]}},
+            expect={
+                "phases": [{"name": "Phase 1", "status": "done"}],
+                "runbook": [
+                    {
+                        "run": 1,
+                        "phase": "Phase 1",
+                        "status": "active",
+                        "goal": "Ship auth",
+                        "outcome": "Auth shipped",
+                        "depends_on": [],
+                        "verify": ["tests"],
+                    }
+                ],
+            },
+        )
+        result = semantic_validate(frame)
+        assert result.blocking == [
+            "facts.identity section is absent — add identity.name and identity.version",
+            "facts.goal section is absent — add goal.purpose and goal.scope",
+        ]
+        assert any("Phase 'phase 1' is marked done" in warning or "phase 'phase 1'" in warning.lower() for warning in result.warnings)
+        assert any("verification discipline" in warning.lower() for warning in result.warnings)
 
     def test_rules_agent_profile_invalid_fields_report_paths(self, tmp_path):
         rules = {

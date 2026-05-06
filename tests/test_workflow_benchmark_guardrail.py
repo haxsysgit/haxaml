@@ -12,7 +12,7 @@ def test_workflow_token_guardrails():
 
     assert profiles["essential_short"]["payload_tokens"] <= 2100
     assert profiles["expanded_short"]["payload_tokens"] <= 2600
-    assert profiles["essential_full"]["payload_tokens"] <= 3200
+    assert profiles["essential_full"]["payload_tokens"] <= 3500
     assert profiles["expanded_short"]["call_count"] > profiles["essential_short"]["call_count"]
     assert profiles["essential_full"]["call_count"] == profiles["essential_short"]["call_count"]
     assert "transport_overhead" in data

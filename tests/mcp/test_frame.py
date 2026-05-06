@@ -145,6 +145,16 @@ class TestValidate:
         assert result["ok"] is False
         assert result["error"]["code"] == "governance_evidence_missing"
 
+    def test_phase_run_advisories_do_not_fail_validation(self, governed_project):
+        expect_path = governed_project / ".haxaml" / "expect.yaml"
+        expect = yaml.safe_load(expect_path.read_text())
+        expect["phases"][0]["status"] = "done"
+        expect_path.write_text(yaml.dump(expect, default_flow_style=False, sort_keys=False))
+
+        result = haxaml_validate(str(governed_project))
+        assert result["ok"] is True
+        assert "Phase 'phase 1' is marked done" in _msg(result) or "planned or active" in _msg(result)
+
 
 class TestContext:
     def test_returns_context_with_tokens(self, governed_project):
@@ -250,26 +260,68 @@ class TestDetailMode:
 
 class TestHealth:
     def test_healthy_project(self, governed_project):
-        result = haxaml_health(str(governed_project))
+        result = haxaml_health(str(governed_project), detail="full")
         text = _msg(result)
         assert result["ok"] is True
         assert "Project:    test-project" in text
         assert "Ready:      " in text
         assert "Facts:      " in text
+        assert result["data"]["report"]["progress_summary"]["status"] == "on_track"
 
     def test_missing_project(self, tmp_path):
         result = haxaml_health(str(tmp_path))
         assert result["ok"] is False
 
+    def test_sync_pending_health_reports_not_ready(self, governed_project):
+        acts_path = governed_project / ".haxaml" / "acts.yaml"
+        acts = yaml.safe_load(acts_path.read_text())
+        acts["runs"] = [{"id": "run-1", "task": "implement auth", "result": "success"}]
+        acts["expect_sync"] = {
+            "required": True,
+            "pending_run_id": "run-1",
+            "pending_task": "implement auth",
+            "pending_result": "success",
+        }
+        acts_path.write_text(yaml.dump(acts, default_flow_style=False, sort_keys=False))
+
+        result = haxaml_health(str(governed_project))
+        assert result["ok"] is False
+        report = result["error"]["details"]["report"]
+        assert report["progress_summary"]["status"] == "sync_pending"
+        assert "Derived:    sync_pending" in result["error"]["details"]["message"]
+
 
 class TestDoctor:
     def test_complete_facts(self, governed_project):
-        result = haxaml_doctor(str(governed_project))
+        result = haxaml_doctor(str(governed_project), detail="full")
         text = _msg(result)
         assert result["ok"] is True
         assert "complete" in text or "recommendation" in text
+        assert result["data"]["progress_summary"]["status"] == "on_track"
 
     def test_missing_facts(self, tmp_path):
         result = haxaml_doctor(str(tmp_path))
         assert result["ok"] is False
         assert "not found" in result["error"]["message"]
+
+    def test_doctor_surfaces_stale_state_consistency_findings(self, governed_project):
+        acts_path = governed_project / ".haxaml" / "acts.yaml"
+        acts = yaml.safe_load(acts_path.read_text())
+        acts["active_task"] = {"name": "implement auth"}
+        acts["sessions"] = [
+            {
+                "id": "session-1",
+                "task": "update docs",
+                "status": "acting",
+                "started": "2026-01-01T00:00:00+00:00",
+            }
+        ]
+        acts_path.write_text(yaml.dump(acts, default_flow_style=False, sort_keys=False))
+
+        result = haxaml_doctor(str(governed_project), detail="full")
+        assert result["ok"] is True
+        assert result["data"]["progress_summary"]["status"] == "stale_state"
+        assert any(
+            finding["code"] == "active_task_session_mismatch"
+            for finding in result["data"]["consistency_findings"]
+        )

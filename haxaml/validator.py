@@ -30,6 +30,450 @@ class SemanticValidationResult:
         return bool(self.blocking)
 
 
+@dataclass
+class ConsistencyFinding:
+    """Deterministic advisory or blocking finding derived from existing FRAME."""
+
+    code: str
+    severity: str
+    area: str
+    message: str
+    hint: str = ""
+    paths: list[str] = field(default_factory=list)
+
+
+def _normalized_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _normalized_task_name(value: Any) -> str:
+    if isinstance(value, dict):
+        value = value.get("name", "")
+    text = _normalized_text(value).lower()
+    return "" if text in {"", "none", "null"} else text
+
+
+def _normalized_session_task(value: Any) -> str:
+    if isinstance(value, dict):
+        value = value.get("task", value.get("name", ""))
+    text = _normalized_text(value).lower()
+    return "" if text in {"", "none", "null"} else text
+
+
+def _open_sessions(acts: dict[str, Any]) -> list[dict[str, Any]]:
+    sessions = acts.get("sessions") or []
+    if not isinstance(sessions, list):
+        return []
+    open_statuses = {"started", "planned", "acting", "verified"}
+    return [
+        session
+        for session in sessions
+        if isinstance(session, dict) and _normalized_text(session.get("status", "")).lower() in open_statuses
+    ]
+
+
+def _recorded_sessions(acts: dict[str, Any]) -> list[dict[str, Any]]:
+    sessions = acts.get("sessions") or []
+    if not isinstance(sessions, list):
+        return []
+    final_statuses = {"recorded", "failed"}
+    return [
+        session
+        for session in sessions
+        if isinstance(session, dict) and _normalized_text(session.get("status", "")).lower() in final_statuses
+    ]
+
+
+def _expect_sync_state(acts: dict[str, Any]) -> dict[str, str | bool]:
+    raw = acts.get("expect_sync", {}) if isinstance(acts, dict) else {}
+    if not isinstance(raw, dict):
+        raw = {}
+    return {
+        "required": bool(raw.get("required", False)),
+        "pending_run_id": _normalized_text(raw.get("pending_run_id", "")),
+        "pending_task": _normalized_text(raw.get("pending_task", "")),
+        "pending_result": _normalized_text(raw.get("pending_result", "")),
+        "last_synced_run_id": _normalized_text(raw.get("last_synced_run_id", "")),
+    }
+
+
+def frame_consistency_report(frame: "FrameModel") -> dict[str, Any]:
+    """Return deterministic consistency findings and a derived progress summary."""
+
+    facts: dict[str, Any] = frame.facts or {}
+    rules: dict[str, Any] = frame.rules or {}
+    acts: dict[str, Any] = frame.acts or {}
+    expect: dict[str, Any] = frame.expect or {}
+
+    findings: list[ConsistencyFinding] = []
+
+    phases = [item for item in (expect.get("phases") or []) if isinstance(item, dict)]
+    phase_names = {_normalized_text(item.get("name", "")) for item in phases if _normalized_text(item.get("name", ""))}
+    active_phases = [
+        _normalized_text(item.get("name", ""))
+        for item in phases
+        if _normalized_text(item.get("status", "")).lower() == "active" and _normalized_text(item.get("name", ""))
+    ]
+    done_phases = {
+        _normalized_text(item.get("name", ""))
+        for item in phases
+        if _normalized_text(item.get("status", "")).lower() == "done" and _normalized_text(item.get("name", ""))
+    }
+    runbook = [item for item in (expect.get("runbook") or []) if isinstance(item, dict)]
+    done_runs = {
+        int(item.get("run"))
+        for item in runbook
+        if isinstance(item.get("run"), int) and _normalized_text(item.get("status", "")).lower() == "done"
+    }
+    active_runs = [
+        item for item in runbook if _normalized_text(item.get("status", "")).lower() == "active"
+    ]
+
+    for run in active_runs:
+        run_no = run.get("run")
+        phase_name = _normalized_text(run.get("phase", ""))
+        if phase_name and phase_names and phase_name not in phase_names:
+            findings.append(
+                ConsistencyFinding(
+                    code="run_unknown_phase",
+                    severity="warning",
+                    area="run_phase_coherence",
+                    message=(
+                        f"expect.yaml run {run_no} references phase '{phase_name}' "
+                        "that is not declared in expect.phases."
+                    ),
+                    hint="Add the missing phase entry or move the run to a declared phase.",
+                    paths=[".haxaml/expect.yaml:phases", ".haxaml/expect.yaml:runbook"],
+                )
+            )
+        if active_phases and phase_name and phase_name not in active_phases:
+            findings.append(
+                ConsistencyFinding(
+                    code="active_phase_run_mismatch",
+                    severity="warning",
+                    area="run_phase_coherence",
+                    message=(
+                        f"expect.yaml run {run_no} is active in phase '{phase_name}' "
+                        f"but active phases are {active_phases}."
+                    ),
+                    hint="Align the run status with the active phase, or move the phase status forward.",
+                    paths=[".haxaml/expect.yaml:phases", ".haxaml/expect.yaml:runbook"],
+                )
+            )
+        unmet = [
+            dep for dep in (run.get("depends_on") or [])
+            if isinstance(dep, int) and dep not in done_runs
+        ]
+        if unmet:
+            findings.append(
+                ConsistencyFinding(
+                    code="active_run_unmet_dependencies",
+                    severity="warning",
+                    area="run_phase_coherence",
+                    message=(
+                        f"expect.yaml run {run_no} is active but still depends on unfinished run(s): {unmet}."
+                    ),
+                    hint="Mark prerequisites done or return this run to planned/blocked until they are complete.",
+                    paths=[".haxaml/expect.yaml:runbook"],
+                )
+            )
+
+    for phase_name in sorted(done_phases):
+        conflicting_runs = [
+            item.get("run")
+            for item in runbook
+            if _normalized_text(item.get("phase", "")) == phase_name
+            and _normalized_text(item.get("status", "")).lower() in {"planned", "active"}
+        ]
+        if conflicting_runs:
+            findings.append(
+                ConsistencyFinding(
+                    code="done_phase_has_open_runs",
+                    severity="warning",
+                    area="run_phase_coherence",
+                    message=(
+                        f"expect.yaml phase '{phase_name}' is marked done while run(s) {conflicting_runs} "
+                        "under that phase are still planned or active."
+                    ),
+                    hint="Either reopen the phase or close the remaining runs underneath it.",
+                    paths=[".haxaml/expect.yaml:phases", ".haxaml/expect.yaml:runbook"],
+                )
+            )
+
+    active_task = _normalized_task_name(acts.get("active_task"))
+    open_sessions = _open_sessions(acts)
+    latest_open_session = open_sessions[-1] if open_sessions else None
+    latest_open_task = _normalized_session_task(latest_open_session or {})
+    if active_task and latest_open_task and active_task != latest_open_task:
+        findings.append(
+            ConsistencyFinding(
+                code="active_task_session_mismatch",
+                severity="warning",
+                area="session_state_coherence",
+                message=(
+                    f"acts.active_task is '{active_task}' but the latest open session is "
+                    f"for '{latest_open_task}'."
+                ),
+                hint="Sync active_task to the current session task, or close the stale session.",
+                paths=[".haxaml/acts.yaml:active_task", ".haxaml/acts.yaml:sessions"],
+            )
+        )
+
+    contract_raw = acts.get("lifecycle_contract", {})
+    contract = contract_raw if isinstance(contract_raw, dict) else {}
+    contract_session_id = _normalized_text(contract.get("active_session_id", ""))
+    if contract_session_id:
+        sessions = acts.get("sessions") or []
+        matching = None
+        if isinstance(sessions, list):
+            for session in sessions:
+                if isinstance(session, dict) and _normalized_text(session.get("id", "")) == contract_session_id:
+                    matching = session
+                    break
+        if not matching:
+            findings.append(
+                ConsistencyFinding(
+                    code="contract_session_missing",
+                    severity="warning",
+                    area="session_state_coherence",
+                    message=(
+                        f"acts.lifecycle_contract points to session '{contract_session_id}' "
+                        "but that session is not present in acts.sessions."
+                    ),
+                    hint="Clear the stale lifecycle_contract pointer or restore the missing session entry.",
+                    paths=[".haxaml/acts.yaml:lifecycle_contract", ".haxaml/acts.yaml:sessions"],
+                )
+            )
+        else:
+            contract_task = _normalized_task_name(contract.get("active_task", ""))
+            session_task = _normalized_session_task(matching)
+            if contract_task and session_task and contract_task != session_task:
+                findings.append(
+                    ConsistencyFinding(
+                        code="contract_task_session_mismatch",
+                        severity="warning",
+                        area="session_state_coherence",
+                        message=(
+                            f"acts.lifecycle_contract active_task '{contract_task}' does not match "
+                            f"session '{contract_session_id}' task '{session_task}'."
+                        ),
+                        hint="Update lifecycle_contract.active_task to match the active session task.",
+                        paths=[".haxaml/acts.yaml:lifecycle_contract", ".haxaml/acts.yaml:sessions"],
+                    )
+                )
+
+    runs = [item for item in (acts.get("runs") or []) if isinstance(item, dict)]
+    run_ids = {_normalized_text(item.get("id", "")) for item in runs if _normalized_text(item.get("id", ""))}
+    expect_sync = _expect_sync_state(acts)
+    if bool(expect_sync["required"]):
+        if not expect_sync["pending_run_id"] or not expect_sync["pending_task"] or not expect_sync["pending_result"]:
+            findings.append(
+                ConsistencyFinding(
+                    code="expect_sync_missing_pending_fields",
+                    severity="warning",
+                    area="session_state_coherence",
+                    message=(
+                        "acts.expect_sync says sync is required but the pending run/task/result fields are incomplete."
+                    ),
+                    hint="Repair acts.expect_sync so the next sync target is explicit.",
+                    paths=[".haxaml/acts.yaml:expect_sync"],
+                )
+            )
+        elif expect_sync["pending_run_id"] not in run_ids:
+            findings.append(
+                ConsistencyFinding(
+                    code="expect_sync_unknown_run",
+                    severity="warning",
+                    area="session_state_coherence",
+                    message=(
+                        f"acts.expect_sync references pending run '{expect_sync['pending_run_id']}' "
+                        "but that run is not present in acts.runs."
+                    ),
+                    hint="Repair expect_sync.pending_run_id or restore the missing run record.",
+                    paths=[".haxaml/acts.yaml:expect_sync", ".haxaml/acts.yaml:runs"],
+                )
+            )
+    elif expect_sync["pending_run_id"] or expect_sync["pending_task"] or expect_sync["pending_result"]:
+        findings.append(
+            ConsistencyFinding(
+                code="expect_sync_stale_pending_fields",
+                severity="warning",
+                area="session_state_coherence",
+                message=(
+                    "acts.expect_sync is marked clean but still carries pending run/task/result fields."
+                ),
+                hint="Clear the stale pending sync fields after a successful sync.",
+                paths=[".haxaml/acts.yaml:expect_sync"],
+            )
+        )
+    if expect_sync["last_synced_run_id"] and expect_sync["last_synced_run_id"] not in run_ids:
+        findings.append(
+            ConsistencyFinding(
+                code="expect_sync_unknown_last_synced_run",
+                severity="warning",
+                area="session_state_coherence",
+                message=(
+                    f"acts.expect_sync last_synced_run_id '{expect_sync['last_synced_run_id']}' "
+                    "does not match any run currently recorded in acts.runs."
+                ),
+                hint="Repair the sync metadata or restore the matching run record.",
+                paths=[".haxaml/acts.yaml:expect_sync", ".haxaml/acts.yaml:runs"],
+            )
+        )
+
+    verifications = [
+        item for item in (acts.get("verifications") or [])
+        if isinstance(item, dict)
+    ]
+    verification_session_ids = {
+        _normalized_text(item.get("session_id", ""))
+        for item in verifications
+        if _normalized_text(item.get("session_id", ""))
+    }
+    recorded_sessions = _recorded_sessions(acts)
+    missing_verification_sessions = [
+        _normalized_text(item.get("id", ""))
+        for item in recorded_sessions
+        if _normalized_text(item.get("id", "")) and _normalized_text(item.get("id", "")) not in verification_session_ids
+    ]
+    if missing_verification_sessions:
+        findings.append(
+            ConsistencyFinding(
+                code="recorded_sessions_missing_verification",
+                severity="warning",
+                area="verification_governance_coherence",
+                message=(
+                    "acts.sessions contains recorded/failed sessions without matching verification "
+                    f"entries: {missing_verification_sessions}."
+                ),
+                hint="Record verification evidence for those sessions, or repair stale session states.",
+                paths=[".haxaml/acts.yaml:sessions", ".haxaml/acts.yaml:verifications"],
+            )
+        )
+
+    verify_checks = (rules.get("after_task") or {}).get("verify", []) or []
+    verification_policy = rules.get("verification_policy") or {}
+    require_checks = verification_policy.get("require_checks", []) if isinstance(verification_policy, dict) else []
+    verification_expected = any(isinstance(item, str) and item.strip() for item in verify_checks) or bool(require_checks)
+    if verification_expected and runs and not verifications:
+        findings.append(
+            ConsistencyFinding(
+                code="verification_policy_without_recent_evidence",
+                severity="warning",
+                area="verification_governance_coherence",
+                message=(
+                    "rules imply verification discipline, but acts.yaml has recorded runs and no verification evidence."
+                ),
+                hint="Use haxaml_session_verify before record, or backfill the missing verification history.",
+                paths=[".haxaml/rules.yaml:after_task", ".haxaml/rules.yaml:verification_policy", ".haxaml/acts.yaml:verifications"],
+            )
+        )
+
+    runbook_verification_expected = any(run.get("verify") for run in runbook if isinstance(run.get("verify"), list))
+    if runbook_verification_expected and recorded_sessions and not verifications:
+        findings.append(
+            ConsistencyFinding(
+                code="runbook_verification_without_evidence",
+                severity="warning",
+                area="verification_governance_coherence",
+                message=(
+                    "expect.runbook declares verification checks, but recent governed state shows no verification entries."
+                ),
+                hint="Ensure governed runs are verified and persisted before they are treated as done.",
+                paths=[".haxaml/expect.yaml:runbook", ".haxaml/acts.yaml:verifications"],
+            )
+        )
+
+    blocking_dependencies = [
+        item for item in (acts.get("unresolved_dependencies") or [])
+        if isinstance(item, dict) and bool(item.get("blocking"))
+    ]
+    blocking_questions = [
+        item for item in (expect.get("open_questions") or [])
+        if isinstance(item, dict) and bool(item.get("blocking"))
+    ]
+    blocking_facts = [
+        item for item in (facts.get("unresolved") or [])
+        if isinstance(item, dict) and bool(item.get("blocking"))
+    ]
+    blocked_reasons: list[str] = []
+    if blocking_dependencies:
+        blocked_reasons.append("blocking unresolved dependencies exist in acts.yaml")
+    if blocking_questions:
+        blocked_reasons.append("blocking open questions exist in expect.yaml")
+    if blocking_facts:
+        blocked_reasons.append("blocking unresolved facts exist in facts.yaml")
+    if any(_normalized_text(item.get("status", "")).lower() == "blocked" for item in runbook):
+        blocked_reasons.append("runbook contains blocked runs")
+    if any(finding.code == "active_run_unmet_dependencies" for finding in findings):
+        blocked_reasons.append("active run still has unmet dependencies")
+
+    stale_reasons: list[str] = []
+    sessions = acts.get("sessions") or []
+    if active_task and isinstance(sessions, list) and sessions and not open_sessions:
+        stale_reasons.append("active_task is set but no open session remains")
+    if any(
+        finding.code
+        in {
+            "active_task_session_mismatch",
+            "contract_session_missing",
+            "contract_task_session_mismatch",
+            "expect_sync_missing_pending_fields",
+            "expect_sync_unknown_run",
+            "expect_sync_stale_pending_fields",
+            "expect_sync_unknown_last_synced_run",
+            "recorded_sessions_missing_verification",
+        }
+        for finding in findings
+    ):
+        stale_reasons.append("acts state has stale session or sync metadata")
+
+    if bool(expect_sync["required"]):
+        progress_status = "sync_pending"
+        reason = (
+            f"expect sync is pending for run '{expect_sync['pending_run_id'] or 'unknown'}'"
+        )
+    elif stale_reasons:
+        progress_status = "stale_state"
+        reason = stale_reasons[0]
+    elif blocked_reasons:
+        progress_status = "blocked"
+        reason = blocked_reasons[0]
+    else:
+        progress_status = "on_track"
+        if active_runs:
+            reason = f"active run {active_runs[0].get('run')} is aligned with current governed state"
+        elif active_phases:
+            reason = f"active phase '{active_phases[0]}' has no deterministic drift signals"
+        else:
+            reason = "no active drift signal was detected from expect.yaml and acts.yaml"
+
+    return {
+        "status": progress_status,
+        "reason": reason,
+        "findings": [
+            {
+                "code": finding.code,
+                "severity": finding.severity,
+                "area": finding.area,
+                "message": finding.message,
+                "hint": finding.hint,
+                "paths": list(finding.paths),
+            }
+            for finding in findings
+        ],
+        "counts": {
+            "warnings": sum(1 for finding in findings if finding.severity == "warning"),
+            "blocking": sum(1 for finding in findings if finding.severity == "blocking"),
+        },
+        "active_phase": active_phases[0] if active_phases else "",
+        "active_run": active_runs[0].get("run") if active_runs else None,
+        "active_task": active_task,
+        "open_session_count": len(open_sessions),
+        "pending_expect_sync": bool(expect_sync["required"]),
+    }
+
+
 def semantic_validate(frame: "FrameModel") -> SemanticValidationResult:
     """Run semantic checks beyond JSON Schema shape validation.
 
@@ -157,6 +601,13 @@ def semantic_validate(frame: "FrameModel") -> SemanticValidationResult:
                     f"facts.unresolved blocking item outstanding: "
                     f"{item.get('item', '?')} — {item.get('reason', 'no reason given')}"
                 )
+
+    consistency = frame_consistency_report(frame)
+    for finding in consistency["findings"]:
+        if finding["severity"] == "blocking":
+            blocking.append(finding["message"])
+        else:
+            warnings.append(finding["message"])
 
     return SemanticValidationResult(blocking=blocking, warnings=warnings)
 

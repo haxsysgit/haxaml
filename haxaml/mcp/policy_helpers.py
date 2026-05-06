@@ -350,5 +350,11 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
             ],
             "visibility_calls_optional": ["haxaml_health", "haxaml_needs", "haxaml_reconcile", "haxaml_state_show"],
         },
+        "lifecycle": {
+            "tool": "haxaml_about",
+            "phase": "about",
+            "depends_on": [],
+            "preferred_next": "haxaml_guidance",
+        },
         "call_budgets": call_budgets,
     }

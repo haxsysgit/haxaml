@@ -10,6 +10,14 @@ def _pick_fields(payload: dict, keys: list[str]) -> dict:
     return {key: payload[key] for key in keys if key in payload}
 
 
+def _compact_lifecycle(payload: dict) -> dict:
+    lifecycle = payload.get("lifecycle", {}) if isinstance(payload.get("lifecycle"), dict) else {}
+    return _pick_fields(
+        lifecycle,
+        ["phase", "depends_on", "preferred_next", "allowed_next"],
+    )
+
+
 def _err(
     tool: str,
     code: str,
@@ -92,7 +100,15 @@ def _compact_context_pack_payload(payload: dict) -> dict:
         compact["context_pack_calls"] = payload.get("context_pack_calls", 0)
         compact["refresh_reason"] = payload.get("refresh_reason", "")
         compact["refresh_reason_category"] = payload.get("refresh_reason_category", "")
+    compact["lifecycle"] = _compact_lifecycle(payload)
     return compact
+
+
+def _normalize_full_success(payload: dict) -> dict:
+    normalized = dict(payload)
+    if isinstance(normalized.get("lifecycle"), dict):
+        normalized["lifecycle"] = _compact_lifecycle(normalized)
+    return normalized
 
 
 def _compact_success(tool: str, payload: dict) -> dict:
@@ -126,17 +142,17 @@ def _compact_success(tool: str, payload: dict) -> dict:
                     payload,
                     [
                         "call_budget",
-                        "visibility_calls_optional",
                         "anti_bloat_policy",
                     ],
                 )
             )
         else:
             compact["policy"] = payload.get("policy", {})
+        compact["lifecycle"] = _compact_lifecycle(payload)
         return compact
 
     if tool == "haxaml_prebuild":
-        return _pick_fields(
+        compact = _pick_fields(
             payload,
             [
                 "message",
@@ -149,34 +165,44 @@ def _compact_success(tool: str, payload: dict) -> dict:
                 "policy",
             ],
         )
+        if "progress_summary" in payload:
+            compact["progress_summary"] = _pick_fields(
+                payload["progress_summary"],
+                ["status", "reason"],
+            )
+        compact["lifecycle"] = _compact_lifecycle(payload)
+        return compact
 
     if tool == "haxaml_about":
         workflow = payload.get("recommended_workflow", {}) if isinstance(payload.get("recommended_workflow"), dict) else {}
-        budgets = payload.get("call_budgets", {}) if isinstance(payload.get("call_budgets"), dict) else {}
-        budget_targets = {
-            key: {
-                "target_calls": value.get("target_calls"),
-                "max_calls_without_visibility": value.get("max_calls_without_visibility"),
-                "max_calls_with_visibility": value.get("max_calls_with_visibility"),
-            }
-            for key, value in budgets.items()
-            if isinstance(value, dict)
-        }
-        return {
-            "message": payload.get("message", ""),
+        lifecycle = payload.get("lifecycle", {}) if isinstance(payload.get("lifecycle"), dict) else {}
+        modes = payload.get("modes", {}) if isinstance(payload.get("modes"), dict) else {}
+        compact = {
+            "message": (
+                "Haxaml is the governance layer. Use the lean flow: "
+                "about -> guidance -> prebuild -> context_pack -> verify -> record -> expect_sync. "
+                "Use utility mode for unrelated work. Next: haxaml_guidance."
+            ),
             "about_version": payload.get("about_version", ""),
-            "project_dir": payload.get("project_dir", ""),
             "onboarding_prompt": payload.get("agent_prompt", {}).get("role", ""),
-            "modes": payload.get("modes", {}),
-            "safety_rule": payload.get("safety_rule", ""),
-            "anti_bloat_policy": payload.get("anti_bloat_policy", {}),
+            "governed_mode": modes.get("governed", ""),
+            "utility_mode": modes.get("utility", ""),
+            "resume_rule": modes.get("resume_rule", ""),
             "lean_workflow": workflow.get("lean_default", []),
             "visibility_calls_optional": workflow.get("visibility_calls_optional", []),
-            "call_budget_targets": budget_targets,
+            "next_step": "haxaml_guidance",
+            "lifecycle": {
+                "tool": lifecycle.get("tool", "haxaml_about"),
+                "phase": lifecycle.get("phase", "about"),
+                "depends_on": lifecycle.get("depends_on", []),
+                "preferred_next": lifecycle.get("preferred_next", "haxaml_guidance"),
+            },
         }
-
+        if "allowed_next" in lifecycle:
+            compact["lifecycle"]["allowed_next"] = lifecycle["allowed_next"]
+        return compact
     if tool == "haxaml_session_start":
-        return _pick_fields(
+        compact = _pick_fields(
             payload,
             [
                 "message",
@@ -190,9 +216,11 @@ def _compact_success(tool: str, payload: dict) -> dict:
                 "recommended_context_packs",
             ],
         )
+        compact["lifecycle"] = _compact_lifecycle(payload)
+        return compact
 
     if tool == "haxaml_session_plan":
-        return _pick_fields(
+        compact = _pick_fields(
             payload,
             [
                 "message",
@@ -206,9 +234,11 @@ def _compact_success(tool: str, payload: dict) -> dict:
                 "retry_policy",
             ],
         )
+        compact["lifecycle"] = _compact_lifecycle(payload)
+        return compact
 
     if tool == "haxaml_session_verify":
-        return _pick_fields(
+        compact = _pick_fields(
             payload,
             [
                 "message",
@@ -221,6 +251,8 @@ def _compact_success(tool: str, payload: dict) -> dict:
                 "follow_ups",
             ],
         )
+        compact["lifecycle"] = _compact_lifecycle(payload)
+        return compact
 
     if tool == "haxaml_session_record":
         compact = _pick_fields(
@@ -239,10 +271,11 @@ def _compact_success(tool: str, payload: dict) -> dict:
             ],
         )
         compact["reconcile"] = _reconcile_summary(payload.get("reconcile"))
+        compact["lifecycle"] = _compact_lifecycle(payload)
         return compact
 
     if tool == "haxaml_expect_sync":
-        return _pick_fields(
+        compact = _pick_fields(
             payload,
             [
                 "message",
@@ -252,6 +285,8 @@ def _compact_success(tool: str, payload: dict) -> dict:
                 "expect_sync",
             ],
         )
+        compact["lifecycle"] = _compact_lifecycle(payload)
+        return compact
 
     if tool == "haxaml_validate":
         compact = _pick_fields(payload, ["message", "valid"])
@@ -274,10 +309,21 @@ def _compact_success(tool: str, payload: dict) -> dict:
             "facts_complete": report.get("facts_complete"),
             "context_tokens": report.get("context_tokens"),
         }
+        if isinstance(report.get("progress_summary"), dict):
+            compact["progress_summary"] = _pick_fields(
+                report["progress_summary"],
+                ["status", "reason"],
+            )
         return compact
 
     if tool == "haxaml_doctor":
-        return _pick_fields(payload, ["message", "has_recommendations", "recommendations", "errors"])
+        compact = _pick_fields(payload, ["message", "has_recommendations", "recommendations", "errors"])
+        if "progress_summary" in payload:
+            compact["progress_summary"] = _pick_fields(
+                payload["progress_summary"],
+                ["status", "reason"],
+            )
+        return compact
 
     if tool == "haxaml_benchmark":
         return _pick_fields(
@@ -305,6 +351,8 @@ def _ok(
     # full version or the compact high-signal summary.
     if detail == DETAIL_SHORT:
         payload = _compact_success(tool, payload)
+    else:
+        payload = _normalize_full_success(payload)
     return {
         "ok": True,
         "tool": tool,

@@ -250,6 +250,29 @@ def _wrapper_deprecation(tool: str, replacement: list[str]) -> dict[str, Any]:
     }
 
 
+def _lifecycle_hint(
+    *,
+    tool: str,
+    phase: str,
+    depends_on: list[str],
+    preferred_next: str,
+    allowed_next: list[str] | None = None,
+    contract_enforced: bool = True,
+) -> dict[str, Any]:
+    """Return compact machine-readable lifecycle dependency metadata."""
+    next_tools = list(allowed_next or ([preferred_next] if preferred_next else []))
+    hint = {
+        "tool": tool,
+        "phase": phase,
+        "depends_on": list(depends_on),
+        "preferred_next": preferred_next,
+        "contract_enforced": contract_enforced,
+    }
+    if next_tools and next_tools != [preferred_next]:
+        hint["allowed_next"] = next_tools
+    return hint
+
+
 def _has_conflict_stop_reason(changes: str, decisions: str, risks: str) -> bool:
     text = f"{changes}\n{decisions}\n{risks}".lower()
     keywords = (
