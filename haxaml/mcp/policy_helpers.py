@@ -146,6 +146,13 @@ def _context_refresh_policy() -> dict[str, Any]:
     }
 
 
+def _compact_context_refresh_policy() -> dict[str, Any]:
+    return {
+        "summary": CONTEXT_PACK_LIMIT_TEXT,
+        "reason_categories": list(CONTEXT_REFRESH_REASON_EXAMPLES.keys()),
+    }
+
+
 def _normalize_context_refresh_reason(refresh_reason: str) -> dict[str, Any]:
     normalized = " ".join(str(refresh_reason or "").strip().split())
     if not normalized:
@@ -323,18 +330,10 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
             "context_pack_limit": CONTEXT_PACK_LIMIT_TEXT,
             "visibility_calls": "health/needs/reconcile/state_show are optional diagnostics, not default loop calls.",
             "retry_behavior": "If the same gate error appears twice, stop retries, fix root cause, then retry once.",
-            "context_refresh_policy": _context_refresh_policy(),
+            "context_refresh_policy": _compact_context_refresh_policy(),
         },
         "recommended_workflow": {
             "phase_summary": "about → guidance → prebuild → context_pack → build → verify → record → expect_sync",
-            "phase_groups": {
-                "about": ["haxaml_about"],
-                "guidance": ["haxaml_guidance"],
-                "prebuild": ["haxaml_prebuild", "haxaml_context_pack"],
-                "build": [],
-                "verify": ["haxaml_session_verify"],
-                "record": ["haxaml_session_record", "haxaml_expect_sync"],
-            },
             "lean_default": [
                 "haxaml_about",
                 "haxaml_guidance",
@@ -345,10 +344,6 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
                 "haxaml_expect_sync",
             ],
             "visibility_calls_optional": ["haxaml_health", "haxaml_needs", "haxaml_reconcile", "haxaml_state_show"],
-            "detail_policy": {
-                "default": "short",
-                "use_full_for": ["deep debugging", "schema inspection", "unexpected workflow behavior"],
-            },
         },
         "call_budgets": call_budgets,
     }

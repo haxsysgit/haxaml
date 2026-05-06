@@ -4,6 +4,21 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to publish, for example v0.6.3"
+        required: true
+        type: string
+      package_target:
+        description: "Which package(s) to publish"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - both
+          - core
+          - mcp
 
 permissions:
   contents: read
@@ -16,20 +31,25 @@ jobs:
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Validate tag and package versions
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           import os
           from haxaml.versioning import validate_release_versions
 
-          snapshot = validate_release_versions(os.environ.get("GITHUB_REF_NAME", ""))
+          ref_name = os.environ.get("INPUT_TAG") or os.environ.get("GITHUB_REF_NAME", "")
+          snapshot = validate_release_versions(ref_name)
           print(
               "Version checks passed for "
               f"{snapshot['core_version']} "
               f"(core={snapshot['core_version']}, mcp={snapshot['mcp_version']})."
           )
           PY
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -46,22 +66,29 @@ jobs:
         run: uv run pytest -q
 
       - name: Build Haxaml package
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'both' || github.event.inputs.package_target == 'core'
         run: uv build
 
       - name: Build Haxaml MCP launcher package
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'both' || github.event.inputs.package_target == 'mcp'
         run: uv build --project packages/haxaml-mcp --out-dir packages/haxaml-mcp/dist
 
-      - name: Check package metadata
-        run: |
-          uv run twine check dist/*
-          uv run twine check packages/haxaml-mcp/dist/*
+      - name: Check Haxaml package metadata
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'both' || github.event.inputs.package_target == 'core'
+        run: uv run twine check dist/*
+
+      - name: Check Haxaml MCP launcher package metadata
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'both' || github.event.inputs.package_target == 'mcp'
+        run: uv run twine check packages/haxaml-mcp/dist/*
 
       - name: Publish Haxaml to PyPI
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'both' || github.event.inputs.package_target == 'core'
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
         run: uv publish --token "$PYPI_TOKEN" dist/*
 
       - name: Publish Haxaml MCP launcher to PyPI
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'both' || github.event.inputs.package_target == 'mcp'
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
         run: uv publish --token "$PYPI_TOKEN" packages/haxaml-mcp/dist/*
