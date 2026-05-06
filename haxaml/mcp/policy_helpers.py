@@ -70,6 +70,7 @@ def _call_budget_for(task_type: str, risk_level: str) -> dict[str, Any]:
     catalog = _workflow_budget_catalog()
     visibility = ["haxaml_health", "haxaml_needs", "haxaml_reconcile", "haxaml_state_show"]
     base = catalog.get(task_type, catalog["implementation"]).copy()
+    # High-risk work gets a slightly larger budget before extra calls count as drift/noise.
     if risk_level == "high":
         base["max_calls_without_visibility"] += 1
         base["max_calls_with_visibility"] += 1
@@ -131,6 +132,7 @@ def _retry_guard_clear(
             continue
         if session_id and not key.endswith(f"::{session_id.strip()}"):
             continue
+        # Clearing without filters resets the whole project's retry guard state.
         if not any([tool, error_code, task, session_id]):
             _RETRY_GUARD_CACHE.pop(key, None)
             continue
@@ -169,6 +171,7 @@ def _normalize_context_refresh_reason(refresh_reason: str) -> dict[str, Any]:
         "stale",
         "scope changed",
     }
+    # Repeat context loads are allowed, but only when the caller can explain what changed.
     if len(lower) < 16 or lower in vague_tokens:
         return {"reason": normalized, "category": "", "too_vague": True}
 
@@ -332,6 +335,8 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
             "retry_behavior": "If the same gate error appears twice, stop retries, fix root cause, then retry once.",
             "context_refresh_policy": _compact_context_refresh_policy(),
         },
+        # Keep the onboarding payload high-signal: enough structure to guide the first call chain,
+        # but not so much detail that "full" mode becomes its own source of context bloat.
         "recommended_workflow": {
             "phase_summary": "about → guidance → prebuild → context_pack → build → verify → record → expect_sync",
             "lean_default": [

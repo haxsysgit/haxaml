@@ -43,6 +43,8 @@ def haxaml_export(
             )
         lines = []
         exported = []
+        # Multi-agent export intentionally writes one canonical file per agent;
+        # we do not try to merge them into a shared target path.
         for a in list_agents():
             path = export_to_file(
                 project_dir,
@@ -179,6 +181,9 @@ def haxaml_upgrade(
             detail=detail_mode,
         )
 
+    # Older uv versions or partial tool installs can make the bulk upgrade fail
+    # even though per-package upgrade/install still works, so we fall back to
+    # one spec at a time before declaring the operation failed.
     failures = []
     executed = []
     for spec in specs:
@@ -275,6 +280,8 @@ def haxaml_mcp_bootstrap(
                     }
                 )
                 continue
+            # Some editor aliases intentionally share the same project-local
+            # config file; only write it once per bootstrap run.
             if str(target_path) in seen_paths:
                 writes.append(
                     {

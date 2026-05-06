@@ -65,7 +65,8 @@ def semantic_validate(frame: "FrameModel") -> SemanticValidationResult:
         if "purpose" not in (goal or {}):
             blocking.append("facts.goal.purpose key is absent")
 
-    # Warn (not block) on empty scaffold values
+    # Warn (not block) on empty scaffold values. A freshly scaffolded project should
+    # still validate, but collaborators should see exactly which values remain placeholders.
     _identity = identity or {}
     _goal = goal or {}
     if "name" in _identity and not str(_identity.get("name") or "").strip():

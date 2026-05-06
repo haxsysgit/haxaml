@@ -143,6 +143,9 @@ def build_recipe(frame: FrameModel, agent: str = "generic") -> PromptRecipe:
 
     sections: list[RecipeSection] = []
 
+    # The recipe is assembled in the same conceptual order the final prompt
+    # should teach the agent: facts first, then profile/rules, then current
+    # state and expectations.
     if frame.has_facts():
         sections.append(RecipeSection(
             key="facts",
@@ -255,6 +258,8 @@ def load_frame(project_dir: str) -> dict:
     Delegates to FrameModel for normalised loading.  Kept for internal
     callers that still use the dict API directly.
     """
+    # This dict-shaped adapter exists for older callers that have not yet moved
+    # to FrameModel directly.
     return FrameModel.load(project_dir).as_dict()
 
 
@@ -603,6 +608,8 @@ def _select_examples(rules: Optional[dict], acts: Optional[dict]) -> tuple[list[
     derived_cap = policy["derived_from_acts_max"]
 
     explicit = _explicit_examples(profile)
+    # Derived examples are intentionally capped so state history does not drown
+    # out author-provided examples.
     derived = _derived_examples_from_acts(acts)[:derived_cap]
     pool = explicit + derived
 
@@ -623,6 +630,8 @@ def _select_examples(rules: Optional[dict], acts: Optional[dict]) -> tuple[list[
             truncated_fields += int(title_trunc) + int(input_trunc) + int(output_trunc)
 
         candidate_size = len(title) + len(input_text) + len(output_text)
+        # Keep the example block on a single total budget instead of letting one
+        # long late example crowd out the rest of the export.
         if selected and total_chars + candidate_size > max_total_chars:
             omitted_for_budget += 1
             break

@@ -45,6 +45,8 @@ class StateManager:
         Writes to a temp file first, then renames. This prevents
         partial writes from corrupting state.
         """
+        # Validate before we take the exclusive lock so obvious schema failures
+        # do not block other readers/writers longer than necessary.
         errors = self._validate_dict(state)
         if errors:
             raise StateError(f"Invalid state: {'; '.join(errors)}")
@@ -194,6 +196,8 @@ class StateManager:
             else:
                 combined_summary = " ".join(summary_parts)
 
+            # Keep only recent runs hot in acts.yaml; older runs stay represented
+            # by a durable summary so agents do not have to reread the full history.
             state["runs"] = kept_runs
             state["compaction"] = {
                 "last_compacted": datetime.now(timezone.utc).isoformat(),

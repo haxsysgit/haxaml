@@ -323,6 +323,8 @@ def _pack_limits(pack: str, policy: dict[str, Any]) -> dict[str, int]:
     if not isinstance(max_chars, int) or max_chars < 40:
         max_chars = 240
 
+    # "minimal" is allowed to further shrink policy defaults, while "full"
+    # can only widen them within deterministic hard caps.
     if resolved == "minimal":
         return {"max_items": min(max_items, 3), "max_chars": min(max_chars, 180)}
     if resolved == "full":
@@ -388,6 +390,8 @@ def _detect_affected_modules(task: str, facts: dict[str, Any], rules: dict[str, 
         seen.add(key)
         unique.append(name)
 
+    # This remains a lightweight heuristic: prefer explicit task-name matches,
+    # otherwise fall back to a small stable list so packs stay predictable.
     matched = [name for name in unique if name.lower() in task_l]
     return matched if matched else unique[:5]
 
@@ -477,6 +481,8 @@ def _limit_list(items: list[Any], max_items: int, max_chars: int) -> tuple[list[
     truncated_items = 0
 
     for idx, item in enumerate(items):
+        # Packs should stay deterministic: once the item budget is spent we stop,
+        # rather than trying to rebalance across later sections.
         if idx >= max_items:
             break
         if isinstance(item, str):

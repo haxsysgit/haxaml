@@ -73,6 +73,8 @@ def _compact_context_pack_payload(payload: dict) -> dict:
     requested_pack = str(meta.get("requested_pack", payload.get("pack", resolved_pack)))
     tokens = int(payload.get("tokens", meta.get("token_count", 0)) or 0)
     message = payload.get("message", f"Context pack ready ({resolved_pack}, {tokens} tokens).")
+    # Short-mode context responses surface the execution facts first and leave the
+    # heavy context body behind. That keeps "context_pack" useful without duplicating the pack text.
     compact = {
         "message": message,
         "pack": resolved_pack,
@@ -97,6 +99,7 @@ def _compact_success(tool: str, payload: dict) -> dict:
     if not isinstance(payload, dict):
         return {}
 
+    # Compactors are per-tool because each tool has a different notion of "high-signal fields".
     if tool == "haxaml_context_pack":
         return _compact_context_pack_payload(payload)
 
@@ -298,6 +301,8 @@ def _ok(
     detail: str = DETAIL_SHORT,
 ) -> dict:
     payload = data or {}
+    # Tools build one rich payload. The response helper decides whether callers get the
+    # full version or the compact high-signal summary.
     if detail == DETAIL_SHORT:
         payload = _compact_success(tool, payload)
     return {

@@ -34,11 +34,15 @@ def _mcp_tools():
     return mcp_server
 
 
+def _result_dict(result):
+    """Return a MCP-style result dict when one is available."""
+    return result if isinstance(result, dict) else None
+
+
 def _is_failure(result: str) -> bool:
-    if isinstance(result, dict):
-        if result.get("ok") is False:
-            return True
-        return False
+    result_dict = _result_dict(result)
+    if result_dict is not None:
+        return result_dict.get("ok") is False
     text = (result or "").strip()
     if not text:
         return False
@@ -48,36 +52,40 @@ def _is_failure(result: str) -> bool:
 
 
 def _result_text(result) -> str:
-    if isinstance(result, dict):
-        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    result_dict = _result_dict(result)
+    if result_dict is not None:
+        data = result_dict.get("data") if isinstance(result_dict.get("data"), dict) else {}
         if data.get("message"):
             return str(data["message"])
-        error = result.get("error") if isinstance(result.get("error"), dict) else {}
+        error = result_dict.get("error") if isinstance(result_dict.get("error"), dict) else {}
         details = error.get("details") if isinstance(error.get("details"), dict) else {}
         if details.get("message"):
             return str(details["message"])
         if error.get("message"):
             return str(error["message"])
-        return json.dumps(result, indent=2, sort_keys=True)
+        return json.dumps(result_dict, indent=2, sort_keys=True)
     return str(result or "")
+
+
+def _echo_tool_result(result, *, exit_on_failure: bool = True) -> None:
+    """Print a MCP/CLI result consistently and optionally fail fast."""
+    click.echo(_result_text(result))
+    if exit_on_failure and _is_failure(result):
+        sys.exit(1)
 
 
 @cli.command()
 @click.argument("directory", default=".")
 def init(directory):
     """Initialize FRAME governance files in DIRECTORY."""
-    result = _mcp_tools().haxaml_init(directory)
-    click.echo(_result_text(result))
+    _echo_tool_result(_mcp_tools().haxaml_init(directory), exit_on_failure=False)
 
 
 @cli.command()
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 def validate(project_dir):
     """Validate FRAME files against schemas."""
-    result = _mcp_tools().haxaml_validate(project_dir)
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    _echo_tool_result(_mcp_tools().haxaml_validate(project_dir))
 
 
 def _resolve(project: Path, new_name: str, old_name: str) -> Path | None:
@@ -89,10 +97,7 @@ def _resolve(project: Path, new_name: str, old_name: str) -> Path | None:
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 def doctor(project_dir):
     """Check facts completeness beyond schema validation."""
-    result = _mcp_tools().haxaml_doctor(project_dir)
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    _echo_tool_result(_mcp_tools().haxaml_doctor(project_dir))
 
 
 @cli.command()
@@ -194,37 +199,28 @@ def adopt(project_dir, from_native, write_files, force):
     if not from_native:
         click.echo("✗ Only native-file adoption is supported right now. Use `haxaml adopt --from-native`.")
         sys.exit(1)
-    result = _mcp_tools().haxaml_adopt(project_dir=project_dir, write=write_files, force=force)
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    _echo_tool_result(_mcp_tools().haxaml_adopt(project_dir=project_dir, write=write_files, force=force))
 
 
 @cli.command("adopt-plan")
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 def adopt_plan(project_dir):
     """Inventory native/context files and show non-destructive adoption plan."""
-    result = _mcp_tools().haxaml_adopt_plan(project_dir=project_dir)
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    _echo_tool_result(_mcp_tools().haxaml_adopt_plan(project_dir=project_dir))
 
 
 @cli.command()
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 def reconcile(project_dir):
     """Check derivation boundaries and return conflict report."""
-    result = _mcp_tools().haxaml_reconcile(project_dir=project_dir)
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    _echo_tool_result(_mcp_tools().haxaml_reconcile(project_dir=project_dir))
 
 
 @cli.command()
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 def needs(project_dir):
     """List what still needs user/agent input before safe building."""
-    click.echo(_result_text(_mcp_tools().haxaml_needs(project_dir)))
+    _echo_tool_result(_mcp_tools().haxaml_needs(project_dir), exit_on_failure=False)
 
 
 @cli.command()
@@ -312,20 +308,14 @@ def state_record(path, task, run_result, changes, decisions, risks):
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 def health(project_dir):
     """Show project health report."""
-    result = _mcp_tools().haxaml_health(project_dir)
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    _echo_tool_result(_mcp_tools().haxaml_health(project_dir))
 
 
 @cli.command()
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 def about(project_dir):
     """Load Haxaml/FRAME onboarding brief (mandatory first call for lifecycle tools)."""
-    result = _mcp_tools().haxaml_about(project_dir=project_dir)
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    _echo_tool_result(_mcp_tools().haxaml_about(project_dir=project_dir))
 
 
 @cli.command()
@@ -342,10 +332,7 @@ def benchmark(facts_path, project_dir, mode):
         click.echo(report)
         return
 
-    result = _mcp_tools().haxaml_benchmark(project_dir=project_dir, mode=mode)
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    _echo_tool_result(_mcp_tools().haxaml_benchmark(project_dir=project_dir, mode=mode))
 
 
 @cli.command()
@@ -353,10 +340,7 @@ def benchmark(facts_path, project_dir, mode):
 @click.option("--task", required=True, help="Task description")
 def guidance(project_dir, task):
     """Generate structured task guidance and clarification needs."""
-    result = _mcp_tools().haxaml_guidance(task=task, project_dir=project_dir)
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    _echo_tool_result(_mcp_tools().haxaml_guidance(task=task, project_dir=project_dir))
 
 
 @cli.command("prebuild")
@@ -365,10 +349,7 @@ def guidance(project_dir, task):
 @click.option("--description", default="", help="Optional task description")
 def prebuild(project_dir, task, description):
     """Classify task, run semantic validation, and open a governed prebuild session."""
-    result = _mcp_tools().haxaml_prebuild(task=task, description=description, project_dir=project_dir)
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    _echo_tool_result(_mcp_tools().haxaml_prebuild(task=task, description=description, project_dir=project_dir))
 
 
 @cli.command("session-start")
@@ -377,10 +358,7 @@ def prebuild(project_dir, task, description):
 @click.option("--description", default="", help="Task description")
 def session_start(project_dir, task, description):
     """Start a governed session manually (advanced/manual path)."""
-    result = _mcp_tools().haxaml_session_start(task=task, description=description, project_dir=project_dir)
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    _echo_tool_result(_mcp_tools().haxaml_session_start(task=task, description=description, project_dir=project_dir))
 
 
 @cli.command("session-plan")
@@ -388,10 +366,7 @@ def session_start(project_dir, task, description):
 @click.option("--session-id", required=True, help="Session ID from session-start")
 def session_plan(project_dir, session_id):
     """Generate a session plan manually after session-start (advanced/manual path)."""
-    result = _mcp_tools().haxaml_session_plan(session_id=session_id, project_dir=project_dir)
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    _echo_tool_result(_mcp_tools().haxaml_session_plan(session_id=session_id, project_dir=project_dir))
 
 
 @cli.command("context-pack")
@@ -403,17 +378,14 @@ def session_plan(project_dir, session_id):
 @click.option("--refresh-reason", default="", help="Reason for repeated context-pack call")
 def context_pack(project_dir, task, pack, no_state, session_id, refresh_reason):
     """Build token-efficient task-specific context pack."""
-    result = _mcp_tools().haxaml_context_pack(
+    _echo_tool_result(_mcp_tools().haxaml_context_pack(
         task=task,
         project_dir=project_dir,
         pack=pack,
         include_state=not no_state,
         session_id=session_id,
         refresh_reason=refresh_reason,
-    )
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    ))
 
 
 @cli.command("verify")
@@ -427,7 +399,7 @@ def context_pack(project_dir, task, pack, no_state, session_id, refresh_reason):
 @click.option("--assumption", "assumptions", multiple=True, help="Assumption made (repeatable)")
 def verify(project_dir, task, session_id, summary, inspected_context, changed_files, unresolved_questions, assumptions):
     """Run reflective verification before recording completion."""
-    result = _mcp_tools().haxaml_session_verify(
+    _echo_tool_result(_mcp_tools().haxaml_session_verify(
         task=task,
         project_dir=project_dir,
         session_id=session_id,
@@ -436,10 +408,7 @@ def verify(project_dir, task, session_id, summary, inspected_context, changed_fi
         unresolved_questions=list(unresolved_questions),
         assumptions=list(assumptions),
         summary=summary,
-    )
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    ))
 
 
 @cli.command("session-record")
@@ -453,7 +422,7 @@ def verify(project_dir, task, session_id, summary, inspected_context, changed_fi
 @click.option("--risks", default="", help="Identified risks")
 def session_record(project_dir, task, run_result, session_id, changes, decisions, risks):
     """Record session completion (verification gate enforced)."""
-    result = _mcp_tools().haxaml_session_record(
+    _echo_tool_result(_mcp_tools().haxaml_session_record(
         task=task,
         result=run_result,
         project_dir=project_dir,
@@ -461,10 +430,7 @@ def session_record(project_dir, task, run_result, session_id, changes, decisions
         changes=changes,
         decisions=decisions,
         risks=risks,
-    )
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    ))
 
 
 @cli.command()
@@ -473,10 +439,7 @@ def session_record(project_dir, task, run_result, session_id, changes, decisions
 @click.option("--description", default="", help="Task description")
 def run(project_dir, task, description):
     """Start an execution run (sets active task, validates preflight)."""
-    result = _mcp_tools().haxaml_run(task=task, description=description, project_dir=project_dir)
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
+    _echo_tool_result(_mcp_tools().haxaml_run(task=task, description=description, project_dir=project_dir))
 
 
 @cli.command()
@@ -490,7 +453,7 @@ def run(project_dir, task, description):
 @click.option("--risks", default="", help="Identified risks")
 def done(project_dir, task, run_result, session_id, changes, decisions, risks):
     """Complete an execution run and record results."""
-    result = _mcp_tools().haxaml_done(
+    _echo_tool_result(_mcp_tools().haxaml_done(
         task=task,
         result=run_result,
         session_id=session_id,
@@ -498,8 +461,7 @@ def done(project_dir, task, run_result, session_id, changes, decisions, risks):
         decisions=decisions,
         risks=risks,
         project_dir=project_dir,
-    )
-    click.echo(_result_text(result))
+    ), exit_on_failure=False)
 
 
 @cli.command()

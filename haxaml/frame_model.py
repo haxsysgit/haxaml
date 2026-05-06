@@ -55,6 +55,8 @@ class FrameModel:
                 return None
             try:
                 with open(path, encoding="utf-8") as f:
+                    # Empty YAML files are treated as empty dicts so downstream selectors can
+                    # distinguish "file exists but blank" from "file missing entirely".
                     return yaml.safe_load(f) or {}
             except Exception as exc:
                 load_errors.append(f"{name}: {exc}")

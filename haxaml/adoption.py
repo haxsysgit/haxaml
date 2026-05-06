@@ -121,6 +121,8 @@ def analyze_adoption_instructions(plan: AdoptionPlan) -> dict:
             }
         )
 
+    # Duplicates look for the same normalized rule repeated across sources,
+    # while conflicts look for the same topic expressed with opposing polarity.
     topic_groups: dict[str, list[InstructionDirective]] = {}
     for item in directives:
         if item.topic:
@@ -230,6 +232,8 @@ def write_adoption_scaffold(plan: AdoptionPlan, force: bool = False) -> list[Pat
     for filename, data in templates.items():
         path = frame_path(project, filename)
         existing = resolve_frame_file(project, filename)
+        # Adoption should not silently overwrite already-curated FRAME unless
+        # the caller explicitly chose a forceful reset.
         if existing and not force:
             continue
         _write_yaml(path, data)
@@ -351,6 +355,8 @@ def _readme_agent_sections(project: Path) -> list[tuple[str, str]]:
     def _flush() -> None:
         nonlocal current_heading, current_lines
         heading = current_heading.strip()
+        # README is only treated as agent evidence when the heading itself
+        # signals agent instructions; generic prose should not become rules.
         if heading and _is_agent_heading(heading):
             scope = f"README.md#{_slugify(heading)}"
             sections.append((scope, "\n".join(current_lines).strip()))
@@ -418,6 +424,8 @@ def _extract_directives(content: str) -> list[dict[str, str]]:
             continue
         cleaned = re.sub(r"^([-*+]\s+|\d+\.\s+|\[[ xX]\]\s+)", "", stripped).strip()
         lowered = cleaned.lower()
+        # The adoption scan intentionally stays conservative: if a line does not
+        # contain directive markers, we do not treat it as governance evidence.
         if not any(marker in lowered for marker in _DIRECTIVE_MARKERS):
             continue
         normalized = _normalize_rule(cleaned)
@@ -442,6 +450,8 @@ def _is_negative(text: str) -> bool:
 
 def _topic_from_rule(rule: str) -> str:
     topic = rule
+    # Strip modal phrasing so "must update acts" and "do not update acts" can
+    # be compared as the same topic with different polarity.
     topic = re.sub(r"\b(do not|don't|never|must not|cannot|can't|must|should|always|only)\b", "", topic)
     topic = re.sub(r"\s+", " ", topic).strip(" .;,:")
     return topic or rule

@@ -89,6 +89,8 @@ def _guidance_eval(task: str, frame: dict[str, Any]) -> dict[str, Any]:
     required_questions: list[str] = []
     suggested_questions: list[str] = []
 
+    # Guidance treats any blocking unresolved item anywhere in FRAME as missing context
+    # for the current task. This keeps the tool focused on project readiness, not just task text.
     unresolved_facts = [
         item for item in (facts.get("unresolved", []) or [])
         if isinstance(item, dict) and item.get("blocking")
@@ -194,6 +196,8 @@ def _session_read_policy(frame: dict[str, Any]) -> dict[str, Any]:
     if frame.get("map"):
         canonical.append(".haxaml/map.yaml")
 
+    # Early governed sessions pay the full read cost so the agent learns the project.
+    # Later sessions can usually rely on the stable high-signal subset.
     needs_full_reads = sessions_started < onboarding
     required_reads = canonical if needs_full_reads else [".haxaml/facts.yaml", ".haxaml/rules.yaml"]
     return {
@@ -281,6 +285,7 @@ def _lifecycle_contract_state(state: dict[str, Any]) -> dict[str, Any]:
     raw = state.get("lifecycle_contract", {}) if isinstance(state, dict) else {}
     if not isinstance(raw, dict):
         raw = {}
+    # Normalize required_next aggressively so tool gates can reason against one shape only.
     required_next = raw.get("required_next", [])
     if isinstance(required_next, str):
         required_next = [required_next]
@@ -290,6 +295,7 @@ def _lifecycle_contract_state(state: dict[str, Any]) -> dict[str, Any]:
     for item in required_next:
         if isinstance(item, str) and item.strip():
             normalized_required.append(item.strip())
+    # Treat missing/empty contract state as "about has not happened yet".
     if not normalized_required:
         normalized_required = ["haxaml_about"]
     return {
@@ -337,6 +343,8 @@ def _contract_touch(
     updated["phase"] = phase
     updated["required_next"] = list(required_next)
     updated["last_tool"] = tool_name
+    # Keep existing session/task context unless the caller explicitly replaces it.
+    # That lets small lifecycle transitions advance the contract without blanking history.
     if active_session_id or updated.get("active_session_id"):
         updated["active_session_id"] = active_session_id
     if active_task or updated.get("active_task"):
@@ -372,6 +380,7 @@ def _git_changed_files(project_dir: str) -> list[str]:
     for line in (result.stdout or "").splitlines():
         if not line.strip():
             continue
+        # Porcelain output prefixes each line with XY status codes; the path starts after that.
         path_part = line[3:].strip() if len(line) > 3 else ""
         if " -> " in path_part:
             path_part = path_part.split(" -> ", 1)[1].strip()
@@ -432,6 +441,8 @@ def _has_governed_evidence_for_changes(state: dict[str, Any], changed_files: lis
     if not changed_files:
         return True
 
+    # An active governed session is enough evidence that the repo is in a live governed flow,
+    # even before file-level verification evidence has been written.
     sessions = state.get("sessions", []) if isinstance(state, dict) else []
     if isinstance(sessions, list):
         for session in sessions:
@@ -442,6 +453,7 @@ def _has_governed_evidence_for_changes(state: dict[str, Any], changed_files: lis
             if str(session.get("status", "")).strip() in {"started", "planned", "verified", "recorded"}:
                 return True
 
+    # When no active session can justify the changes, fall back to file-level verification evidence.
     verifications = state.get("verifications", []) if isinstance(state, dict) else []
     evidence_files: set[str] = set()
     if isinstance(verifications, list):

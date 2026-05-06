@@ -25,6 +25,59 @@ def _contract_violation(
     return _err(tool, "lifecycle_contract_violation", reason, payload)
 
 
+def _missing_acts_error(tool: str) -> dict:
+    return _err(tool, "missing_acts", "acts.yaml not found")
+
+
+def _load_state_or_error(tool: str, project_dir: str) -> tuple[Optional[StateManager], Optional[dict], Optional[dict]]:
+    """Load acts state once and keep the call-sites focused on lifecycle logic."""
+    sm, _ = _get_state_manager(project_dir)
+    if not sm:
+        return None, None, _missing_acts_error(tool)
+    return sm, sm.read(), None
+
+
+def _active_session_violation(
+    tool: str,
+    *,
+    project_dir: str,
+    contract: dict[str, Any],
+    session_id: str,
+    reason: str,
+) -> dict:
+    return _contract_violation(
+        tool,
+        project_dir=project_dir,
+        contract=contract,
+        reason=reason,
+        details={"requested_session_id": session_id},
+    )
+
+
+def _latest_verification_for_session(
+    state: dict[str, Any],
+    *,
+    session_id: str,
+    task: str,
+) -> tuple[Optional[str], str]:
+    """Return the latest verification verdict/id pair for the current session task."""
+    latest_verdict: Optional[str] = None
+    latest_verification_id = ""
+    verifications = state.get("verifications", []) if isinstance(state, dict) else []
+    if isinstance(verifications, list):
+        for item in reversed(verifications):
+            if not isinstance(item, dict):
+                continue
+            if session_id and item.get("session_id") != session_id:
+                continue
+            if item.get("task") != task:
+                continue
+            latest_verdict = item.get("verdict")
+            latest_verification_id = str(item.get("id", ""))
+            break
+    return latest_verdict, latest_verification_id
+
+
 @mcp_app.tool()
 def haxaml_about(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Return onboarding context for Haxaml and FRAME. Call once per active agent/MCP session."""
@@ -50,6 +103,8 @@ def haxaml_about(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
         state["about"] = about
         contract = _lifecycle_contract_state(state)
         required_next = contract.get("required_next", ["haxaml_about"])
+        # Fresh or idle contracts are advanced to guidance; otherwise we only refresh
+        # the acknowledgment metadata and preserve the active lifecycle position.
         if required_next == ["haxaml_about"] or str(contract.get("phase", "idle")) in {"idle", ""}:
             contract = _contract_touch(
                 contract,
@@ -103,10 +158,9 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
 
     guidance = _guidance_eval(task, frame)
     if guidance["execution_mode"] == "governed":
-        sm, _ = _get_state_manager(project_dir)
-        if not sm:
-            return _err("haxaml_guidance", "missing_acts", "acts.yaml not found")
-        state = sm.read()
+        sm, state, state_err = _load_state_or_error("haxaml_guidance", project_dir)
+        if state_err:
+            return state_err
         contract = _lifecycle_contract_state(state)
         if not _contract_allows(contract, "haxaml_guidance"):
             return _contract_violation(
@@ -148,6 +202,7 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
         msg_lines.append("Missing context:")
         msg_lines.extend([f"  - {m}" for m in guidance["missing_context"]])
 
+    # Keep the payload split between human-readable summary text and machine-usable fields.
     payload = {
         "message": "\n".join(msg_lines),
         "execution_mode": execution_mode,
@@ -176,6 +231,7 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
     else:
         payload["policy"] = _utility_mode_policy()
     if guidance["execution_mode"] == "governed" and sm:
+        # Guidance claims ownership of the active task before prebuild/session-start continue.
         updated = _contract_touch(
             contract,
             phase="guidance",
@@ -227,10 +283,9 @@ def haxaml_session_start(
     if mode_eval["mode"] == "utility":
         return _utility_mode_error("haxaml_session_start", project_dir, task, description)
 
-    sm, _ = _get_state_manager(project_dir)
-    if not sm:
-        return _err("haxaml_session_start", "missing_acts", "acts.yaml not found")
-    state = sm.read()
+    sm, state, state_err = _load_state_or_error("haxaml_session_start", project_dir)
+    if state_err:
+        return state_err
     contract = _lifecycle_contract_state(state)
     if not _contract_allows(contract, "haxaml_session_start"):
         return _contract_violation(
@@ -361,11 +416,9 @@ def haxaml_session_plan(
     if detail_err:
         return detail_err
 
-    sm, _ = _get_state_manager(project_dir)
-    if not sm:
-        return _err("haxaml_session_plan", "missing_acts", "acts.yaml not found")
-
-    state = sm.read()
+    sm, state, state_err = _load_state_or_error("haxaml_session_plan", project_dir)
+    if state_err:
+        return state_err
     contract = _lifecycle_contract_state(state)
     if not _contract_allows(contract, "haxaml_session_plan"):
         return _contract_violation(
@@ -376,12 +429,12 @@ def haxaml_session_plan(
             retry_after=contract.get("required_next", []),
         )
     if contract.get("active_session_id", "") != session_id:
-        return _contract_violation(
+        return _active_session_violation(
             "haxaml_session_plan",
             project_dir=project_dir,
             contract=contract,
+            session_id=session_id,
             reason="Session plan must target the active governed session.",
-            details={"requested_session_id": session_id},
         )
     session = _find_session(state, session_id)
     if not session:
@@ -481,11 +534,10 @@ def haxaml_context_pack(
             },
         )
 
-    sm, _ = _get_state_manager(project_dir)
-    if not sm:
-        return _err("haxaml_context_pack", "missing_acts", "acts.yaml not found")
+    sm, state, state_err = _load_state_or_error("haxaml_context_pack", project_dir)
+    if state_err:
+        return state_err
     warnings = []
-    state = sm.read() if sm else {}
     contract = _lifecycle_contract_state(state)
     required_next = contract.get("required_next", [])
     allow_refresh_repeat = (
@@ -502,12 +554,12 @@ def haxaml_context_pack(
             retry_after=contract.get("required_next", []),
         )
     if contract.get("active_session_id", "") != session_id:
-        return _contract_violation(
+        return _active_session_violation(
             "haxaml_context_pack",
             project_dir=project_dir,
             contract=contract,
+            session_id=session_id,
             reason="Context pack must target the active governed session.",
-            details={"requested_session_id": session_id},
         )
     prior_calls = 0
     refresh_info = _normalize_context_refresh_reason(refresh_reason)
@@ -691,11 +743,10 @@ def haxaml_session_verify(
     verification_id = f"verify-{uuid.uuid4().hex[:10]}"
     timestamp = _now_iso()
 
-    sm, _ = _get_state_manager(project_dir)
-    if not sm:
-        return _err("haxaml_session_verify", "missing_acts", "acts.yaml not found")
+    sm, state, state_err = _load_state_or_error("haxaml_session_verify", project_dir)
+    if state_err:
+        return state_err
     warnings = []
-    state = sm.read()
     contract = _lifecycle_contract_state(state)
     if not _contract_allows(contract, "haxaml_session_verify"):
         return _contract_violation(
@@ -706,12 +757,12 @@ def haxaml_session_verify(
             retry_after=contract.get("required_next", []),
         )
     if contract.get("active_session_id", "") != session_id:
-        return _contract_violation(
+        return _active_session_violation(
             "haxaml_session_verify",
             project_dir=project_dir,
             contract=contract,
+            session_id=session_id,
             reason="Session verification must target the active governed session.",
-            details={"requested_session_id": session_id},
         )
     verifications = state.get("verifications", [])
     if not isinstance(verifications, list):
@@ -831,26 +882,16 @@ def haxaml_session_record(
     lifecycle = _rules_policy(rules, "lifecycle", {"enforce_verify_before_record": True})
     enforce_verify = bool(lifecycle.get("enforce_verify_before_record", True))
 
-    sm, _ = _get_state_manager(project_dir)
-    if not sm:
-        return _err("haxaml_session_record", "missing_acts", "acts.yaml not found")
-    state = sm.read()
+    sm, state, state_err = _load_state_or_error("haxaml_session_record", project_dir)
+    if state_err:
+        return state_err
     contract = _lifecycle_contract_state(state)
 
-    latest_verdict = None
-    latest_verification_id = ""
-    verifications = state.get("verifications", []) if isinstance(state, dict) else []
-    if isinstance(verifications, list):
-        for item in reversed(verifications):
-            if not isinstance(item, dict):
-                continue
-            if session_id and item.get("session_id") != session_id:
-                continue
-            if item.get("task") != task:
-                continue
-            latest_verdict = item.get("verdict")
-            latest_verification_id = str(item.get("id", ""))
-            break
+    latest_verdict, latest_verification_id = _latest_verification_for_session(
+        state,
+        session_id=session_id,
+        task=task,
+    )
     required_next = contract.get("required_next", [])
     if not _contract_allows(contract, "haxaml_session_record"):
         if (
@@ -881,12 +922,12 @@ def haxaml_session_record(
                 retry_after=required_next if isinstance(required_next, list) else [],
             )
     if contract.get("active_session_id", "") != session_id:
-        return _contract_violation(
+        return _active_session_violation(
             "haxaml_session_record",
             project_dir=project_dir,
             contract=contract,
+            session_id=session_id,
             reason="Session record must target the active governed session.",
-            details={"requested_session_id": session_id},
         )
     expect_sync = _expect_sync_state(state)
     if expect_sync["required"]:
@@ -1050,11 +1091,9 @@ def haxaml_expect_sync(
     if detail_err:
         return detail_err
 
-    sm, _ = _get_state_manager(project_dir)
-    if not sm:
-        return _err("haxaml_expect_sync", "missing_acts", "acts.yaml not found")
-
-    state = sm.read()
+    sm, state, state_err = _load_state_or_error("haxaml_expect_sync", project_dir)
+    if state_err:
+        return state_err
     contract = _lifecycle_contract_state(state)
     if not _contract_allows(contract, "haxaml_expect_sync"):
         return _contract_violation(
