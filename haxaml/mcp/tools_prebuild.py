@@ -3,12 +3,10 @@
 Lifecycle position:
     about -> guidance -> prebuild -> context_pack -> build -> verify -> record -> expect_sync
 
-haxaml_prebuild replaces the recommended use of session_start + session_plan.
-It classifies the task, runs semantic validation, produces a structured readiness
-report, starts a governed session internally, and advances the lifecycle contract
-to allow haxaml_context_pack.
-
-The lower-level session_start + session_plan tools still exist for advanced flows.
+haxaml_prebuild is the public governed entrypoint. It classifies the task, runs
+semantic validation, produces a structured readiness report, starts a governed
+session internally, and advances the lifecycle contract to allow
+haxaml_context_pack.
 """
 
 from __future__ import annotations
@@ -38,10 +36,10 @@ from haxaml.mcp.base import (
     _ok,
     _persist_state,
     _require_about,
-    _session_read_policy,
     _set_lifecycle_contract_state,
     _utility_mode_eval,
     _utility_mode_error,
+    _utility_mode_policy,
     mcp_app,
     DETAIL_SHORT,
     ExecutionRunner,
@@ -222,8 +220,6 @@ def haxaml_prebuild(
             state = sm.read()
             contract = _lifecycle_contract_state(state)
 
-            # Allow prebuild after guidance (required_next = ["haxaml_session_start"])
-            # or after about in projects that skipped guidance
             if not _contract_allows(contract, "haxaml_prebuild"):
                 # Check if guidance has been called
                 phase = contract.get("phase", "")
@@ -250,7 +246,13 @@ def haxaml_prebuild(
                 warnings.append(f"Runner start skipped: {exc}")
 
             now = _now_iso()
-            frame_dict = frame.as_dict()
+            frame_dict = {
+                "facts": frame.facts,
+                "rules": frame.rules,
+                "acts": frame.acts,
+                "map": frame.map,
+                "expect": frame.expect,
+            }
             guidance = _guidance_eval(task, frame_dict)
 
             sessions = state.get("sessions", [])

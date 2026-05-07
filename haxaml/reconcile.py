@@ -217,8 +217,8 @@ def reconcile_derivation(project_dir: str | Path) -> dict[str, Any]:
     project = Path(project_dir).resolve()
     assessment = evaluate_map_complexity(project)
     map_path = resolve_frame_file(project, "map.yaml")
-    rules_path = resolve_frame_file(project, "rules.yaml", "mind.yaml")
-    facts_path = resolve_frame_file(project, "facts.yaml", "brain.yaml")
+    rules_path = resolve_frame_file(project, "rules.yaml")
+    facts_path = resolve_frame_file(project, "facts.yaml")
     expect_path = resolve_frame_file(project, "expect.yaml")
 
     rules = load_yaml(str(rules_path)) if rules_path else {}

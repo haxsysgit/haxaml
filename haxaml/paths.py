@@ -1,4 +1,4 @@
-"""Shared path resolution for FRAME files."""
+"""Shared canonical path resolution for FRAME files."""
 
 from pathlib import Path
 
@@ -16,28 +16,10 @@ def frame_path(project_dir: str | Path, filename: str) -> Path:
     return frame_dir(project_dir) / filename
 
 
-def resolve_frame_file(project_dir: str | Path, filename: str,
-                       legacy_filename: str | None = None) -> Path | None:
-    """Resolve a FRAME file across new, root, and legacy locations.
-
-    Search order:
-    1. .haxaml/<filename>        canonical location
-    2. ./<filename>              root compatibility
-    3. .haxaml/<legacy_filename> legacy compatibility
-    4. ./<legacy_filename>       legacy root compatibility
-    """
+def resolve_frame_file(project_dir: str | Path, filename: str) -> Path | None:
+    """Resolve a canonical FRAME file inside .haxaml/."""
     project = Path(project_dir)
-    candidates = [
-        frame_path(project, filename),
-        project / filename,
-    ]
-    if legacy_filename:
-        candidates.extend([
-            frame_path(project, legacy_filename),
-            project / legacy_filename,
-        ])
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
+    candidate = frame_path(project, filename)
+    if candidate.exists():
+        return candidate
     return None

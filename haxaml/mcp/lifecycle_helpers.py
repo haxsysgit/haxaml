@@ -172,46 +172,9 @@ def _guidance_eval(task: str, frame: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _session_read_policy(frame: dict[str, Any]) -> dict[str, Any]:
-    rules = frame.get("rules") or {}
-    acts = frame.get("acts") or {}
-    lifecycle = _rules_policy(
-        rules,
-        "lifecycle",
-        {
-            "onboarding_full_reads": 5,
-            "enforce_verify_before_record": True,
-        },
-    )
-    onboarding = lifecycle.get("onboarding_full_reads", 5)
-    if not isinstance(onboarding, int) or onboarding < 1:
-        onboarding = 5
-
-    context_compaction = acts.get("context_compaction", {}) if isinstance(acts, dict) else {}
-    sessions_started = context_compaction.get("sessions_started", 0)
-    if not isinstance(sessions_started, int) or sessions_started < 0:
-        sessions_started = 0
-
-    canonical = [".haxaml/facts.yaml", ".haxaml/rules.yaml", ".haxaml/acts.yaml", ".haxaml/expect.yaml"]
-    if frame.get("map"):
-        canonical.append(".haxaml/map.yaml")
-
-    # Early governed sessions pay the full read cost so the agent learns the project.
-    # Later sessions can usually rely on the stable high-signal subset.
-    needs_full_reads = sessions_started < onboarding
-    required_reads = canonical if needs_full_reads else [".haxaml/facts.yaml", ".haxaml/rules.yaml"]
-    return {
-        "needs_full_reads": needs_full_reads,
-        "required_reads": required_reads,
-        "sessions_started": sessions_started,
-        "onboarding_full_reads": onboarding,
-        "enforce_verify_before_record": bool(lifecycle.get("enforce_verify_before_record", True)),
-    }
-
-
 def _get_state_manager(project_dir: str) -> tuple[Optional[StateManager], Optional[Path]]:
     p = Path(project_dir).resolve()
-    acts_path = resolve_frame_file(p, "acts.yaml", "state.yaml")
+    acts_path = resolve_frame_file(p, "acts.yaml")
     if not acts_path:
         return None, None
     try:
@@ -238,16 +201,6 @@ def _find_session(state: dict[str, Any], session_id: str) -> Optional[dict[str, 
         if isinstance(session, dict) and session.get("id") == session_id:
             return session
     return None
-
-
-def _wrapper_deprecation(tool: str, replacement: list[str]) -> dict[str, Any]:
-    return {
-        "tool": tool,
-        "status": "deprecated",
-        "replacement": replacement,
-        "removal_target": "0.7.0",
-        "message": f"{tool} is a compatibility wrapper and is planned for removal in 0.7.0.",
-    }
 
 
 def _lifecycle_hint(

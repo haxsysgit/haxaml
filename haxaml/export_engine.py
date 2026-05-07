@@ -139,7 +139,6 @@ def build_recipe(frame: FrameModel, agent: str = "generic") -> PromptRecipe:
 
     config = AGENT_CONFIGS[agent]
     style = config["style"]
-    frame_dict = frame.as_dict()
 
     sections: list[RecipeSection] = []
 
@@ -150,22 +149,22 @@ def build_recipe(frame: FrameModel, agent: str = "generic") -> PromptRecipe:
         sections.append(RecipeSection(
             key="facts",
             title="Project Facts",
-            content=_render_facts(frame_dict["facts"], style),
+            content=_render_facts(frame.facts or {}, style),
         ))
 
-    profile = _agent_profile(frame_dict.get("rules"))
+    profile = _agent_profile(frame.rules)
     if profile:
         sections.append(RecipeSection(
             key="persona",
             title="Working Profile",
-            content=_render_agent_persona(frame_dict.get("rules")),
+            content=_render_agent_persona(frame.rules),
         ))
         sections.append(RecipeSection(
             key="reasoning",
             title="Reasoning & Response Style",
-            content=_render_agent_reasoning_policy(frame_dict.get("rules")),
+            content=_render_agent_reasoning_policy(frame.rules),
         ))
-        few_shot = _render_agent_few_shot_examples(frame_dict.get("rules"), frame_dict.get("acts"))
+        few_shot = _render_agent_few_shot_examples(frame.rules, frame.acts)
         if few_shot:
             sections.append(RecipeSection(
                 key="examples",
@@ -177,28 +176,28 @@ def build_recipe(frame: FrameModel, agent: str = "generic") -> PromptRecipe:
         sections.append(RecipeSection(
             key="rules",
             title="Rules & Conventions",
-            content=_render_rules(frame_dict["rules"], style),
+            content=_render_rules(frame.rules or {}, style),
         ))
 
     if frame.has_acts():
         sections.append(RecipeSection(
             key="acts",
             title="Current State",
-            content=_render_acts(frame_dict["acts"], style),
+            content=_render_acts(frame.acts or {}, style),
         ))
 
     if frame.has_map():
         sections.append(RecipeSection(
             key="map",
             title="Module Map",
-            content=_render_map(frame_dict["map"], style),
+            content=_render_map(frame.map or {}, style),
         ))
 
     if frame.has_expect():
         sections.append(RecipeSection(
             key="expect",
             title="What's Expected Next",
-            content=_render_expect(frame_dict["expect"], style),
+            content=_render_expect(frame.expect or {}, style),
         ))
 
     recipe = PromptRecipe(
@@ -221,10 +220,6 @@ def _render_recipe(recipe: PromptRecipe) -> str:
     return "\n\n".join(parts)
 
 
-# ---------------------------------------------------------------------------
-# Backward-compat helpers kept for internal callers
-# ---------------------------------------------------------------------------
-
 DEFAULT_EXAMPLE_POLICY = {
     "max_examples": 4,
     "max_input_chars": 320,
@@ -242,25 +237,6 @@ def _load_yaml_safe(path: Path) -> Optional[dict]:
         return None
     with open(path) as f:
         return yaml.safe_load(f) or {}
-
-
-def _resolve_frame_file(project: Path, new_name: str, old_name: str) -> Optional[Path]:
-    """Resolve FRAME filename with backward compat."""
-    return resolve_frame_file(project, new_name, old_name)
-
-
-def load_frame(project_dir: str) -> dict:
-    """Load all FRAME files from a project directory.
-
-    Returns a dict with keys: facts, rules, acts, map, expect.
-    Missing files are None.
-
-    Delegates to FrameModel for normalised loading.  Kept for internal
-    callers that still use the dict API directly.
-    """
-    # This dict-shaped adapter exists for older callers that have not yet moved
-    # to FrameModel directly.
-    return FrameModel.load(project_dir).as_dict()
 
 
 def _section(title: str, content: str) -> str:

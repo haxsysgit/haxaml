@@ -17,15 +17,13 @@ from haxaml.export_engine import export_to_file, list_agents, AGENT_CONFIGS
 
 
 FRAME_FILES = ["facts.yaml", "rules.yaml", "acts.yaml", "expect.yaml", "map.yaml"]
-LEGACY_NAMES = {"facts.yaml": "brain.yaml", "rules.yaml": "mind.yaml", "acts.yaml": "state.yaml"}
 
 
 def _frame_mtime(project_dir: Path) -> Optional[float]:
     """Get the newest mtime across all FRAME files."""
     newest = None
     for name in FRAME_FILES:
-        legacy = LEGACY_NAMES.get(name)
-        path = resolve_frame_file(project_dir, name, legacy) if legacy else resolve_frame_file(project_dir, name)
+        path = resolve_frame_file(project_dir, name)
         if path and path.exists():
             mt = path.stat().st_mtime
             if newest is None or mt > newest:

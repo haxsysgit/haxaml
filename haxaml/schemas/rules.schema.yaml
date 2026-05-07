@@ -49,7 +49,7 @@ properties:
     properties:
       default_pack:
         type: string
-        enum: [balanced, standard, minimal, full]
+        enum: [balanced, minimal, full]
       max_items_per_section:
         type: integer
         minimum: 1

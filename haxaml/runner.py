@@ -49,15 +49,11 @@ class ExecutionRunner:
 
     def __init__(self, project_dir: str):
         self.project_dir = Path(project_dir).resolve()
-        self.facts_path = self._resolve("facts.yaml", "brain.yaml")
-        self.acts_path = self._resolve("acts.yaml", "state.yaml")
+        self.facts_path = resolve_frame_file(self.project_dir, "facts.yaml") or (self.project_dir / ".haxaml" / "facts.yaml")
+        self.acts_path = resolve_frame_file(self.project_dir, "acts.yaml") or (self.project_dir / ".haxaml" / "acts.yaml")
 
         if not self.facts_path.exists():
             raise FileNotFoundError(f"facts.yaml not found at {self.project_dir}")
-
-    def _resolve(self, new_name: str, old_name: str) -> Path:
-        """Resolve FRAME filename with backward compat."""
-        return resolve_frame_file(self.project_dir, new_name, old_name) or self.project_dir / old_name
 
     @property
     def state_manager(self) -> Optional[StateManager]:

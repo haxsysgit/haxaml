@@ -1,11 +1,6 @@
-"""Compatibility import surface for MCP tools/resources.
+"""Shared MCP imports and helper surface for tool/resource modules."""
 
-This module intentionally re-exports legacy names so `tools_*` and `resources`
-modules can keep `from haxaml.mcp.base import *` while implementation details
-move into focused helper modules.
-"""
-
-# Stdlib names kept for wildcard-import compatibility in tool modules.
+# Stdlib names shared across MCP modules.
 import difflib
 import json
 import os
@@ -20,10 +15,9 @@ from typing import Any, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-# FrameModel — normalized FRAME loader. Use this in new code.
 from haxaml.frame_model import FrameModel
 
-# Core haxaml imports kept for wildcard-import compatibility.
+# Core haxaml imports shared across MCP modules.
 from haxaml.adoption import (
     analyze_adoption_instructions,
     render_adoption_report,
@@ -109,8 +103,6 @@ from haxaml.mcp.lifecycle_helpers import (
     _persist_state,
     _rules_policy,
     _set_lifecycle_contract_state,
-    _session_read_policy,
-    _wrapper_deprecation,
 )
 from haxaml.mcp.policy_helpers import (
     CONTEXT_PACK_LIMIT_TEXT,
@@ -143,15 +135,9 @@ from haxaml.mcp.response_helpers import (
     _reconcile_summary,
 )
 
-# Export all shared symbols (including single-underscore helpers) so tool and
-# resource modules can import the legacy helper surface directly.
+# Export shared symbols for MCP modules that still use the common import surface.
 __all__ = [
     name
     for name in globals()
     if not (name.startswith("__") and name.endswith("__"))
 ]
-
-# Convenience: route old load_frame_data callers through FrameModel.as_dict().
-# This keeps all existing tool call-sites working without change.
-def load_frame_data(project_dir: str = ".") -> dict:  # type: ignore[override]
-    return FrameModel.load(project_dir).as_dict()

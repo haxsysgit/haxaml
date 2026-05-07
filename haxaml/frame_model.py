@@ -48,8 +48,8 @@ class FrameModel:
         load_errors: list[str] = []
         missing_files: list[str] = []
 
-        def _load(name: str, legacy: str | None = None) -> dict[str, Any] | None:
-            path = resolve_frame_file(project, name, legacy)
+        def _load(name: str) -> dict[str, Any] | None:
+            path = resolve_frame_file(project, name)
             if path is None:
                 missing_files.append(name)
                 return None
@@ -62,9 +62,9 @@ class FrameModel:
                 load_errors.append(f"{name}: {exc}")
                 return None
 
-        facts = _load("facts.yaml", "brain.yaml")
-        rules = _load("rules.yaml", "mind.yaml")
-        acts = _load("acts.yaml", "state.yaml")
+        facts = _load("facts.yaml")
+        rules = _load("rules.yaml")
+        acts = _load("acts.yaml")
         map_data = _load("map.yaml")
         expect = _load("expect.yaml")
 
@@ -95,22 +95,6 @@ class FrameModel:
 
     def has_expect(self) -> bool:
         return self.expect is not None
-
-    # --- compatibility escape hatch ---
-
-    def as_dict(self) -> dict[str, Any]:
-        """Return raw FRAME data as a dict keyed by file name.
-
-        Exists as a backward-compat escape hatch. Prefer selector methods in new
-        code rather than manually inspecting the raw dicts returned here.
-        """
-        return {
-            "facts": self.facts,
-            "rules": self.rules,
-            "acts": self.acts,
-            "map": self.map,
-            "expect": self.expect,
-        }
 
     # --- core selectors ---
 

@@ -250,7 +250,7 @@ def haxaml_benchmark(project_dir: str = ".", mode: str = "frame", detail: str = 
 
     p = Path(project_dir).resolve()
     if mode == "frame":
-        facts_path = resolve_frame_file(p, "facts.yaml", "brain.yaml")
+        facts_path = resolve_frame_file(p, "facts.yaml")
         if not facts_path:
             return _err("haxaml_benchmark", "missing_facts", "facts.yaml not found")
         report = format_benchmark_report(str(facts_path), project_dir)

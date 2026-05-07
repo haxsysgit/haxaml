@@ -38,8 +38,6 @@ In short:
 about → guidance → prebuild → context_pack → build → verify → record → expect_sync
 ```
 
-Lower-level tools like `haxaml_session_start` and `haxaml_session_plan` still exist, but they are now the advanced/manual path. The recommended public flow uses `haxaml_prebuild`.
-
 Project memory lives in `.haxaml/` — versioned files your agent uses at runtime, not a static wall of text.
 
 ## Install

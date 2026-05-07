@@ -230,8 +230,8 @@ def evaluate_map_complexity(project_dir: str | Path) -> MapComplexityAssessment:
     project = Path(project_dir).resolve()
 
     expect_path = resolve_frame_file(project, "expect.yaml")
-    rules_path = resolve_frame_file(project, "rules.yaml", "mind.yaml")
-    facts_path = resolve_frame_file(project, "facts.yaml", "brain.yaml")
+    rules_path = resolve_frame_file(project, "rules.yaml")
+    facts_path = resolve_frame_file(project, "facts.yaml")
     map_path = resolve_frame_file(project, "map.yaml")
 
     expect = load_yaml(str(expect_path)) if expect_path else {}

@@ -16,7 +16,7 @@ def render_needs(project_dir: str) -> str:
     p = Path(project_dir).resolve()
     lines = []
 
-    facts_path = resolve_frame_file(p, "facts.yaml", "brain.yaml")
+    facts_path = resolve_frame_file(p, "facts.yaml")
     if facts_path:
         facts = load_yaml(str(facts_path))
         unresolved = facts.get("unresolved", [])
@@ -35,7 +35,7 @@ def render_needs(project_dir: str) -> str:
     else:
         lines.append("⚠ facts.yaml not found")
 
-    acts_path = resolve_frame_file(p, "acts.yaml", "state.yaml")
+    acts_path = resolve_frame_file(p, "acts.yaml")
     if acts_path:
         acts = load_yaml(str(acts_path))
         expect_sync = acts.get("expect_sync", {})

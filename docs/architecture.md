@@ -1,35 +1,37 @@
 # Architecture
 
-This repository is organized around two goals:
-1. Keep FRAME governance deterministic for agents.
-2. Keep MCP server behavior backward-compatible for users.
+Haxaml is organized around two goals:
+
+1. Keep FRAME governance deterministic.
+2. Keep agent context lean and canonical.
 
 ## Top-Level Structure
 
 ```text
 haxaml/
-  mcp_server.py              # stable compatibility entrypoint (haxaml.mcp_server:main)
+  mcp_server.py              # public MCP entrypoint (haxaml.mcp_server:main)
   mcp/
     __init__.py
-    base.py                  # compatibility import surface for MCP internals
+    base.py                  # shared MCP imports and app wiring
     app_core.py              # MCP app object + core constants/caches
     response_helpers.py      # response envelopes, detail modes, compaction
-    policy_helpers.py        # mode gating, retry policy, about gate, call budgets
-    lifecycle_helpers.py     # guidance/session/state helper functions
+    policy_helpers.py        # about gate, mode gating, retry policy
+    lifecycle_helpers.py     # lifecycle/session/state helper functions
     export_helpers.py        # export/bootstrap helper functions
     adoption_helpers.py      # adoption inventory helper functions
-    tools_frame.py           # init/validate/context/health/doctor
-    tools_lifecycle.py       # about/guidance/start/plan/context/verify/record/run/done
+    tools_frame.py           # init/validate/health/doctor
+    tools_lifecycle.py       # about/guidance/context/verify/record/sync
+    tools_prebuild.py        # prebuild governed entrypoint
     tools_ops.py             # export/upgrade/bootstrap/adopt/reconcile/needs/impact/state
     tools_benchmark.py       # benchmark tool and workflow profiling helpers
-    tools.py                 # compatibility re-export of all tool modules
-    resources.py             # MCP resources (haxaml://...)
+    resources.py             # MCP resources (haxaml://frame/*)
   context.py                 # context assembly and token counting
-  validator.py               # FRAME schema validation
+  validator.py               # FRAME schema + semantic validation
   reconcile.py               # derivation conflict detection
   export_engine.py           # FRAME -> agent-native file generation
   state_manager.py           # state read/write + compaction
-  runner.py                  # run lifecycle preflight/start/finish
+  runner.py                  # internal run lifecycle helper
+  paths.py                   # canonical FRAME path resolution
 
 docs/
   architecture.md
@@ -54,35 +56,36 @@ tests/
     test_resources.py
     test_registration.py
     test_benchmark_tool.py
-  test_*.py                  # non-MCP unit tests
+  test_*.py
 ```
 
-## Compatibility Rules
+## Canonical Rules
 
-- Tool names are stable: no renames in this refactor.
-- MCP payload contracts are stable: no response-shape changes in this refactor.
-- Legacy entrypoint stays stable: `haxaml.mcp_server:main` remains valid.
+- Public governed path is `about -> guidance -> prebuild -> context_pack -> verify -> record -> expect_sync`.
+- `.haxaml/*.yaml` is the only supported FRAME location.
+- Canonical file names are `facts.yaml`, `rules.yaml`, `acts.yaml`, `expect.yaml`, and `map.yaml`.
+- Context packs are task-scoped and preferred over whole-project context dumps.
 
 ## MCP Layering
 
 - `haxaml.mcp_server`
-  - public/legacy import surface
-  - entrypoint used by `haxaml-mcp`
+  - public import surface
+  - stdio entrypoint used by `haxaml-mcp`
 
 - `haxaml.mcp.tools_*`
   - callable MCP tools registered on `mcp_app`
   - split by domain for maintainability
 
 - `haxaml.mcp.*_helpers`
-  - pure helper logic extracted from old monolith
-  - internal support for tool modules
+  - shared internal logic
+  - lifecycle, policy, export, and adoption support
 
 - `haxaml.mcp.base`
-  - compatibility barrel
-  - preserves wildcard import surface used by `tools_*` and `resources`
+  - shared imports/constants for MCP modules
+  - not a public tool surface
 
 ## Testing Strategy
 
 - MCP behavior is mirrored by module in `tests/mcp/`.
 - Non-MCP units stay in `tests/test_*.py`.
-- Keep full-suite pass (`pytest -q`) required before merge.
+- Full-suite pass remains required before release.

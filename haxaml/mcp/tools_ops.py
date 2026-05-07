@@ -497,7 +497,7 @@ def haxaml_state_show(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dic
         return detail_err
 
     p = Path(project_dir).resolve()
-    acts_path = resolve_frame_file(p, "acts.yaml", "state.yaml")
+    acts_path = resolve_frame_file(p, "acts.yaml")
     if not acts_path:
         return _err("haxaml_state_show", "missing_acts", "acts.yaml not found")
 
@@ -535,7 +535,7 @@ def haxaml_state_compact(
         return detail_err
 
     p = Path(project_dir).resolve()
-    acts_path = resolve_frame_file(p, "acts.yaml", "state.yaml")
+    acts_path = resolve_frame_file(p, "acts.yaml")
     if not acts_path:
         return _err("haxaml_state_compact", "missing_acts", "acts.yaml not found")
 

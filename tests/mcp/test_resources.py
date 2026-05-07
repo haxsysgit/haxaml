@@ -2,7 +2,6 @@
 
 from haxaml.mcp_server import (
     resource_acts,
-    resource_context,
     resource_expect,
     resource_facts,
     resource_map,
@@ -35,8 +34,3 @@ class TestResources:
         monkeypatch.setenv("HAXAML_PROJECT_DIR", str(governed_project))
         content = resource_map()
         assert "not found" in content
-
-    def test_context_resource(self, governed_project, monkeypatch):
-        monkeypatch.setenv("HAXAML_PROJECT_DIR", str(governed_project))
-        content = resource_context()
-        assert "Project Facts" in content

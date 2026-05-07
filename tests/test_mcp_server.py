@@ -1,4 +1,4 @@
-"""Compatibility shim for migrated MCP tests.
+"""Shim module for migrated MCP tests.
 
 MCP test coverage now lives in `tests/mcp/` mirrored by module scope:
 - tests/mcp/test_frame.py

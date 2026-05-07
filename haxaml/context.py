@@ -1,41 +1,32 @@
-"""Context builder — minimal and task-scoped context for AI agent consumption."""
+"""Context builder — task-scoped context for AI agent consumption."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import yaml
 
+from haxaml.frame_model import FrameModel
 from haxaml.paths import resolve_frame_file
 
 
 def load_frame_data(project_dir: str) -> dict[str, Any]:
     """Load available FRAME files into a dict."""
-    project = Path(project_dir)
-
-    def _load(new_name: str, old_name: str | None = None) -> dict[str, Any] | None:
-        path = resolve_frame_file(project, new_name, old_name)
-        if not path:
-            return None
-        with open(path, encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-
+    frame = FrameModel.load(project_dir)
     return {
-        "facts": _load("facts.yaml", "brain.yaml"),
-        "rules": _load("rules.yaml", "mind.yaml"),
-        "acts": _load("acts.yaml", "state.yaml"),
-        "expect": _load("expect.yaml"),
-        "map": _load("map.yaml"),
+        "facts": frame.facts,
+        "rules": frame.rules,
+        "acts": frame.acts,
+        "expect": frame.expect,
+        "map": frame.map,
     }
 
 
 def build_context(project_dir: str, include_state: bool = True) -> str:
-    """Build legacy compact context string from FRAME files."""
-    project = Path(project_dir)
+    """Build compact whole-project context from canonical FRAME files."""
     parts = []
 
-    facts_path = resolve_frame_file(project, "facts.yaml", "brain.yaml")
+    facts_path = resolve_frame_file(project_dir, "facts.yaml")
     if facts_path:
         with open(facts_path, encoding="utf-8") as f:
             facts = yaml.safe_load(f)
@@ -43,20 +34,20 @@ def build_context(project_dir: str, include_state: bool = True) -> str:
     else:
         parts.append("⚠ facts.yaml not found — project facts are missing.")
 
-    rules_path = resolve_frame_file(project, "rules.yaml", "mind.yaml")
+    rules_path = resolve_frame_file(project_dir, "rules.yaml")
     if rules_path:
         with open(rules_path, encoding="utf-8") as f:
             rules = yaml.safe_load(f)
         parts.append(_format_rules_context(rules))
 
     if include_state:
-        acts_path = resolve_frame_file(project, "acts.yaml", "state.yaml")
+        acts_path = resolve_frame_file(project_dir, "acts.yaml")
         if acts_path:
             with open(acts_path, encoding="utf-8") as f:
                 acts = yaml.safe_load(f)
             parts.append(_format_acts_context(acts))
 
-    expect_path = resolve_frame_file(project, "expect.yaml")
+    expect_path = resolve_frame_file(project_dir, "expect.yaml")
     if expect_path:
         with open(expect_path, encoding="utf-8") as f:
             expect = yaml.safe_load(f)
@@ -300,15 +291,11 @@ def _context_policy(rules: dict[str, Any]) -> dict[str, Any]:
 
 
 def _resolve_pack_name(pack: str, default: str = "balanced") -> str:
-    """Normalize pack aliases and fallback to a safe default."""
+    """Normalize pack names and fallback to a safe default."""
     normalized = str(pack or "").strip().lower()
-    if normalized == "standard":
-        normalized = "balanced"
     if normalized in {"minimal", "balanced", "full"}:
         return normalized
     fallback = str(default or "balanced").strip().lower()
-    if fallback == "standard":
-        fallback = "balanced"
     return fallback if fallback in {"minimal", "balanced", "full"} else "balanced"
 
 

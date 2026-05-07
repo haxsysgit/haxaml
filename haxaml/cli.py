@@ -88,11 +88,6 @@ def validate(project_dir):
     _echo_tool_result(_mcp_tools().haxaml_validate(project_dir))
 
 
-def _resolve(project: Path, new_name: str, old_name: str) -> Path | None:
-    """Resolve FRAME filename with backward compat fallback."""
-    return resolve_frame_file(project, new_name, old_name)
-
-
 @cli.command()
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 def doctor(project_dir):
@@ -142,22 +137,6 @@ def upgrade(target_version, include_mcp, dry_run):
         sys.exit(1)
 
     click.echo("✓ Upgrade complete via fallback install flow.")
-
-
-@cli.command()
-@click.option("--dir", "project_dir", default=".", help="Project directory")
-@click.option("--no-state", is_flag=True, help="Exclude state from context")
-@click.option("--tokens", is_flag=True, help="Show token count")
-def context(project_dir, no_state, tokens):
-    """Output minimal context for an AI agent."""
-    result = _mcp_tools().haxaml_context(project_dir, include_state=not no_state)
-    rendered = _result_text(result)
-    if tokens:
-        click.echo(rendered)
-        return
-    marker = "\n\n--- Token count:"
-    base = rendered.split(marker, 1)[0]
-    click.echo(base)
 
 
 @cli.command()
@@ -293,7 +272,7 @@ def state_compact(path, keep):
 @click.option("--risks", default="", help="Identified risks")
 def state_record(path, task, run_result, changes, decisions, risks):
     """Record a completed run."""
-    path = path or str(resolve_frame_file(".", "acts.yaml", "state.yaml") or frame_path(".", "acts.yaml"))
+    path = path or str(resolve_frame_file(".", "acts.yaml") or frame_path(".", "acts.yaml"))
     if not os.path.exists(path):
         click.echo(f"✗ acts.yaml not found at {path}")
         sys.exit(1)
@@ -352,27 +331,10 @@ def prebuild(project_dir, task, description):
     _echo_tool_result(_mcp_tools().haxaml_prebuild(task=task, description=description, project_dir=project_dir))
 
 
-@cli.command("session-start")
-@click.option("--dir", "project_dir", default=".", help="Project directory")
-@click.option("--task", required=True, help="Task to execute")
-@click.option("--description", default="", help="Task description")
-def session_start(project_dir, task, description):
-    """Start a governed session manually (advanced/manual path)."""
-    _echo_tool_result(_mcp_tools().haxaml_session_start(task=task, description=description, project_dir=project_dir))
-
-
-@cli.command("session-plan")
-@click.option("--dir", "project_dir", default=".", help="Project directory")
-@click.option("--session-id", required=True, help="Session ID from session-start")
-def session_plan(project_dir, session_id):
-    """Generate a session plan manually after session-start (advanced/manual path)."""
-    _echo_tool_result(_mcp_tools().haxaml_session_plan(session_id=session_id, project_dir=project_dir))
-
-
 @cli.command("context-pack")
 @click.option("--dir", "project_dir", default=".", help="Project directory")
 @click.option("--task", required=True, help="Task to build context for")
-@click.option("--pack", default="balanced", type=click.Choice(["minimal", "balanced", "standard", "full"]), help="Pack detail level")
+@click.option("--pack", default="balanced", type=click.Choice(["minimal", "balanced", "full"]), help="Pack detail level")
 @click.option("--no-state", is_flag=True, help="Exclude acts state from the pack")
 @click.option("--session-id", default="", help="Session ID for one-pack-per-task enforcement")
 @click.option("--refresh-reason", default="", help="Reason for repeated context-pack call")
@@ -431,37 +393,6 @@ def session_record(project_dir, task, run_result, session_id, changes, decisions
         decisions=decisions,
         risks=risks,
     ))
-
-
-@cli.command()
-@click.option("--dir", "project_dir", default=".", help="Project directory")
-@click.option("--task", required=True, help="Task to execute")
-@click.option("--description", default="", help="Task description")
-def run(project_dir, task, description):
-    """Start an execution run (sets active task, validates preflight)."""
-    _echo_tool_result(_mcp_tools().haxaml_run(task=task, description=description, project_dir=project_dir))
-
-
-@cli.command()
-@click.option("--dir", "project_dir", default=".", help="Project directory")
-@click.option("--task", required=True, help="Task that was completed")
-@click.option("--result", "run_result", default="success",
-              type=click.Choice(["success", "partial", "failed"]))
-@click.option("--session-id", default="", help="Session ID (optional)")
-@click.option("--changes", default="", help="Summary of changes")
-@click.option("--decisions", default="", help="Key decisions made")
-@click.option("--risks", default="", help="Identified risks")
-def done(project_dir, task, run_result, session_id, changes, decisions, risks):
-    """Complete an execution run and record results."""
-    _echo_tool_result(_mcp_tools().haxaml_done(
-        task=task,
-        result=run_result,
-        session_id=session_id,
-        changes=changes,
-        decisions=decisions,
-        risks=risks,
-        project_dir=project_dir,
-    ), exit_on_failure=False)
 
 
 @cli.command()

@@ -1,48 +1,42 @@
-"""Compatibility entrypoint for the Haxaml MCP server.
+"""Entrypoint for the Haxaml MCP server."""
 
-This module preserves the historical import path (`haxaml.mcp_server`) while
-implementation details live under `haxaml.mcp` submodules.
-"""
-
-import shutil  # backward-compatible patch target (tests/integrations)
+import shutil
 
 from haxaml.mcp.base import mcp_app
-from haxaml.mcp.tools import (
-    haxaml_prebuild,
-    haxaml_about,
+from haxaml.mcp.tools_benchmark import haxaml_benchmark
+from haxaml.mcp.tools_frame import (
+    haxaml_doctor,
+    haxaml_health,
     haxaml_init,
     haxaml_validate,
-    haxaml_context,
-    haxaml_health,
-    haxaml_doctor,
-    haxaml_guidance,
-    haxaml_session_start,
-    haxaml_session_plan,
-    haxaml_context_pack,
-    haxaml_session_verify,
-    haxaml_session_record,
-    haxaml_expect_sync,
-    haxaml_run,
-    haxaml_done,
-    haxaml_export,
-    haxaml_upgrade,
-    haxaml_mcp_bootstrap,
-    haxaml_adopt_plan,
-    haxaml_reconcile,
-    haxaml_adopt,
-    haxaml_needs,
-    haxaml_impact,
-    haxaml_state_show,
-    haxaml_state_compact,
-    haxaml_benchmark,
 )
+from haxaml.mcp.tools_lifecycle import (
+    haxaml_about,
+    haxaml_context_pack,
+    haxaml_expect_sync,
+    haxaml_guidance,
+    haxaml_session_record,
+    haxaml_session_verify,
+)
+from haxaml.mcp.tools_ops import (
+    haxaml_adopt,
+    haxaml_adopt_plan,
+    haxaml_export,
+    haxaml_impact,
+    haxaml_mcp_bootstrap,
+    haxaml_needs,
+    haxaml_reconcile,
+    haxaml_state_compact,
+    haxaml_state_show,
+    haxaml_upgrade,
+)
+from haxaml.mcp.tools_prebuild import haxaml_prebuild
 from haxaml.mcp.resources import (
     resource_facts,
     resource_rules,
     resource_acts,
     resource_expect,
     resource_map,
-    resource_context,
 )
 
 
@@ -52,18 +46,13 @@ __all__ = [
     "haxaml_about",
     "haxaml_init",
     "haxaml_validate",
-    "haxaml_context",
     "haxaml_health",
     "haxaml_doctor",
     "haxaml_guidance",
-    "haxaml_session_start",
-    "haxaml_session_plan",
     "haxaml_context_pack",
     "haxaml_session_verify",
     "haxaml_session_record",
     "haxaml_expect_sync",
-    "haxaml_run",
-    "haxaml_done",
     "haxaml_export",
     "haxaml_upgrade",
     "haxaml_mcp_bootstrap",
@@ -80,7 +69,6 @@ __all__ = [
     "resource_acts",
     "resource_expect",
     "resource_map",
-    "resource_context",
     "main",
 ]
 

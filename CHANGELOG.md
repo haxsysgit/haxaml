@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.5 - 2026-05-07
+
+- Shipped the current governed lifecycle, export, resource, and documentation updates as the `0.6.5` release snapshot.
+- Aligned `haxaml` and `haxaml-mcp` package versions at `0.6.5`.
+
 ## 0.6.4 - 2026-05-07
 
 - Added deterministic 0.6.4 consistency checks and derived progress summaries across validator, reconcile, doctor, health, and prebuild without introducing a new inference layer.

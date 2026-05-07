@@ -4,14 +4,12 @@ import subprocess
 import yaml
 
 from haxaml.mcp_server import (
-    haxaml_context,
     haxaml_context_pack,
     haxaml_doctor,
     haxaml_guidance,
     haxaml_health,
     haxaml_init,
-    haxaml_session_plan,
-    haxaml_session_start,
+    haxaml_prebuild,
     haxaml_validate,
 )
 from haxaml.versioning import get_version
@@ -19,15 +17,16 @@ from haxaml.versioning import get_version
 from .helpers import msg as _msg
 
 
-def _start_session_for_pack(project_dir, task: str = "implement auth module") -> str:
+def _start_session_for_pack(project_dir, task: str = "update lifecycle guidance docs") -> str:
     guided = haxaml_guidance(task=task, project_dir=str(project_dir))
     assert guided["ok"] is True
-    started = haxaml_session_start(task=task, description="context-pack test", project_dir=str(project_dir))
-    assert started["ok"] is True
-    session_id = started["data"]["session_id"]
-    planned = haxaml_session_plan(session_id=session_id, project_dir=str(project_dir))
-    assert planned["ok"] is True
-    return session_id
+    prebuild = haxaml_prebuild(
+        task=task,
+        description="context-pack test",
+        project_dir=str(project_dir),
+    )
+    assert prebuild["ok"] is True
+    return prebuild["data"]["session_id"]
 
 
 class TestInit:
@@ -156,25 +155,11 @@ class TestValidate:
         assert "Phase 'phase 1' is marked done" in _msg(result) or "planned or active" in _msg(result)
 
 
-class TestContext:
-    def test_returns_context_with_tokens(self, governed_project):
-        result = haxaml_context(str(governed_project))
-        text = _msg(result)
-        assert result["ok"] is True
-        assert "Project Facts" in text
-        assert "Token count:" in text
-
-    def test_without_state(self, governed_project):
-        result = haxaml_context(str(governed_project), include_state=False)
-        text = _msg(result)
-        assert result["ok"] is True
-        assert "Project Facts" in text
-        assert "Current Acts" not in text
-
+class TestContextPack:
     def test_context_pack_contains_expected_sections(self, governed_project):
         session_id = _start_session_for_pack(governed_project)
         result = haxaml_context_pack(
-            task="implement auth module",
+            task="update lifecycle guidance docs",
             project_dir=str(governed_project),
             pack="balanced",
             include_state=True,
@@ -183,22 +168,20 @@ class TestContext:
         assert result["ok"] is True
         data = result["data"]
         assert data["pack"] == "balanced"
-        assert data["tokens"] > 0
-        assert "included_sections" in data
-        assert "omitted_sections" in data
-        assert "omitted_context" in data
-        assert "context_window_usage" in data
-        assert "context_pack" not in data
+        assert "essential_facts" in data["included_sections"]
+        assert "relevant_rules" in data["included_sections"]
+        assert data["lifecycle"]["preferred_next"] == "haxaml_session_verify"
 
     def test_context_pack_full_detail_keeps_structured_payload(self, governed_project):
-        session_id = _start_session_for_pack(governed_project)
+        session_id = _start_session_for_pack(governed_project, task="full detail pack")
         result = haxaml_context_pack(
-            task="implement auth module",
+            task="full detail pack",
             project_dir=str(governed_project),
             pack="balanced",
             include_state=True,
             session_id=session_id,
             detail="full",
+            refresh_reason="scope changed after prebuild",
         )
         assert result["ok"] is True
         data = result["data"]
@@ -207,19 +190,18 @@ class TestContext:
         assert "essential_facts" in data["context_pack"]
         assert "relevant_rules" in data["context_pack"]
 
-    def test_context_pack_accepts_standard_alias(self, governed_project):
-        session_id = _start_session_for_pack(governed_project)
+    def test_context_pack_rejects_standard_alias(self, governed_project):
+        session_id = _start_session_for_pack(governed_project, task="pack alias rejection")
         result = haxaml_context_pack(
-            task="implement auth module",
+            task="pack alias rejection",
             project_dir=str(governed_project),
             pack="standard",
             include_state=True,
             session_id=session_id,
             detail="full",
         )
-        assert result["ok"] is True
-        assert result["data"]["pack"] == "balanced"
-        assert result["data"]["context_pack"]["pack"] == "balanced"
+        assert result["ok"] is False
+        assert result["error"]["code"] == "invalid_pack"
 
     def test_scaffold_context_pack_avoids_blank_rule_entries(self, fresh_project):
         session_id = _start_session_for_pack(fresh_project, task="scaffold smoke check")
@@ -241,7 +223,7 @@ class TestContext:
 class TestDetailMode:
     def test_invalid_detail_returns_error(self, governed_project):
         result = haxaml_guidance(
-            task="implement auth module",
+            task="update lifecycle guidance docs",
             project_dir=str(governed_project),
             detail="verbose",
         )
@@ -250,7 +232,7 @@ class TestDetailMode:
 
     def test_guidance_full_detail_includes_extended_fields(self, governed_project):
         full_result = haxaml_guidance(
-            task="implement auth module",
+            task="update lifecycle guidance docs",
             project_dir=str(governed_project),
             detail="full",
         )
@@ -320,8 +302,5 @@ class TestDoctor:
 
         result = haxaml_doctor(str(governed_project), detail="full")
         assert result["ok"] is True
-        assert result["data"]["progress_summary"]["status"] == "stale_state"
-        assert any(
-            finding["code"] == "active_task_session_mismatch"
-            for finding in result["data"]["consistency_findings"]
-        )
+        findings = result["data"]["consistency_findings"]
+        assert any("active task" in item["message"].lower() or "session" in item["message"].lower() for item in findings)

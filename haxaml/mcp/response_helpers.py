@@ -119,9 +119,6 @@ def _compact_success(tool: str, payload: dict) -> dict:
     if tool == "haxaml_context_pack":
         return _compact_context_pack_payload(payload)
 
-    if tool == "haxaml_context":
-        return _pick_fields(payload, ["message", "tokens", "include_state", "deprecation"])
-
     if tool == "haxaml_guidance":
         compact = _pick_fields(
             payload,
@@ -201,42 +198,6 @@ def _compact_success(tool: str, payload: dict) -> dict:
         if "allowed_next" in lifecycle:
             compact["lifecycle"]["allowed_next"] = lifecycle["allowed_next"]
         return compact
-    if tool == "haxaml_session_start":
-        compact = _pick_fields(
-            payload,
-            [
-                "message",
-                "session_id",
-                "execution_mode",
-                "status",
-                "risk_level",
-                "task_type",
-                "required_reads",
-                "required_questions",
-                "recommended_context_packs",
-            ],
-        )
-        compact["lifecycle"] = _compact_lifecycle(payload)
-        return compact
-
-    if tool == "haxaml_session_plan":
-        compact = _pick_fields(
-            payload,
-            [
-                "message",
-                "session_id",
-                "execution_mode",
-                "status",
-                "risk_level",
-                "plan",
-                "verification_expectations",
-                "visibility_policy",
-                "retry_policy",
-            ],
-        )
-        compact["lifecycle"] = _compact_lifecycle(payload)
-        return compact
-
     if tool == "haxaml_session_verify":
         compact = _pick_fields(
             payload,

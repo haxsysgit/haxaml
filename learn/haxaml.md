@@ -487,10 +487,6 @@ internally, and produces a readiness report with blocking issues, advisory
 warnings, required questions, and a recommended context pack level. It stops
 the agent from starting high-risk work in a broken FRAME state.
 
-`start` and `plan` still exist, but they are now the advanced/manual path. Use
-them when you intentionally want lower-level control over session creation and
-planning instead of the recommended `prebuild` entry path.
-
 `context_pack` exists because the agent should pull task-relevant memory, not
 the whole project every time.
 

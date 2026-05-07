@@ -88,7 +88,7 @@ def haxaml_about(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     payload = _about_payload(project_dir)
     key = _project_key(project_dir)
     _ABOUT_ACK_CACHE.add(key)
-    _retry_guard_clear(project_dir, tool="haxaml_session_start", error_code="about_required")
+    _retry_guard_clear(project_dir, tool="haxaml_prebuild", error_code="about_required")
 
     warnings = []
     sm, _ = _get_state_manager(project_dir)
@@ -223,7 +223,7 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
             phase="guidance",
             depends_on=["haxaml_about"],
             preferred_next=next_step,
-            allowed_next=["haxaml_prebuild", "haxaml_session_start"] if execution_mode == "governed" else ["run_outside_governed_flow"],
+            allowed_next=["haxaml_prebuild"] if execution_mode == "governed" else ["run_outside_governed_flow"],
             contract_enforced=(execution_mode == "governed"),
         ),
     }
@@ -243,7 +243,7 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
         updated = _contract_touch(
             contract,
             phase="guidance",
-            required_next=["haxaml_prebuild", "haxaml_session_start"],
+            required_next=["haxaml_prebuild"],
             tool_name="haxaml_guidance",
             active_session_id="",
             active_task=task,
@@ -258,269 +258,6 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
                 {"persist_error": err},
             )
     return _ok("haxaml_guidance", payload, detail=detail_mode)
-
-
-@mcp_app.tool()
-def haxaml_session_start(
-    task: str,
-    description: str = "",
-    project_dir: str = ".",
-    detail: str = DETAIL_SHORT,
-) -> dict:
-    """Start a governed agent session with guidance and read policy checks."""
-    detail_mode, detail_err = _normalize_detail("haxaml_session_start", detail)
-    if detail_err:
-        return detail_err
-
-    frame = load_frame_data(project_dir)
-    if not frame.get("facts"):
-        return _err("haxaml_session_start", "missing_facts", "facts.yaml not found")
-    about_required = _require_about("haxaml_session_start", project_dir)
-    if about_required:
-        details = ((about_required.get("error") or {}).get("details") or {})
-        return _gate_error_with_retry_policy(
-            "haxaml_session_start",
-            "about_required",
-            "Call haxaml_about once per active agent/MCP session before haxaml_session_start.",
-            project_dir=project_dir,
-            task=task,
-            details=details,
-        )
-
-    mode_eval = _utility_mode_eval(task, description)
-    if mode_eval["mode"] == "utility":
-        return _utility_mode_error("haxaml_session_start", project_dir, task, description)
-
-    sm, state, state_err = _load_state_or_error("haxaml_session_start", project_dir)
-    if state_err:
-        return state_err
-    contract = _lifecycle_contract_state(state)
-    if not _contract_allows(contract, "haxaml_session_start"):
-        return _contract_violation(
-            "haxaml_session_start",
-            project_dir=project_dir,
-            contract=contract,
-            reason="Session start is out of lifecycle order.",
-            retry_after=contract.get("required_next", []),
-        )
-    guided_task = str(contract.get("active_task", "") or "").strip()
-    if guided_task and guided_task != task.strip():
-        return _contract_violation(
-            "haxaml_session_start",
-            project_dir=project_dir,
-            contract=contract,
-            reason="Session start task does not match the most recent governed guidance task.",
-            details={"guided_task": guided_task, "requested_task": task.strip()},
-            retry_after=["haxaml_guidance(task='<matching task>', project_dir='.')"],
-        )
-
-    try:
-        runner = ExecutionRunner(project_dir)
-        pre = runner.start_run(task=task, description=description)
-        if pre.result == "failed":
-            return _err(
-                "haxaml_session_start",
-                "preflight_failed",
-                "Session failed preflight.",
-                {"errors": pre.errors},
-            )
-    except FileNotFoundError as e:
-        return _err("haxaml_session_start", "missing_frame", str(e))
-
-    guidance = _guidance_eval(task, frame)
-    read_policy = _session_read_policy(frame)
-    session_id = f"session-{uuid.uuid4().hex[:10]}"
-    now = _now_iso()
-
-    warnings = []
-    if sm:
-        expect_sync = _expect_sync_state(state)
-        if expect_sync["required"]:
-            warnings.append(
-                "Expect sync is pending from the previous recorded run. "
-                "Call haxaml_expect_sync before claiming the next governed completion."
-            )
-        sessions = state.get("sessions", [])
-        if not isinstance(sessions, list):
-            sessions = []
-        sessions.append(
-            {
-                "id": session_id,
-                "task": task,
-                "description": description,
-                "execution_mode": "governed",
-                "status": "started",
-                "phase": "start",
-                "risk_level": guidance["risk_level"],
-                "guidance_status": guidance["status"],
-                "started": now,
-                "updated": now,
-            }
-        )
-        state["sessions"] = sessions
-        state["active_task"] = {
-            "name": task,
-            "description": description,
-            "started": now,
-            "assignee": "agent",
-        }
-        compaction = state.get("context_compaction", {})
-        if not isinstance(compaction, dict):
-            compaction = {}
-        started = compaction.get("sessions_started", 0)
-        if not isinstance(started, int) or started < 0:
-            started = 0
-        compaction["sessions_started"] = started + 1
-        state["context_compaction"] = compaction
-        contract = _contract_touch(
-            contract,
-            phase="start",
-            required_next=["haxaml_session_plan"],
-            tool_name="haxaml_session_start",
-            active_session_id=session_id,
-            active_task=task,
-        )
-        _set_lifecycle_contract_state(state, contract)
-        err = _persist_state(sm, state)
-        if err:
-            warnings.append(f"Could not persist session state: {err}")
-    else:
-        warnings.append("acts.yaml not found; session was not persisted.")
-
-    payload = {
-        "message": (
-            f"Session started: {session_id}\n"
-            f"Mode: governed\n"
-            f"Status: {guidance['status']}\n"
-            f"Risk: {guidance['risk_level']}\n"
-            f"Required reads: {', '.join(read_policy['required_reads'])}"
-        ),
-        "session_id": session_id,
-        "execution_mode": "governed",
-        "status": guidance["status"],
-        "risk_level": guidance["risk_level"],
-        "task_type": guidance["task_type"],
-        "required_questions": guidance["required_questions"],
-        "required_reads": read_policy["required_reads"],
-        "recommended_context_packs": guidance["recommended_packs"],
-        "onboarding": {
-            "needs_full_reads": read_policy["needs_full_reads"],
-            "sessions_started": read_policy["sessions_started"],
-            "onboarding_full_reads": read_policy["onboarding_full_reads"],
-        },
-        "next_step": "haxaml_session_plan",
-        "lifecycle": _lifecycle_hint(
-            tool="haxaml_session_start",
-            phase="start",
-            depends_on=["haxaml_about", "haxaml_guidance"],
-            preferred_next="haxaml_session_plan",
-            allowed_next=["haxaml_session_plan"],
-        ),
-    }
-    _retry_guard_clear(project_dir, tool="haxaml_session_start", error_code="about_required", task=task)
-    return _ok("haxaml_session_start", payload, warnings=warnings, detail=detail_mode)
-
-
-@mcp_app.tool()
-def haxaml_session_plan(
-    session_id: str,
-    project_dir: str = ".",
-    detail: str = DETAIL_SHORT,
-) -> dict:
-    """Generate a short execution plan and risk check for a started session."""
-    detail_mode, detail_err = _normalize_detail("haxaml_session_plan", detail)
-    if detail_err:
-        return detail_err
-
-    sm, state, state_err = _load_state_or_error("haxaml_session_plan", project_dir)
-    if state_err:
-        return state_err
-    contract = _lifecycle_contract_state(state)
-    if not _contract_allows(contract, "haxaml_session_plan"):
-        return _contract_violation(
-            "haxaml_session_plan",
-            project_dir=project_dir,
-            contract=contract,
-            reason="Session plan is out of lifecycle order.",
-            retry_after=contract.get("required_next", []),
-        )
-    if contract.get("active_session_id", "") != session_id:
-        return _active_session_violation(
-            "haxaml_session_plan",
-            project_dir=project_dir,
-            contract=contract,
-            session_id=session_id,
-            reason="Session plan must target the active governed session.",
-        )
-    session = _find_session(state, session_id)
-    if not session:
-        return _err("haxaml_session_plan", "unknown_session", f"Session not found: {session_id}")
-
-    task = str(session.get("task", ""))
-    frame = load_frame_data(project_dir)
-    guidance = _guidance_eval(task, frame)
-    rules = frame.get("rules") or {}
-    verify_expect_raw = ((rules.get("after_task") or {}).get("verify", []) or [])
-    verify_expect = [
-        item.strip() for item in verify_expect_raw if isinstance(item, str) and item.strip()
-    ]
-    if not verify_expect:
-        verify_expect = [
-            "Confirm changes satisfy task scope.",
-            "Run relevant validation/tests.",
-            "Record unresolved risks and follow-ups.",
-        ]
-
-    plan = [
-        "Inspect context pack and required rules for this task.",
-        "Apply smallest logical change set in scoped files.",
-        "Run validations/tests for touched behavior.",
-        "Run reflective verification before record.",
-    ]
-    if guidance["status"] == "action_required":
-        plan.insert(0, "Resolve required clarification questions before code changes.")
-
-    session["phase"] = "plan"
-    session["status"] = "planned"
-    session["updated"] = _now_iso()
-    session["plan"] = plan
-    contract = _contract_touch(
-        contract,
-        phase="plan",
-        required_next=["haxaml_context_pack"],
-        tool_name="haxaml_session_plan",
-        active_session_id=session_id,
-        active_task=str(session.get("task", "") or ""),
-    )
-    _set_lifecycle_contract_state(state, contract)
-    err = _persist_state(sm, state)
-    warnings = [f"Could not persist session plan: {err}"] if err else []
-
-    return _ok(
-        "haxaml_session_plan",
-        {
-            "message": f"Session plan prepared for {session_id}",
-            "session_id": session_id,
-            "execution_mode": guidance["execution_mode"],
-            "status": guidance["status"],
-            "risk_level": guidance["risk_level"],
-            "plan": plan,
-            "risk_checks": guidance["assumptions"] + guidance["missing_context"],
-            "verification_expectations": verify_expect,
-            "visibility_policy": "Optional diagnostics only; call health/needs/reconcile/state_show on failure, uncertainty, or pre-final check.",
-            "retry_policy": "If same gate error appears twice, stop retrying and fix root cause before retrying once.",
-            "next_step": "haxaml_context_pack",
-            "lifecycle": _lifecycle_hint(
-                tool="haxaml_session_plan",
-                phase="plan",
-                depends_on=["haxaml_session_start"],
-                preferred_next="haxaml_context_pack",
-                allowed_next=["haxaml_context_pack"],
-            ),
-        },
-        warnings=warnings,
-        detail=detail_mode,
-    )
 
 
 @mcp_app.tool()
@@ -541,6 +278,13 @@ def haxaml_context_pack(
     frame = load_frame_data(project_dir)
     if not frame.get("facts"):
         return _err("haxaml_context_pack", "missing_facts", "facts.yaml not found")
+    if pack not in {"minimal", "balanced", "full"}:
+        return _err(
+            "haxaml_context_pack",
+            "invalid_pack",
+            "Invalid pack. Use 'minimal', 'balanced', or 'full'.",
+            {"received": pack, "allowed": ["minimal", "balanced", "full"]},
+        )
 
     mode_eval = _utility_mode_eval(task)
     if mode_eval["mode"] == "utility":
@@ -669,7 +413,7 @@ def haxaml_context_pack(
             "lifecycle": _lifecycle_hint(
                 tool="haxaml_context_pack",
                 phase="context",
-                depends_on=["haxaml_prebuild", "haxaml_session_plan"],
+                depends_on=["haxaml_prebuild"],
                 preferred_next="haxaml_session_verify",
                 allowed_next=["haxaml_session_verify"],
             ),
@@ -1333,175 +1077,5 @@ def haxaml_expect_sync(
             ),
         },
         warnings=warnings,
-        detail=detail_mode,
-    )
-
-
-# Deprecated compatibility helper.
-# Not registered as an MCP tool.
-# Remove fully in v0.7 after dogfooding.
-def haxaml_run(
-    task: str,
-    description: str = "",
-    project_dir: str = ".",
-    detail: str = DETAIL_SHORT,
-) -> dict:
-    """Deprecated wrapper. Use haxaml_guidance + haxaml_prebuild instead."""
-    detail_mode, detail_err = _normalize_detail("haxaml_run", detail)
-    if detail_err:
-        return detail_err
-
-    guided = haxaml_guidance(task=task, project_dir=project_dir, detail=detail_mode)
-    if not guided.get("ok"):
-        dep = _wrapper_deprecation("haxaml_run", ["haxaml_guidance", "haxaml_session_start"])
-        return _err(
-            "haxaml_run",
-            guided.get("error", {}).get("code", "guidance_failed"),
-            guided.get("error", {}).get("message", "Guidance failed."),
-            guided.get("error", {}).get("details", {}),
-            warnings=[dep["message"]],
-        )
-
-    started = haxaml_session_start(task=task, description=description, project_dir=project_dir, detail=detail_mode)
-    dep = _wrapper_deprecation("haxaml_run", ["haxaml_session_start"])
-    if not started.get("ok"):
-        return _err(
-            "haxaml_run",
-            started.get("error", {}).get("code", "session_start_failed"),
-            started.get("error", {}).get("message", "Session start failed."),
-            started.get("error", {}).get("details", {}),
-            warnings=[dep["message"]],
-        )
-
-    payload = started.get("data", {})
-    session_id = payload.get("session_id", "")
-    planned = haxaml_session_plan(session_id=session_id, project_dir=project_dir, detail=detail_mode)
-    if not planned.get("ok"):
-        return _err(
-            "haxaml_run",
-            planned.get("error", {}).get("code", "session_plan_failed"),
-            planned.get("error", {}).get("message", "Session plan failed."),
-            planned.get("error", {}).get("details", {}),
-            warnings=[dep["message"]],
-        )
-    packed = haxaml_context_pack(
-        task=task,
-        project_dir=project_dir,
-        pack="minimal",
-        include_state=True,
-        session_id=session_id,
-        refresh_reason="wrapper bootstrap context for compatibility",
-        detail=detail_mode,
-    )
-    if not packed.get("ok"):
-        return _err(
-            "haxaml_run",
-            packed.get("error", {}).get("code", "context_pack_failed"),
-            packed.get("error", {}).get("message", "Context pack failed."),
-            packed.get("error", {}).get("details", {}),
-            warnings=[dep["message"]],
-        )
-
-    lines = [f"✓ Run started: {task}"]
-    lines.append(f"  Session: {session_id}")
-    lines.append(f"  Status: {payload.get('status', 'proceed')}")
-    lines.append("  → Work on the task, then call haxaml_done (or haxaml_session_verify + haxaml_session_record)")
-    return _ok(
-        "haxaml_run",
-        {
-            "message": "\n".join(lines),
-            "task": task,
-            "session_id": session_id,
-            "warnings": started.get("warnings", []),
-            "deprecation": dep,
-        },
-        warnings=[dep["message"]],
-        detail=detail_mode,
-    )
-
-
-# Deprecated compatibility helper.
-# Not registered as an MCP tool.
-# Remove fully in v0.7 after dogfooding.
-def haxaml_done(
-    task: str,
-    result: str = "success",
-    changes: str = "",
-    decisions: str = "",
-    risks: str = "",
-    project_dir: str = ".",
-    session_id: str = "",
-    detail: str = DETAIL_SHORT,
-) -> dict:
-    """Deprecated wrapper. Use haxaml_session_verify + haxaml_session_record instead."""
-    detail_mode, detail_err = _normalize_detail("haxaml_done", detail)
-    if detail_err:
-        return detail_err
-
-    if not session_id:
-        sm, _ = _get_state_manager(project_dir)
-        if sm:
-            state = sm.read()
-            sessions = state.get("sessions", [])
-            if isinstance(sessions, list):
-                for item in reversed(sessions):
-                    if not isinstance(item, dict):
-                        continue
-                    if str(item.get("task", "")).strip() != task.strip():
-                        continue
-                    if str(item.get("status", "")).strip() not in {"started", "planned", "verified"}:
-                        continue
-                    session_id = str(item.get("id", "")).strip()
-                    if session_id:
-                        break
-
-    verify = haxaml_session_verify(
-        task=task,
-        project_dir=project_dir,
-        session_id=session_id,
-        summary=changes or decisions or risks or f"Completed task: {task}",
-        changed_files=[],
-        unresolved_questions=[],
-        assumptions=[],
-        detail=detail_mode,
-    )
-    if not verify.get("ok"):
-        dep = _wrapper_deprecation("haxaml_done", ["haxaml_session_verify", "haxaml_session_record"])
-        return _err(
-            "haxaml_done",
-            verify.get("error", {}).get("code", "verify_failed"),
-            verify.get("error", {}).get("message", "Verification failed."),
-            verify.get("error", {}).get("details", {}),
-            warnings=[dep["message"]],
-        )
-
-    record = haxaml_session_record(
-        task=task,
-        result=result,
-        project_dir=project_dir,
-        session_id=session_id,
-        changes=changes,
-        decisions=decisions,
-        risks=risks,
-        detail=detail_mode,
-    )
-    if not record.get("ok"):
-        dep = _wrapper_deprecation("haxaml_done", ["haxaml_session_verify", "haxaml_session_record"])
-        return _err(
-            "haxaml_done",
-            record.get("error", {}).get("code", "record_failed"),
-            record.get("error", {}).get("message", "Recording failed."),
-            record.get("error", {}).get("details", {}),
-            warnings=[dep["message"]],
-        )
-
-    payload = record.get("data", {})
-    dep = _wrapper_deprecation("haxaml_done", ["haxaml_session_verify", "haxaml_session_record"])
-    payload["message"] = f"{payload.get('message', '')}\n(verification: {verify.get('data', {}).get('verification_id', '')})"
-    payload["deprecation"] = dep
-    return _ok(
-        "haxaml_done",
-        payload,
-        warnings=[dep["message"]],
         detail=detail_mode,
     )

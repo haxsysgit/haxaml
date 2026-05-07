@@ -18,9 +18,7 @@ Skip for simple utility tasks (fix a typo, run a command). Utility mode detectio
 about -> guidance -> prebuild -> context_pack -> ...
 ```
 
-When `haxaml_prebuild` succeeds, it already creates the governed session and advances the lifecycle contract to `haxaml_context_pack`. In the recommended path, you do not need a separate `session_start` or `session_plan` call afterward.
-
-The lower-level `session_start` and `session_plan` tools still exist for advanced/manual flows.
+When `haxaml_prebuild` succeeds, it already creates the governed session and advances the lifecycle contract to `haxaml_context_pack`.
 
 ## Parameters
 
@@ -41,20 +39,13 @@ The lower-level `session_start` and `session_plan` tools still exist for advance
     "task_type": "api_endpoint",
     "guidance_type": "implementation",
     "session_id": "session-abc123",
-    "frame_health": {
-      "blocking": [],
-      "warnings": ["facts.goal.scope is missing"]
-    },
     "required_questions": ["What is the expected interface contract for this feature?"],
-    "context_policy": {
-      "recommended_pack": "balanced"
-    },
     "message": "..."
   }
 }
 ```
 
-The full payload also includes `classification_reason`, `materials_needed`, `done_criteria`, `likely_impact`, `risks`, `plan`, `verification_expectations`, and `next_step`.
+The full payload also includes `classification_reason`, `materials_needed`, `done_criteria`, `likely_impact`, `risks`, `plan`, `verification_expectations`, `frame_health`, `context_policy`, and `next_step`.
 
 ## Readiness Values
 

@@ -1,4 +1,4 @@
-"""Tests for MCP server registration and compatibility entrypoint."""
+"""Tests for MCP server registration and entrypoint."""
 
 from haxaml.mcp_server import haxaml_prebuild, main, mcp_app
 
@@ -6,7 +6,7 @@ from haxaml.mcp_server import haxaml_prebuild, main, mcp_app
 class TestServerRegistration:
     def test_tool_count(self):
         tools = mcp_app._tool_manager._tools
-        assert len(tools) >= 22
+        assert len(tools) >= 19
 
     def test_expected_tools_registered(self):
         tools = mcp_app._tool_manager._tools
@@ -30,8 +30,6 @@ class TestServerRegistration:
             "haxaml_benchmark",
             "haxaml_context_pack",
             "haxaml_guidance",
-            "haxaml_session_start",
-            "haxaml_session_plan",
             "haxaml_session_verify",
             "haxaml_session_record",
             "haxaml_expect_sync",
@@ -43,9 +41,9 @@ class TestServerRegistration:
         assert mcp_app.name == "haxaml"
 
 
-class TestCompatibilityEntrypoint:
+class TestEntrypoint:
     def test_main_entrypoint_is_importable(self):
         assert callable(main)
 
-    def test_prebuild_is_importable_from_compat_entrypoint(self):
+    def test_prebuild_is_importable_from_server_entrypoint(self):
         assert callable(haxaml_prebuild)

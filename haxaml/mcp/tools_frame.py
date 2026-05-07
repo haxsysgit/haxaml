@@ -90,13 +90,13 @@ def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     rules_blob = {}
 
     checks = [
-        ("facts.yaml", "brain.yaml", validate_facts),
-        ("rules.yaml", "mind.yaml", validate_rules),
-        ("acts.yaml", "state.yaml", validate_acts),
+        ("facts.yaml", validate_facts),
+        ("rules.yaml", validate_rules),
+        ("acts.yaml", validate_acts),
     ]
 
-    for new_name, old_name, validator_fn in checks:
-        path = resolve_frame_file(p, new_name, old_name)
+    for new_name, validator_fn in checks:
+        path = resolve_frame_file(p, new_name)
         if path:
             errors = validator_fn(str(path))
             if errors:
@@ -116,7 +116,7 @@ def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
                 all_valid = False
             else:
                 lines.append(f"⚠ {new_name} not found (optional)")
-    acts_path = resolve_frame_file(p, "acts.yaml", "state.yaml")
+    acts_path = resolve_frame_file(p, "acts.yaml")
     if acts_path:
         acts = load_yaml(str(acts_path))
         sync_state = _expect_sync_state(acts)
@@ -260,51 +260,6 @@ def haxaml_validate(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     )
 
 
-# Deprecated compatibility helper.
-# Not registered as an MCP tool.
-# Remove fully in v0.7 after dogfooding.
-def haxaml_context(
-    project_dir: str = ".",
-    include_state: bool = True,
-    detail: str = DETAIL_SHORT,
-) -> dict:
-    """Deprecated wrapper. Use haxaml_context_pack instead."""
-    detail_mode, detail_err = _normalize_detail("haxaml_context", detail)
-    if detail_err:
-        return detail_err
-
-    frame = load_frame_data(project_dir)
-    if not frame.get("facts"):
-        return _err("haxaml_context", "missing_facts", "facts.yaml not found")
-    rules = frame.get("rules") or {}
-    context_policy = _rules_policy(rules, "context_policy", {"default_pack": "balanced"})
-    default_pack = str(context_policy.get("default_pack", "balanced"))
-    pack_data = build_context_pack(
-        project_dir,
-        task="General project context",
-        pack=default_pack,
-        include_state=include_state,
-        frame_data=frame,
-    )
-    ctx = "## Project Facts\n\n" + format_context_pack(pack_data)
-    tokens = pack_data.get("_meta", {}).get("token_count", count_tokens(ctx))
-    message = f"{ctx}\n\n--- Token count: {tokens} ---"
-    dep = _wrapper_deprecation("haxaml_context", ["haxaml_context_pack"])
-    return _ok(
-        "haxaml_context",
-        {
-            "message": message,
-            "context": ctx,
-            "tokens": tokens,
-            "context_pack": pack_data,
-            "include_state": include_state,
-            "deprecation": dep,
-        },
-        warnings=[dep["message"]],
-        detail=detail_mode,
-    )
-
-
 @mcp_app.tool()
 def haxaml_health(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Get project health report.
@@ -382,7 +337,7 @@ def haxaml_health(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     ]
 
     p = Path(project_dir).resolve()
-    rules_path = resolve_frame_file(p, "rules.yaml", "mind.yaml")
+    rules_path = resolve_frame_file(p, "rules.yaml")
     rules_errors = validate_rules(str(rules_path)) if rules_path else []
     expect_path = resolve_frame_file(p, "expect.yaml")
     expect_errors = validate_expect(str(expect_path)) if expect_path else []
@@ -451,7 +406,7 @@ def haxaml_doctor(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
         return detail_err
 
     p = Path(project_dir).resolve()
-    facts_path = resolve_frame_file(p, "facts.yaml", "brain.yaml")
+    facts_path = resolve_frame_file(p, "facts.yaml")
     if not facts_path:
         return _err("haxaml_doctor", "missing_facts", "facts.yaml not found")
 

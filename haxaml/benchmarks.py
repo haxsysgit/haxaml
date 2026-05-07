@@ -153,14 +153,14 @@ def measure_context_budget(project_dir: str) -> dict:
     project = Path(project_dir)
     results = {}
 
-    # FRAME files with backward compat
-    for new_name, old_name, label in [
-        ("facts.yaml", "brain.yaml", "facts"),
-        ("rules.yaml", "mind.yaml", "rules"),
-        ("acts.yaml", "state.yaml", "acts"),
-        ("expect.yaml", None, "expect"),
+    # Canonical FRAME files only
+    for filename, label in [
+        ("facts.yaml", "facts"),
+        ("rules.yaml", "rules"),
+        ("acts.yaml", "acts"),
+        ("expect.yaml", "expect"),
     ]:
-        fpath = resolve_frame_file(project, new_name, old_name)
+        fpath = resolve_frame_file(project, filename)
         if fpath:
             with open(fpath) as f:
                 text = f.read()
