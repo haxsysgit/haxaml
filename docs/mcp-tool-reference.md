@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Compact operator reference for the supported Haxaml MCP surface in `0.6.6`.
+Compact operator reference for the supported Haxaml MCP surface in `0.6.7b0`.
 
 ## Stable Contracts
 
@@ -73,6 +73,7 @@ Use visibility and repair tools such as `haxaml_health`, `haxaml_needs`, and `ha
 - `haxaml_prebuild` is the only public governed session-entry tool.
 - `session_id` is required for governed `context_pack`, `context_fetch`, `session_verify`, and `session_record`.
 - Repeated `haxaml_context_pack` calls require `refresh_reason`.
+- Repeated `haxaml_context_pack` calls now return refresh metadata describing whether the second call was a full pack, a delta, or a no-change refresh.
 - Repeated `haxaml_context_fetch` calls are allowed because each call is query-driven.
 - `pack` must be one of `minimal`, `balanced`, or `full`.
 - `haxaml_state_compact` archives older runs, sessions, and verifications into `.haxaml/archive/acts-history.yaml`; it does not summarize them away.
@@ -85,3 +86,5 @@ Use visibility and repair tools such as `haxaml_health`, `haxaml_needs`, and `ha
 `haxaml_context_pack` stays separate because it decides how much task-scoped context the agent should load first.
 
 `haxaml_context_fetch` exists so the agent can ask for more governed memory later without rerunning the whole first-pass context step. That keeps the default path lean while still allowing archive-backed follow-up retrieval.
+
+In `0.6.7b0`, repeated `context_pack` calls also use runtime snapshots keyed by `(project_dir, session_id)` so unchanged governed sections can stay out of the second payload.

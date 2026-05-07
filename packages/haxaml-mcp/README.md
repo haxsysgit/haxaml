@@ -2,6 +2,12 @@
 
 Tiny launcher package for the Haxaml MCP server.
 
+Package split:
+
+- `haxaml` - core governance engine and CLI
+- `haxaml-mcp` - this MCP launcher/runtime package
+- `haxaml-ui` - optional local dashboard package
+
 Use this when you want the clean MCP setup:
 
 ```bash

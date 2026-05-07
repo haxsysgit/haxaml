@@ -13,12 +13,13 @@ on:
       package_target:
         description: "Which package(s) to publish"
         required: true
-        default: "both"
+        default: "all"
         type: choice
         options:
-          - both
+          - all
           - core
           - mcp
+          - ui
 
 permissions:
   contents: read
@@ -50,7 +51,7 @@ jobs:
           print(
               "Version checks passed for "
               f"{snapshot['core_version']} "
-              f"(core={snapshot['core_version']}, mcp={snapshot['mcp_version']})."
+              f"(core={snapshot['core_version']}, mcp={snapshot['mcp_version']}, ui={snapshot['ui_version']})."
           )
           PY
         env:
@@ -60,38 +61,52 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --extra dev --extra ui
 
       - name: Clean old build artifacts
-        run: rm -rf dist packages/haxaml-mcp/dist
+        run: rm -rf dist packages/haxaml-mcp/dist packages/haxaml-ui/dist
 
       - name: Run tests
         run: uv run pytest -q
 
       - name: Build Haxaml package
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'both' || github.event.inputs.package_target == 'core'
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'core'
         run: uv build
 
       - name: Build Haxaml MCP launcher package
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'both' || github.event.inputs.package_target == 'mcp'
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'mcp'
         run: uv build --project packages/haxaml-mcp --out-dir packages/haxaml-mcp/dist
 
+      - name: Build Haxaml UI package
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'ui'
+        run: uv build --project packages/haxaml-ui --out-dir packages/haxaml-ui/dist
+
       - name: Check Haxaml package metadata
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'both' || github.event.inputs.package_target == 'core'
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'core'
         run: uv run twine check dist/*
 
       - name: Check Haxaml MCP launcher package metadata
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'both' || github.event.inputs.package_target == 'mcp'
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'mcp'
         run: uv run twine check packages/haxaml-mcp/dist/*
 
+      - name: Check Haxaml UI package metadata
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'ui'
+        run: uv run twine check packages/haxaml-ui/dist/*
+
       - name: Publish Haxaml to PyPI
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'both' || github.event.inputs.package_target == 'core'
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'core'
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
         run: uv publish --token "$PYPI_TOKEN" dist/*
 
       - name: Publish Haxaml MCP launcher to PyPI
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'both' || github.event.inputs.package_target == 'mcp'
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'mcp'
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
         run: uv publish --token "$PYPI_TOKEN" packages/haxaml-mcp/dist/*
+
+      - name: Publish Haxaml UI to PyPI
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'ui'
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: uv publish --token "$PYPI_TOKEN" packages/haxaml-ui/dist/*

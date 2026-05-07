@@ -26,12 +26,20 @@ haxaml/
     tools_benchmark.py       # benchmark tool and workflow profiling helpers
     resources.py             # MCP resources (haxaml://frame/*)
   context.py                 # context assembly and token counting
+  runtime_cache.py           # shared in-process FRAME/archive snapshot cache
   validator.py               # FRAME schema + semantic validation
   reconcile.py               # derivation conflict detection
   export_engine.py           # FRAME -> agent-native file generation
   state_manager.py           # state read/write + hot/archive acts history control
   runner.py                  # internal run lifecycle helper
   paths.py                   # canonical FRAME path resolution
+
+haxaml_ui/
+  dashboard.py               # local read-only dashboard package
+
+packages/
+  haxaml-mcp/               # MCP launcher package
+  haxaml-ui/                # dashboard package manifest
 
 docs/
   architecture.md
@@ -66,6 +74,7 @@ tests/
 - Canonical file names are `facts.yaml`, `rules.yaml`, `acts.yaml`, `expect.yaml`, and `map.yaml`.
 - Context packs are task-scoped and preferred over whole-project context dumps.
 - Older acts history lives in `.haxaml/archive/acts-history.yaml` and is loaded on demand for guided retrieval.
+- Long-lived runtimes should reuse `runtime_cache` rather than rereading FRAME files ad hoc.
 
 ## MCP Layering
 
@@ -84,6 +93,48 @@ tests/
 - `haxaml.mcp.base`
   - shared imports/constants for MCP modules
   - not a public tool surface
+
+## Package Split
+
+- `haxaml`
+  - core governance engine
+  - canonical FRAME loaders and context logic
+  - CLI surface including `haxaml dashboard`
+  - does not require MCP runtime deps by default
+
+- `haxaml-mcp`
+  - tiny launcher/runtime package for stdio MCP use
+  - carries the `mcp` dependency so core installs stay leaner
+
+- `haxaml-ui`
+  - local browser dashboard package
+  - pulled in directly with `pip install haxaml-ui`
+  - also reachable via the convenience extra `pip install "haxaml[ui]"`
+
+## Incremental Read Path
+
+The `0.6.7b0` line adds a shared in-process snapshot layer so long-lived runtimes stop reparsing all FRAME files on every governed read.
+
+The cache tracks:
+
+- file existence
+- file stat signatures
+- parsed YAML blobs
+- load errors
+- section fingerprints
+- shallow archive metadata and index
+
+Used in:
+
+- repeated `context_pack` calls
+- archive-aware retrieval
+- dashboard overview and drilldown routes
+- any other read-heavy in-process runtime path
+
+Archive detail is intentionally separate:
+
+- overview/index reads stay shallow
+- full archived record bodies are loaded only for the records actually drilled into
 
 ## Testing Strategy
 

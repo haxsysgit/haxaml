@@ -21,6 +21,12 @@ Prompt files still matter, but they are adapters. The hard governance logic live
 - MCP server: `haxaml-mcp` via `haxaml.mcp_server:main`
 - Project state: repository plus `.haxaml/*.yaml`
 
+Package split in `0.6.7b0`:
+
+- `haxaml` - core governance engine and CLI
+- `haxaml-mcp` - MCP runtime/launcher package
+- `haxaml-ui` - local dashboard package
+
 Canonical FRAME files:
 
 - `.haxaml/facts.yaml`
@@ -84,6 +90,12 @@ What to read from each step:
 - `balanced` should remain the default for most governed work.
 - Repeat `haxaml_context_pack` only when scope changed or context went stale.
 - Repeated calls require `refresh_reason`.
+- Repeated calls now report:
+  - `refresh_mode`
+  - `refresh_summary`
+  - `changed_sections`
+  - `unchanged_sections`
+  - `token_delta`
 - Use `haxaml_context_fetch` for follow-up governed lookup instead of repeating `context_pack` just to go hunting for more memory.
 
 Short mode intentionally returns compact execution facts first, not the full context body. Use `detail="full"` only when a client explicitly needs the structured pack object.
@@ -93,6 +105,8 @@ Acts history stays tiered:
 - hot current state remains in `.haxaml/acts.yaml`
 - older runs, sessions, and verifications move to `.haxaml/archive/acts-history.yaml`
 - archive history is searched only when the agent asks for more governed context
+
+Long-lived runtimes now also share an in-process FRAME/archive snapshot cache so repeated governed reads do not reparse every unchanged file.
 
 ## Visibility And Repair Tools
 

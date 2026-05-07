@@ -41,7 +41,26 @@ about → guidance → prebuild → context_pack → [context_fetch]* → build 
 
 Project memory lives in `.haxaml/` — versioned files your agent uses at runtime, not a static wall of text. Older acts history is kept in `.haxaml/archive/acts-history.yaml` and pulled back only on demand.
 
+In `0.6.7b0`, long-lived runtimes also stop rereading unchanged FRAME files blindly. Repeated `context_pack` calls now compare the current runtime snapshot to the earlier session snapshot, report what changed, and return smaller refresh deltas when only part of the governed context moved.
+
 ## Install
+
+Haxaml now ships as three related packages:
+
+- `haxaml` - core FRAME governance engine and CLI
+- `haxaml-mcp` - MCP launcher/runtime package
+- `haxaml-ui` - local read-only dashboard package, beta in `0.6.7b0`
+
+Common install paths:
+
+```bash
+pip install haxaml
+pip install haxaml-mcp
+pip install haxaml-ui
+pip install "haxaml[ui]"
+```
+
+If you want to run the MCP server without a persistent install:
 
 ```bash
 uvx haxaml-mcp
@@ -52,6 +71,37 @@ For persistent local installs:
 ```bash
 uv tool install haxaml-mcp
 ```
+
+## Local Dashboard
+
+The first dashboard release is intentionally narrow:
+
+- browser UI, not TUI
+- localhost only
+- read-only
+- overview-first
+- all five FRAME files rendered
+- archive summary plus drilldown
+
+Launch it with:
+
+```bash
+haxaml dashboard
+```
+
+Supported flags:
+
+- `--project-dir`
+- `--host`
+- `--port`
+- `--no-open`
+- `--read-only`
+
+Install note:
+
+- `haxaml dashboard` is the primary human launcher
+- `haxaml[ui]` is the install selector
+- `haxaml-ui` is the separate dashboard distribution
 
 ## MCP Start
 

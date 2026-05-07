@@ -7,6 +7,7 @@ from haxaml.runtime_cache import runtime_cache
 
 pytest.importorskip("jinja2")
 pytest.importorskip("starlette.testclient")
+pytest.importorskip("haxaml_ui")
 
 from starlette.testclient import TestClient
 

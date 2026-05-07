@@ -41,9 +41,5 @@ haxaml-dashboard = "haxaml_ui.dashboard:main"
 Homepage = "https://github.com/haxsysgit/haxaml"
 Repository = "https://github.com/haxsysgit/haxaml"
 
-[tool.setuptools]
-package-dir = {"" = "../.."}
-
 [tool.setuptools.packages.find]
-where = ["../.."]
 include = ["haxaml_ui*"]

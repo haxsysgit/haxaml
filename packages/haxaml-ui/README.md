@@ -2,6 +2,16 @@
 
 Read-only local dashboard package for Haxaml.
 
+This package is the dashboard distribution itself.
+
+The human launcher remains:
+
+```bash
+haxaml dashboard
+```
+
+`haxaml[ui]` is only the convenience install selector for the core package.
+
 Install directly:
 
 ```bash
@@ -14,8 +24,8 @@ Or install through the core extra:
 pip install "haxaml[ui]"
 ```
 
-The primary human launcher remains:
+Direct package entrypoint is also available:
 
 ```bash
-haxaml dashboard
+haxaml-dashboard
 ```

@@ -44,12 +44,14 @@ ui = [
 ]
 dev = [
   "build>=1.2",
+  "mcp>=1.0",
   "pytest>=8.0",
   "twine>=5.0"
 ]
 all = [
   "build>=1.2",
   "haxaml-ui==0.6.7b0",
+  "mcp>=1.0",
   "pytest>=8.0",
   "tiktoken>=0.5",
   "twine>=5.0"
