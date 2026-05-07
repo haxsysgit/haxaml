@@ -126,7 +126,7 @@ def test_archive_overview_is_shallow_and_detail_loads_selected_record(monkeypatc
         yaml.dump(
             {
                 "metadata": {
-                    "version": "0.6.7b0",
+                    "version": "0.6.7",
                     "managed_by": "haxaml",
                     "archive_mode": "manual",
                     "counts": {"runs": 1, "sessions": 0, "verifications": 0},

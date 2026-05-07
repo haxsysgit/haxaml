@@ -18,7 +18,7 @@ import yaml
 from haxaml.paths import acts_history_path
 
 
-ARCHIVE_VERSION = "0.6.7b0"
+ARCHIVE_VERSION = "0.6.7"
 DEFAULT_MEMORY_POLICY = {
     "archive_mode": "manual",
     "max_hot_runs": 5,

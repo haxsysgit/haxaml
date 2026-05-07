@@ -41,7 +41,7 @@ about → guidance → prebuild → context_pack → [context_fetch]* → build 
 
 Project memory lives in `.haxaml/` — versioned files your agent uses at runtime, not a static wall of text. Older acts history is kept in `.haxaml/archive/acts-history.yaml` and pulled back only on demand.
 
-In `0.6.7b0`, long-lived runtimes also stop rereading unchanged FRAME files blindly. Repeated `context_pack` calls now compare the current runtime snapshot to the earlier session snapshot, report what changed, and return smaller refresh deltas when only part of the governed context moved.
+In `0.6.7`, long-lived runtimes also stop rereading unchanged FRAME files blindly. Repeated `context_pack` calls now compare the current runtime snapshot to the earlier session snapshot, report what changed, and return smaller refresh deltas when only part of the governed context moved.
 
 ## Install
 
@@ -49,7 +49,7 @@ Haxaml now ships as three related packages:
 
 - `haxaml` - core FRAME governance engine and CLI
 - `haxaml-mcp` - MCP launcher/runtime package
-- `haxaml-ui` - local read-only dashboard package, beta in `0.6.7b0`
+- `haxaml-ui` - local read-only dashboard package
 
 Common install paths:
 

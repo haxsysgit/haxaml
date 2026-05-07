@@ -44,7 +44,7 @@ def test_archive_overview_is_shallow_and_detail_drilldown_works(monkeypatch, gov
         yaml.dump(
             {
                 "metadata": {
-                    "version": "0.6.7b0",
+                    "version": "0.6.7",
                     "managed_by": "haxaml",
                     "archive_mode": "manual",
                     "counts": {"runs": 1, "sessions": 0, "verifications": 0},

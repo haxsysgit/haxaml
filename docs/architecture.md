@@ -113,7 +113,7 @@ tests/
 
 ## Incremental Read Path
 
-The `0.6.7b0` line adds a shared in-process snapshot layer so long-lived runtimes stop reparsing all FRAME files on every governed read.
+The `0.6.7` line adds a shared in-process snapshot layer so long-lived runtimes stop reparsing all FRAME files on every governed read.
 
 The cache tracks:
 

@@ -33,9 +33,9 @@ def test_validate_release_versions_rejects_mismatched_tag():
         validate_release_versions("v9.9.9")
 
 
-def test_release_snapshot_accepts_beta_tag():
-    snap = release_version_snapshot("v0.6.7b0")
-    assert snap["tag_version"] == "0.6.7b0"
+def test_release_snapshot_accepts_prerelease_tag():
+    snap = release_version_snapshot("v0.6.7b1")
+    assert snap["tag_version"] == "0.6.7b1"
 
 
 def test_get_version_prefers_local_pyproject(monkeypatch):

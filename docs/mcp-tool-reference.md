@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Compact operator reference for the supported Haxaml MCP surface in `0.6.7b0`.
+Compact operator reference for the supported Haxaml MCP surface in `0.6.7`.
 
 ## Stable Contracts
 
@@ -87,4 +87,4 @@ Use visibility and repair tools such as `haxaml_health`, `haxaml_needs`, and `ha
 
 `haxaml_context_fetch` exists so the agent can ask for more governed memory later without rerunning the whole first-pass context step. That keeps the default path lean while still allowing archive-backed follow-up retrieval.
 
-In `0.6.7b0`, repeated `context_pack` calls also use runtime snapshots keyed by `(project_dir, session_id)` so unchanged governed sections can stay out of the second payload.
+In `0.6.7`, repeated `context_pack` calls also use runtime snapshots keyed by `(project_dir, session_id)` so unchanged governed sections can stay out of the second payload.

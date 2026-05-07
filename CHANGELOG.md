@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.7b0 - 2026-05-07
+## 0.6.7 - 2026-05-07
 
 - Added a shared in-process runtime snapshot cache so long-lived runtimes reuse canonical FRAME reads, invalidate only changed files, and keep archive indexing shallow until drilldown detail is requested.
 - Updated repeated `haxaml_context_pack` behavior to compare against prior session snapshots in runtime memory and return refresh metadata:
@@ -11,13 +11,13 @@
   - `token_delta`
 - Added smaller refresh responses when only part of the governed context changed, plus a repeat-context benchmark profile and cache-focused regression coverage.
 - Shipped the first local read-only dashboard behind `haxaml dashboard`, with overview, FRAME, and archive routes designed for humans who need to inspect FRAME without editing it.
-- Split packaging more cleanly across:
+- Split packaging cleanly across:
   - `haxaml` for core CLI/governance
   - `haxaml-mcp` for MCP runtime
-  - `haxaml-ui` for the dashboard beta
+  - `haxaml-ui` for the dashboard
 - Kept `haxaml[ui]` as the convenience install selector while making `haxaml-ui` the actual UI distribution.
 - Moved `mcp` out of the core package default dependency set so base installs stay leaner.
-- Hardened release tooling for the beta line by teaching version checks, bump tooling, and publish workflow steps about the separate UI package and beta tags.
+- Hardened release tooling by teaching version checks, bump tooling, and publish workflow steps about the separate UI package and prerelease tags.
 
 ## 0.6.6 - 2026-05-07
 

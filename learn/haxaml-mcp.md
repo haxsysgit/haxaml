@@ -21,7 +21,7 @@ Prompt files still matter, but they are adapters. The hard governance logic live
 - MCP server: `haxaml-mcp` via `haxaml.mcp_server:main`
 - Project state: repository plus `.haxaml/*.yaml`
 
-Package split in `0.6.7b0`:
+Package split in `0.6.7`:
 
 - `haxaml` - core governance engine and CLI
 - `haxaml-mcp` - MCP runtime/launcher package
