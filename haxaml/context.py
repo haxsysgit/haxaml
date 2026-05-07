@@ -8,50 +8,48 @@ import yaml
 
 from haxaml.acts_archive import ActsArchive
 from haxaml.frame_model import FrameModel
-from haxaml.paths import resolve_frame_file
+from haxaml.runtime_cache import runtime_cache, stable_fingerprint
+
+
+CONTEXT_SECTION_ORDER = [
+    "essential_facts",
+    "relevant_rules",
+    "recent_decisions",
+    "affected_modules",
+    "expectations",
+    "unresolved",
+    "task_risks",
+    "retrieval_hints",
+]
 
 
 def load_frame_data(project_dir: str) -> dict[str, Any]:
     """Load available FRAME files into a dict."""
-    frame = FrameModel.load(project_dir)
-    return {
-        "facts": frame.facts,
-        "rules": frame.rules,
-        "acts": frame.acts,
-        "expect": frame.expect,
-        "map": frame.map,
-    }
+    return runtime_cache().get_frame_bundle(project_dir)["data"]
 
 
 def build_context(project_dir: str, include_state: bool = True) -> str:
     """Build compact whole-project context from canonical FRAME files."""
     parts = []
+    frame = load_frame_data(project_dir)
 
-    facts_path = resolve_frame_file(project_dir, "facts.yaml")
-    if facts_path:
-        with open(facts_path, encoding="utf-8") as f:
-            facts = yaml.safe_load(f)
+    facts = frame.get("facts")
+    if isinstance(facts, dict):
         parts.append(_format_facts_context(facts))
     else:
         parts.append("⚠ facts.yaml not found — project facts are missing.")
 
-    rules_path = resolve_frame_file(project_dir, "rules.yaml")
-    if rules_path:
-        with open(rules_path, encoding="utf-8") as f:
-            rules = yaml.safe_load(f)
+    rules = frame.get("rules")
+    if isinstance(rules, dict):
         parts.append(_format_rules_context(rules))
 
     if include_state:
-        acts_path = resolve_frame_file(project_dir, "acts.yaml")
-        if acts_path:
-            with open(acts_path, encoding="utf-8") as f:
-                acts = yaml.safe_load(f)
+        acts = frame.get("acts")
+        if isinstance(acts, dict):
             parts.append(_format_acts_context(acts))
 
-    expect_path = resolve_frame_file(project_dir, "expect.yaml")
-    if expect_path:
-        with open(expect_path, encoding="utf-8") as f:
-            expect = yaml.safe_load(f)
+    expect = frame.get("expect")
+    if isinstance(expect, dict):
         parts.append(_format_expect_context(expect))
 
     return "\n\n---\n\n".join(parts)
@@ -63,6 +61,8 @@ def build_context_pack(
     pack: str = "balanced",
     include_state: bool = True,
     frame_data: dict[str, Any] | None = None,
+    sections_override: dict[str, Any] | None = None,
+    refresh_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic task-specific context pack.
 
@@ -76,6 +76,90 @@ def build_context_pack(
     - task risks
     """
     frame = frame_data if isinstance(frame_data, dict) else load_frame_data(project_dir)
+    sections, build_meta = build_context_pack_sections(
+        project_dir,
+        task=task,
+        pack=pack,
+        include_state=include_state,
+        frame_data=frame,
+        sections_override=sections_override,
+    )
+
+    pack_data: dict[str, Any] = {
+        "task": task,
+        "pack": build_meta["resolved_pack"],
+        **sections,
+    }
+    pack_text = format_context_pack(pack_data)
+    token_count = count_tokens(pack_text)
+    refresh = refresh_meta or {}
+    pack_data["_meta"] = {
+        "token_count": token_count,
+        "context_window_usage": _token_window_usage(token_count),
+        "compaction_notes": build_meta["notes"],
+        "included_sections": build_meta["included_sections"],
+        "omitted_sections": build_meta["omitted_sections"],
+        "omitted_context": build_meta["omitted_context"],
+        "limits": build_meta["limits"],
+        "state_included": include_state,
+        "requested_pack": pack,
+        "resolved_pack": build_meta["resolved_pack"],
+        "likely_relevant_sources": build_meta["retrieval_hints"].get("likely_relevant_sources", []),
+        "candidate_file_refs": build_meta["retrieval_hints"].get("candidate_file_refs", []),
+        "archive_available": build_meta["retrieval_hints"].get("archive_available", False),
+        "refresh_mode": refresh.get("refresh_mode", "full"),
+        "refresh_summary": refresh.get("refresh_summary", "Initial full context pack."),
+        "changed_sections": refresh.get("changed_sections", list(build_meta["included_sections"])),
+        "unchanged_sections": refresh.get("unchanged_sections", []),
+        "token_delta": int(refresh.get("token_delta", token_count) or 0),
+    }
+    return pack_data
+
+
+def format_context_pack(pack_data: dict[str, Any]) -> str:
+    """Render a context pack to compact markdown text."""
+    meta = pack_data.get("_meta", {}) if isinstance(pack_data.get("_meta"), dict) else {}
+    refresh_mode = str(meta.get("refresh_mode", "full"))
+    lines: list[str] = ["## Context Pack Refresh" if refresh_mode != "full" else "## Context Pack"]
+    lines.append(f"Task: {pack_data.get('task', '')}")
+    lines.append(f"Pack: {pack_data.get('pack', 'balanced')}")
+    if refresh_mode != "full":
+        lines.append(f"Refresh mode: {refresh_mode}")
+        if meta.get("refresh_summary"):
+            lines.append(f"Refresh summary: {meta['refresh_summary']}")
+        changed_sections = meta.get("changed_sections", [])
+        unchanged_sections = meta.get("unchanged_sections", [])
+        if changed_sections:
+            lines.append(f"Changed sections: {', '.join(changed_sections)}")
+        if unchanged_sections:
+            lines.append(f"Unchanged sections: {', '.join(unchanged_sections)}")
+        lines.append(f"Token delta: {int(meta.get('token_delta', 0) or 0)}")
+
+    for section_name in CONTEXT_SECTION_ORDER:
+        section_lines = _render_context_section(section_name, pack_data.get(section_name))
+        if section_lines:
+            lines.append("")
+            lines.extend(section_lines)
+
+    notes = meta.get("compaction_notes", [])
+    if notes:
+        lines.append("\n### Compaction")
+        for note in notes:
+            lines.append(f"- {note}")
+
+    return "\n".join(lines)
+
+
+def build_context_pack_sections(
+    project_dir: str,
+    *,
+    task: str,
+    pack: str,
+    include_state: bool,
+    frame_data: dict[str, Any] | None = None,
+    sections_override: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    frame = frame_data if isinstance(frame_data, dict) else load_frame_data(project_dir)
     facts = frame.get("facts") or {}
     rules = frame.get("rules") or {}
     acts = frame.get("acts") or {}
@@ -86,222 +170,271 @@ def build_context_pack(
     default_pack = _resolve_pack_name(str(policy.get("default_pack", "balanced")))
     resolved_pack = _resolve_pack_name(pack, default_pack)
     limits = _pack_limits(pack, policy)
-
-    essential_facts = {
-        "project": _clean_str((facts.get("identity") or {}).get("name", "unknown"), "unknown"),
-        "purpose": _clean_str((facts.get("goal") or {}).get("purpose", "")),
-        "scope": _clean_str((facts.get("goal") or {}).get("scope", "")),
-        "stack": facts.get("stack", {}),
-        "architecture": {
-            "pattern": _clean_str((facts.get("architecture") or {}).get("pattern", "")),
-            "boundaries": (facts.get("architecture") or {}).get("boundaries", []),
-        },
-        "database": _clean_str((facts.get("database") or {}).get("type", "")),
-    }
-
-    relevant_rules = {
-        "read_first": _clean_str_list(((rules.get("before_task") or {}).get("read_first", []) or [])),
-        "checks": _clean_str_list(((rules.get("before_task") or {}).get("check", []) or [])),
-        "boundaries": _clean_str_list(((rules.get("boundaries") or {}).get("rules", []) or [])),
-        "forbidden": _clean_str_list((rules.get("forbidden", []) or [])),
-        "after_verify": _clean_str_list(((rules.get("after_task") or {}).get("verify", []) or [])),
-    }
-
-    recent_decisions = _normalize_decisions(acts.get("decisions", []))
-    affected_modules = _detect_affected_modules(task, facts, rules, map_data)
-
-    expectations = {
-        "goal": ((expect.get("planning") or {}).get("goal", "")),
-        "active_phase": _active_phase(expect),
-        "active_runs": _active_runs(expect.get("runbook", [])),
-    }
-
-    unresolved = {
-        "facts": _normalize_unresolved_facts(facts.get("unresolved", [])),
-        "acts": _normalize_unresolved_acts(acts.get("unresolved_dependencies", [])),
-        "expect": _normalize_open_questions(expect.get("open_questions", [])),
-    }
-
-    task_risks = _task_risks(task, rules, affected_modules)
-
-    # Deterministic compaction
+    overrides = sections_override or {}
     notes: list[str] = []
-    recent_decisions, note = _limit_list(recent_decisions, limits["max_items"], limits["max_chars"])
-    if note:
-        notes.append(f"recent_decisions: {note}")
+    sections: dict[str, Any] = {}
+    section_markers = context_pack_section_markers(
+        project_dir,
+        task=task,
+        pack=resolved_pack,
+        include_state=include_state,
+        frame_data=frame,
+    )
 
-    relevant_rules["checks"], note = _limit_list(relevant_rules["checks"], limits["max_items"], limits["max_chars"])
-    if note:
-        notes.append(f"rules.checks: {note}")
+    if "essential_facts" in overrides:
+        sections["essential_facts"] = overrides["essential_facts"]
+    else:
+        sections["essential_facts"] = {
+            "project": _clean_str((facts.get("identity") or {}).get("name", "unknown"), "unknown"),
+            "purpose": _clean_str((facts.get("goal") or {}).get("purpose", "")),
+            "scope": _clean_str((facts.get("goal") or {}).get("scope", "")),
+            "stack": facts.get("stack", {}),
+            "architecture": {
+                "pattern": _clean_str((facts.get("architecture") or {}).get("pattern", "")),
+                "boundaries": (facts.get("architecture") or {}).get("boundaries", []),
+            },
+            "database": _clean_str((facts.get("database") or {}).get("type", "")),
+        }
 
-    relevant_rules["boundaries"], note = _limit_list(relevant_rules["boundaries"], limits["max_items"], limits["max_chars"])
-    if note:
-        notes.append(f"rules.boundaries: {note}")
+    if "relevant_rules" in overrides:
+        sections["relevant_rules"] = overrides["relevant_rules"]
+    else:
+        relevant_rules = {
+            "read_first": _clean_str_list(((rules.get("before_task") or {}).get("read_first", []) or [])),
+            "checks": _clean_str_list(((rules.get("before_task") or {}).get("check", []) or [])),
+            "boundaries": _clean_str_list(((rules.get("boundaries") or {}).get("rules", []) or [])),
+            "forbidden": _clean_str_list((rules.get("forbidden", []) or [])),
+            "after_verify": _clean_str_list(((rules.get("after_task") or {}).get("verify", []) or [])),
+        }
+        for key, note_key in (
+            ("checks", "rules.checks"),
+            ("boundaries", "rules.boundaries"),
+            ("forbidden", "rules.forbidden"),
+        ):
+            relevant_rules[key], note = _limit_list(relevant_rules[key], limits["max_items"], limits["max_chars"])
+            if note:
+                notes.append(f"{note_key}: {note}")
+        sections["relevant_rules"] = relevant_rules
 
-    relevant_rules["forbidden"], note = _limit_list(relevant_rules["forbidden"], limits["max_items"], limits["max_chars"])
-    if note:
-        notes.append(f"rules.forbidden: {note}")
+    if "recent_decisions" in overrides:
+        sections["recent_decisions"] = overrides["recent_decisions"]
+    else:
+        recent_decisions = _normalize_decisions(acts.get("decisions", [])) if include_state else []
+        recent_decisions, note = _limit_list(recent_decisions, limits["max_items"], limits["max_chars"])
+        if note:
+            notes.append(f"recent_decisions: {note}")
+        sections["recent_decisions"] = recent_decisions
 
-    affected_modules, note = _limit_list(affected_modules, limits["max_items"], limits["max_chars"])
-    if note:
-        notes.append(f"affected_modules: {note}")
+    if "affected_modules" in overrides:
+        affected_modules = overrides["affected_modules"]
+    else:
+        affected_modules = _detect_affected_modules(task, facts, rules, map_data)
+        affected_modules, note = _limit_list(affected_modules, limits["max_items"], limits["max_chars"])
+        if note:
+            notes.append(f"affected_modules: {note}")
+    sections["affected_modules"] = affected_modules
 
-    unresolved["facts"], note = _limit_list(unresolved["facts"], limits["max_items"], limits["max_chars"])
-    if note:
-        notes.append(f"unresolved.facts: {note}")
+    if "expectations" in overrides:
+        sections["expectations"] = overrides["expectations"]
+    else:
+        sections["expectations"] = {
+            "goal": ((expect.get("planning") or {}).get("goal", "")),
+            "active_phase": _active_phase(expect),
+            "active_runs": _active_runs(expect.get("runbook", [])),
+        }
 
-    unresolved["acts"], note = _limit_list(unresolved["acts"], limits["max_items"], limits["max_chars"])
-    if note:
-        notes.append(f"unresolved.acts: {note}")
+    if "unresolved" in overrides:
+        unresolved = overrides["unresolved"]
+    else:
+        unresolved = {
+            "facts": _normalize_unresolved_facts(facts.get("unresolved", [])),
+            "acts": _normalize_unresolved_acts(acts.get("unresolved_dependencies", [])) if include_state else [],
+            "expect": _normalize_open_questions(expect.get("open_questions", [])),
+        }
+        for key in ("facts", "acts", "expect"):
+            unresolved[key], note = _limit_list(unresolved[key], limits["max_items"], limits["max_chars"])
+            if note:
+                notes.append(f"unresolved.{key}: {note}")
+    sections["unresolved"] = unresolved
 
-    unresolved["expect"], note = _limit_list(unresolved["expect"], limits["max_items"], limits["max_chars"])
-    if note:
-        notes.append(f"unresolved.expect: {note}")
+    if "task_risks" in overrides:
+        sections["task_risks"] = overrides["task_risks"]
+    else:
+        sections["task_risks"] = _task_risks(task, rules, sections["affected_modules"])
 
-    pack_data: dict[str, Any] = {
-        "task": task,
-        "pack": resolved_pack,
-        "essential_facts": essential_facts,
-        "relevant_rules": relevant_rules,
-        "recent_decisions": recent_decisions if include_state else [],
-        "affected_modules": affected_modules,
-        "expectations": expectations,
-        "unresolved": unresolved,
-        "task_risks": task_risks,
-    }
-    retrieval_hints = build_context_hints(project_dir, task=task, frame_data=frame)
-    pack_data["retrieval_hints"] = retrieval_hints
+    if "retrieval_hints" in overrides:
+        retrieval_hints = overrides["retrieval_hints"]
+    else:
+        retrieval_hints = build_context_hints(project_dir, task=task, frame_data=frame)
+    sections["retrieval_hints"] = retrieval_hints
 
-    pack_text = format_context_pack(pack_data)
-    section_order = [
-        "essential_facts",
-        "relevant_rules",
-        "recent_decisions",
-        "affected_modules",
-        "expectations",
-        "unresolved",
-        "task_risks",
-    ]
-    included_sections = [name for name in section_order if _has_section_data(pack_data.get(name))]
-    omitted_sections = [name for name in section_order if name not in included_sections]
+    included_sections = [name for name in CONTEXT_SECTION_ORDER if _has_section_data(sections.get(name))]
+    omitted_sections = [name for name in CONTEXT_SECTION_ORDER if name not in included_sections]
     omitted_context = list(notes)
     if not include_state:
         omitted_context.append("recent_decisions: omitted (include_state=False)")
     if omitted_sections:
         omitted_context.append(f"empty sections omitted: {', '.join(omitted_sections)}")
 
-    token_count = count_tokens(pack_text)
-    pack_data["_meta"] = {
-        "token_count": token_count,
-        "context_window_usage": _token_window_usage(token_count),
-        "compaction_notes": notes,
+    section_tokens = {
+        name: count_tokens("\n".join(_render_context_section(name, sections.get(name))))
+        for name in included_sections
+    }
+    return sections, {
+        "resolved_pack": resolved_pack,
+        "limits": limits,
+        "notes": notes,
         "included_sections": included_sections,
         "omitted_sections": omitted_sections,
         "omitted_context": omitted_context,
-        "limits": limits,
-        "state_included": include_state,
-        "requested_pack": pack,
-        "resolved_pack": resolved_pack,
-        "likely_relevant_sources": retrieval_hints.get("likely_relevant_sources", []),
-        "candidate_file_refs": retrieval_hints.get("candidate_file_refs", []),
-        "archive_available": retrieval_hints.get("archive_available", False),
+        "retrieval_hints": retrieval_hints,
+        "section_markers": section_markers,
+        "section_tokens": section_tokens,
     }
 
-    return pack_data
+
+def context_pack_section_markers(
+    project_dir: str,
+    *,
+    task: str,
+    pack: str,
+    include_state: bool,
+    frame_data: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    bundle = runtime_cache().get_frame_bundle(project_dir)
+    files = bundle["files"]
+    archive_index = bundle["archive_index"]
+    frame = frame_data if isinstance(frame_data, dict) else bundle["data"]
+
+    def file_fp(name: str, *section: str) -> str:
+        snapshot = files.get(name)
+        if snapshot is None:
+            return stable_fingerprint(None)
+        return snapshot.section_fingerprint(*section)
+
+    affected_input = {
+        "task": task,
+        "pack": pack,
+        "include_state": include_state,
+        "facts": file_fp("facts"),
+        "rules": file_fp("rules"),
+        "map": file_fp("map"),
+    }
+    affected_modules = _detect_affected_modules(task, frame.get("facts") or {}, frame.get("rules") or {}, frame.get("map") or {})
+    return {
+        "essential_facts": stable_fingerprint({"pack": pack, "facts": file_fp("facts")}),
+        "relevant_rules": stable_fingerprint({"pack": pack, "rules": file_fp("rules")}),
+        "recent_decisions": stable_fingerprint(
+            {"pack": pack, "include_state": include_state, "acts.decisions": file_fp("acts", "decisions")}
+        ),
+        "expectations": stable_fingerprint({"pack": pack, "expect": file_fp("expect")}),
+        "unresolved": stable_fingerprint(
+            {
+                "pack": pack,
+                "include_state": include_state,
+                "facts.unresolved": file_fp("facts", "unresolved"),
+                "acts.unresolved_dependencies": file_fp("acts", "unresolved_dependencies"),
+                "expect.open_questions": file_fp("expect", "open_questions"),
+            }
+        ),
+        "affected_modules": stable_fingerprint(affected_input),
+        "task_risks": stable_fingerprint(
+            {
+                "task": task,
+                "pack": pack,
+                "rules": file_fp("rules"),
+                "affected_modules": affected_modules,
+            }
+        ),
+        "retrieval_hints": stable_fingerprint(
+            {
+                "task": task,
+                "pack": pack,
+                "include_state": include_state,
+                "sources": ["facts", "rules", "acts", "archived_acts", "expect", "map"],
+                "archive_available": archive_index.exists,
+                "archive_signature": archive_index.signature,
+            }
+        ),
+    }
 
 
-def format_context_pack(pack_data: dict[str, Any]) -> str:
-    """Render a context pack to compact markdown text."""
-    lines: list[str] = ["## Context Pack"]
-    lines.append(f"Task: {pack_data.get('task', '')}")
-    lines.append(f"Pack: {pack_data.get('pack', 'balanced')}")
-
-    facts = pack_data.get("essential_facts", {})
-    lines.append("\n### Essential Facts")
-    lines.append(f"Project: {facts.get('project', 'unknown')}")
-    lines.append(f"Purpose: {facts.get('purpose', '')}")
-    if facts.get("scope"):
-        lines.append(f"Scope: {facts.get('scope')}")
-
-    stack = facts.get("stack", {})
-    if isinstance(stack, dict) and stack:
-        stack_text = ", ".join(f"{k}: {v}" for k, v in stack.items() if v)
-        if stack_text:
-            lines.append(f"Stack: {stack_text}")
-
-    lines.append("\n### Relevant Rules")
-    rules = pack_data.get("relevant_rules", {})
-    for label, values in (
-        ("Read first", rules.get("read_first", [])),
-        ("Checks", rules.get("checks", [])),
-        ("Boundary", rules.get("boundaries", [])),
-        ("Forbidden", rules.get("forbidden", [])),
-        ("After verify", rules.get("after_verify", [])),
-    ):
-        if values:
-            lines.append(f"{label}:")
-            for item in values:
-                lines.append(f"- {item}")
-
-    decisions = pack_data.get("recent_decisions", [])
-    if decisions:
-        lines.append("\n### Recent Decisions")
-        for item in decisions:
-            lines.append(f"- {item}")
-
-    modules = pack_data.get("affected_modules", [])
-    if modules:
-        lines.append("\n### Affected Modules")
-        for item in modules:
-            lines.append(f"- {item}")
-
-    lines.append("\n### Expectations")
-    expect = pack_data.get("expectations", {})
-    if expect.get("goal"):
-        lines.append(f"Goal: {expect['goal']}")
-    if expect.get("active_phase"):
-        lines.append(f"Active phase: {expect['active_phase']}")
-    for run in expect.get("active_runs", []):
-        lines.append(f"- Run {run.get('run', '?')} [{run.get('status', '?')}]: {run.get('goal', '')}")
-
-    unresolved = pack_data.get("unresolved", {})
-    if any(unresolved.values()):
-        lines.append("\n### Unresolved")
+def _render_context_section(section_name: str, value: Any) -> list[str]:
+    if section_name == "essential_facts":
+        facts = value if isinstance(value, dict) else {}
+        lines = ["### Essential Facts", f"Project: {facts.get('project', 'unknown')}", f"Purpose: {facts.get('purpose', '')}"]
+        if facts.get("scope"):
+            lines.append(f"Scope: {facts.get('scope')}")
+        stack = facts.get("stack", {})
+        if isinstance(stack, dict) and stack:
+            stack_text = ", ".join(f"{k}: {v}" for k, v in stack.items() if v)
+            if stack_text:
+                lines.append(f"Stack: {stack_text}")
+        return lines
+    if section_name == "relevant_rules":
+        rules = value if isinstance(value, dict) else {}
+        lines = ["### Relevant Rules"]
+        for label, values in (
+            ("Read first", rules.get("read_first", [])),
+            ("Checks", rules.get("checks", [])),
+            ("Boundary", rules.get("boundaries", [])),
+            ("Forbidden", rules.get("forbidden", [])),
+            ("After verify", rules.get("after_verify", [])),
+        ):
+            if values:
+                lines.append(f"{label}:")
+                for item in values:
+                    lines.append(f"- {item}")
+        return lines if len(lines) > 1 else []
+    if section_name == "recent_decisions":
+        if not value:
+            return []
+        return ["### Recent Decisions", *[f"- {item}" for item in value]]
+    if section_name == "affected_modules":
+        if not value:
+            return []
+        return ["### Affected Modules", *[f"- {item}" for item in value]]
+    if section_name == "expectations":
+        expect = value if isinstance(value, dict) else {}
+        lines = ["### Expectations"]
+        if expect.get("goal"):
+            lines.append(f"Goal: {expect['goal']}")
+        if expect.get("active_phase"):
+            lines.append(f"Active phase: {expect['active_phase']}")
+        for run in expect.get("active_runs", []):
+            lines.append(f"- Run {run.get('run', '?')} [{run.get('status', '?')}]: {run.get('goal', '')}")
+        return lines if len(lines) > 1 else []
+    if section_name == "unresolved":
+        unresolved = value if isinstance(value, dict) else {}
+        if not any(unresolved.values()):
+            return []
+        lines = ["### Unresolved"]
         for label, items in (("Facts", unresolved.get("facts", [])), ("Acts", unresolved.get("acts", [])), ("Expect", unresolved.get("expect", []))):
             if items:
                 lines.append(f"{label}:")
                 for item in items:
                     lines.append(f"- {item}")
-
-    risks = pack_data.get("task_risks", [])
-    if risks:
-        lines.append("\n### Task Risks")
-        for risk in risks:
-            lines.append(f"- {risk}")
-
-    hints = pack_data.get("retrieval_hints", {})
-    if isinstance(hints, dict):
+        return lines
+    if section_name == "task_risks":
+        if not value:
+            return []
+        return ["### Task Risks", *[f"- {item}" for item in value]]
+    if section_name == "retrieval_hints":
+        hints = value if isinstance(value, dict) else {}
         sources = hints.get("likely_relevant_sources", [])
         file_refs = hints.get("candidate_file_refs", [])
         archive_available = bool(hints.get("archive_available"))
-        if sources or file_refs or archive_available:
-            lines.append("\n### Retrieval Hints")
-            if sources:
-                lines.append(f"Likely sources: {', '.join(sources)}")
-            if file_refs:
-                for item in file_refs[:6]:
-                    lines.append(f"- {item}")
-            if archive_available:
-                lines.append("Archive history exists and may contain relevant prior context.")
-
-    meta = pack_data.get("_meta", {})
-    notes = meta.get("compaction_notes", [])
-    if notes:
-        lines.append("\n### Compaction")
-        for note in notes:
-            lines.append(f"- {note}")
-
-    return "\n".join(lines)
+        if not (sources or file_refs or archive_available):
+            return []
+        lines = ["### Retrieval Hints"]
+        if sources:
+            lines.append(f"Likely sources: {', '.join(sources)}")
+        if file_refs:
+            lines.extend(f"- {item}" for item in file_refs[:6])
+        if archive_available:
+            lines.append("Archive history exists and may contain relevant prior context.")
+        return lines
+    return []
 
 
 def _context_policy(rules: dict[str, Any]) -> dict[str, Any]:

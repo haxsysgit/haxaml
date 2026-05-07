@@ -106,6 +106,12 @@ def _record_keywords(*parts: Any) -> list[str]:
     return tokens
 
 
+def _empty_context_section(section_name: str) -> Any:
+    if section_name in {"essential_facts", "relevant_rules", "expectations", "unresolved", "retrieval_hints"}:
+        return {}
+    return []
+
+
 def _module_refs_for_files(frame: dict[str, Any], file_refs: list[str], task: str = "") -> list[str]:
     map_data = frame.get("map") or {}
     modules = map_data.get("modules", []) if isinstance(map_data, dict) else []
@@ -425,21 +431,126 @@ def haxaml_context_pack(
             },
         )
 
-    pack_data = build_context_pack(
+    cache = runtime_cache()
+    prior_snapshot = cache.get_context_pack_snapshot(project_dir, session_id)
+    refresh_mode = "full"
+    refresh_summary = "Initial full context pack."
+    changed_sections: list[str] = []
+    unchanged_sections: list[str] = []
+    token_delta = 0
+
+    current_markers = context_pack_section_markers(
         project_dir,
         task=task,
         pack=pack,
         include_state=include_state,
         frame_data=frame,
     )
+
+    current_full_sections: dict[str, Any]
+    current_section_tokens: dict[str, int]
+
+    needs_full_pack = (
+        prior_snapshot is None
+        or prior_snapshot.task != task
+        or prior_snapshot.pack != pack
+        or prior_snapshot.include_state != include_state
+        or prior_calls == 0
+    )
+
+    if needs_full_pack:
+        current_full_sections, full_meta = build_context_pack_sections(
+            project_dir,
+            task=task,
+            pack=pack,
+            include_state=include_state,
+            frame_data=frame,
+        )
+        current_section_tokens = full_meta["section_tokens"]
+    else:
+        changed_sections = [
+            name for name in CONTEXT_SECTION_ORDER
+            if current_markers.get(name) != prior_snapshot.section_markers.get(name)
+        ]
+        unchanged_sections = [name for name in CONTEXT_SECTION_ORDER if name not in changed_sections]
+        if not changed_sections:
+            refresh_mode = "no_change"
+            refresh_summary = "No meaningful governed context changed since the last pack."
+            token_delta = 0
+            current_full_sections = dict(prior_snapshot.full_sections)
+            current_section_tokens = dict(prior_snapshot.section_tokens)
+        else:
+            refresh_mode = "delta"
+            refresh_summary = (
+                f"Refreshed {len(changed_sections)} section(s): {', '.join(changed_sections)}."
+            )
+            seed_sections = {
+                name: prior_snapshot.full_sections.get(name, _empty_context_section(name))
+                for name in unchanged_sections
+            }
+            current_full_sections, full_meta = build_context_pack_sections(
+                project_dir,
+                task=task,
+                pack=pack,
+                include_state=include_state,
+                frame_data=frame,
+                sections_override=seed_sections,
+            )
+            current_section_tokens = full_meta["section_tokens"]
+            token_delta = sum(
+                int(current_section_tokens.get(name, 0) or 0) - int(prior_snapshot.section_tokens.get(name, 0) or 0)
+                for name in changed_sections
+            )
+
+    if refresh_mode == "full":
+        response_sections = dict(current_full_sections)
+    elif refresh_mode == "delta":
+        response_sections = {
+            name: (current_full_sections.get(name) if name in changed_sections else _empty_context_section(name))
+            for name in CONTEXT_SECTION_ORDER
+        }
+    else:
+        response_sections = {name: _empty_context_section(name) for name in CONTEXT_SECTION_ORDER}
+
+    pack_data = build_context_pack(
+        project_dir,
+        task=task,
+        pack=pack,
+        include_state=include_state,
+        frame_data=frame,
+        sections_override=response_sections,
+        refresh_meta={
+            "refresh_mode": refresh_mode,
+            "refresh_summary": refresh_summary,
+            "changed_sections": changed_sections,
+            "unchanged_sections": unchanged_sections,
+            "token_delta": token_delta if refresh_mode != "full" else 0,
+        },
+    )
     text = format_context_pack(pack_data)
     tokens = count_tokens(text)
+
+    cache.set_context_pack_snapshot(
+        project_dir,
+        session_id,
+        ContextPackSnapshot(
+            task=task,
+            pack=pack,
+            include_state=include_state,
+            full_sections=current_full_sections,
+            section_markers=current_markers,
+            section_tokens=current_section_tokens,
+            tokens=tokens,
+            text=text,
+        ),
+    )
 
     compaction = state.get("context_compaction", {})
     if not isinstance(compaction, dict):
         compaction = {}
     compaction["last_pack_tokens"] = tokens
     compaction["last_window_usage"] = pack_data.get("_meta", {}).get("context_window_usage", {})
+    compaction["last_refresh_mode"] = refresh_mode
     resolved_pack = pack_data.get("_meta", {}).get("resolved_pack", pack)
     if resolved_pack in ("minimal", "balanced", "full"):
         compaction["default_pack"] = resolved_pack
@@ -472,6 +583,11 @@ def haxaml_context_pack(
             "context_pack_calls": (prior_calls + 1) if session_id else 0,
             "refresh_reason": refresh_info["reason"],
             "refresh_reason_category": refresh_info["category"],
+            "refresh_mode": refresh_mode,
+            "refresh_summary": refresh_summary,
+            "changed_sections": changed_sections,
+            "unchanged_sections": unchanged_sections,
+            "token_delta": token_delta if refresh_mode != "full" else 0,
             "next_step": "haxaml_session_verify",
             "lifecycle": _lifecycle_hint(
                 tool="haxaml_context_pack",

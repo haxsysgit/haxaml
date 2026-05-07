@@ -72,6 +72,17 @@ def _benchmark_profile_steps(name: str) -> list[str]:
             "haxaml_session_record",
             "haxaml_expect_sync",
         ]
+    if name == "repeat_refresh_short":
+        return [
+            "haxaml_about",
+            "haxaml_guidance",
+            "haxaml_prebuild",
+            "haxaml_context_pack",
+            "haxaml_context_pack",
+            "haxaml_session_verify",
+            "haxaml_session_record",
+            "haxaml_expect_sync",
+        ]
     raise ValueError(f"Unknown workflow benchmark profile: {name}")
 
 
@@ -101,6 +112,7 @@ def _benchmark_run_profile(project_dir: str, name: str, detail: str) -> dict[str
     payload_total = 0
     envelope_total = 0
     elapsed_total = 0.0
+    context_pack_seen = 0
 
     for idx, tool_name in enumerate(_benchmark_profile_steps(name), start=1):
         common = {"project_dir": project_dir, "detail": detail}
@@ -122,6 +134,25 @@ def _benchmark_run_profile(project_dir: str, name: str, detail: str) -> dict[str
                 "session_id": session_id,
                 **common,
             }
+            if name == "repeat_refresh_short" and context_pack_seen >= 1:
+                import yaml
+
+                acts_path = frame_path(project_dir, "acts.yaml")
+                state = load_yaml(str(acts_path))
+                decisions = state.get("decisions", [])
+                if not isinstance(decisions, list):
+                    decisions = []
+                decisions.append(
+                    {
+                        "decision": "Refresh benchmark delta",
+                        "reasoning": "Measure incremental context pack payload after a local acts update.",
+                        "date": "2026-01-01T00:00:00+00:00",
+                        "reversible": True,
+                    }
+                )
+                state["decisions"] = decisions
+                acts_path.write_text(yaml.dump(state, default_flow_style=False, sort_keys=False))
+                kwargs["refresh_reason"] = "context stale after updated decisions"
         elif tool_name == "haxaml_context_fetch":
             kwargs = {
                 "task": WORKFLOW_BENCHMARK_TASK,
@@ -171,6 +202,8 @@ def _benchmark_run_profile(project_dir: str, name: str, detail: str) -> dict[str
 
         if tool_name == "haxaml_prebuild":
             session_id = str((result.get("data") or {}).get("session_id", ""))
+        if tool_name == "haxaml_context_pack":
+            context_pack_seen += 1
         if not result.get("ok"):
             break
 
@@ -212,6 +245,7 @@ def _benchmark_workflow_mode() -> dict[str, Any]:
         "expanded_short": _run_isolated_profile("expanded_short", DETAIL_SHORT),
         "essential_full": _run_isolated_profile("essential_full", DETAIL_FULL),
         "retrieval_short": _run_isolated_profile("retrieval_short", DETAIL_SHORT),
+        "repeat_refresh_short": _run_isolated_profile("repeat_refresh_short", DETAIL_SHORT),
     }
     essential = profiles["essential_short"]["payload_tokens"]
     expanded = profiles["expanded_short"]["payload_tokens"]

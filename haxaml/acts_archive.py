@@ -18,7 +18,7 @@ import yaml
 from haxaml.paths import acts_history_path
 
 
-ARCHIVE_VERSION = "0.6.6"
+ARCHIVE_VERSION = "0.6.7b0"
 DEFAULT_MEMORY_POLICY = {
     "archive_mode": "manual",
     "max_hot_runs": 5,
@@ -277,8 +277,10 @@ class ActsArchive:
         return counts
 
     def get_counts(self) -> dict[str, int]:
-        doc = self.read()
-        counts = doc["metadata"].get("counts", {})
+        from haxaml.runtime_cache import runtime_cache
+
+        snapshot = runtime_cache().get_archive_index(self.project_dir)
+        counts = snapshot.metadata.get("counts", {}) if snapshot.exists else {}
         return {
             "runs": int(counts.get("runs", 0) or 0),
             "sessions": int(counts.get("sessions", 0) or 0),
@@ -286,56 +288,27 @@ class ActsArchive:
         }
 
     def has_record(self, record_id: str) -> bool:
+        from haxaml.runtime_cache import runtime_cache
+
         wanted = _clean_text(record_id)
         if not wanted:
             return False
-        doc = self.read()
-        for item in doc["index"]:
+        for item in runtime_cache().get_archive_index(self.project_dir).index:
             if isinstance(item, dict) and _clean_text(item.get("id", "")) == wanted:
                 return True
         return False
 
     def load_record_details(self, kind: str, record_id: str) -> dict[str, Any] | None:
         """Return one archived record by kind/id."""
-        key = ARCHIVE_KINDS.get(kind)
-        if not key:
-            return None
-        wanted = _clean_text(record_id)
-        if not wanted:
-            return None
-        doc = self.read()
-        for item in doc["history"].get(key, []):
-            if isinstance(item, dict) and _clean_text(item.get("id", "")) == wanted:
-                return item
-        return None
+        from haxaml.runtime_cache import runtime_cache
+
+        return runtime_cache().load_archive_record_details(self.project_dir, kind, record_id)
 
     def load_selected_record_details(self, records: list[tuple[str, str]]) -> dict[tuple[str, str], dict[str, Any]]:
         """Return full details for the selected archived records with one archive read."""
-        wanted_by_section: dict[str, set[str]] = {}
-        for kind, record_id in records:
-            key = ARCHIVE_KINDS.get(kind)
-            record_key = _clean_text(record_id)
-            if not key or not record_key:
-                continue
-            ids = wanted_by_section.setdefault(key, set())
-            ids.add(record_key)
+        from haxaml.runtime_cache import runtime_cache
 
-        if not wanted_by_section:
-            return {}
-
-        doc = self.read()
-        selected_records: dict[tuple[str, str], dict[str, Any]] = {}
-        for kind, key in ARCHIVE_KINDS.items():
-            wanted_ids = wanted_by_section.get(key, set())
-            if not wanted_ids:
-                continue
-            for item in doc["history"].get(key, []):
-                if not isinstance(item, dict):
-                    continue
-                record_id = _clean_text(item.get("id", ""))
-                if record_id in wanted_ids:
-                    selected_records[(kind, record_id)] = item
-        return selected_records
+        return runtime_cache().load_selected_archive_details(self.project_dir, records)
 
     # Compatibility wrappers kept during the 0.6.x line while internal call sites
     # move to more readable names.
@@ -346,8 +319,9 @@ class ActsArchive:
         return self.load_selected_record_details(records)
 
     def index_entries(self) -> list[dict[str, Any]]:
-        doc = self.read()
-        return [item for item in doc["index"] if isinstance(item, dict)]
+        from haxaml.runtime_cache import runtime_cache
+
+        return list(runtime_cache().get_archive_index(self.project_dir).index)
 
     def _empty_doc(self) -> dict[str, Any]:
         return {

@@ -30,7 +30,10 @@ from haxaml.context import (
     build_context,
     build_context_hints,
     build_context_pack,
+    build_context_pack_sections,
     count_tokens,
+    CONTEXT_SECTION_ORDER,
+    context_pack_section_markers,
     format_context_pack,
     load_frame_data,
     search_context_memory,
@@ -49,6 +52,7 @@ from haxaml.map_policy import (
 )
 from haxaml.paths import frame_dir, frame_path, resolve_frame_file
 from haxaml.reconcile import reconcile_derivation
+from haxaml.runtime_cache import ContextPackSnapshot, runtime_cache
 from haxaml.runner import ExecutionRunner
 from haxaml.state_manager import StateError, StateManager
 from haxaml.supervision import render_impact, render_needs

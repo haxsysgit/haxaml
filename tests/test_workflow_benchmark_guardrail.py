@@ -13,6 +13,8 @@ def test_workflow_token_guardrails():
     assert profiles["essential_short"]["payload_tokens"] <= 2100
     assert profiles["expanded_short"]["payload_tokens"] <= 2700
     assert profiles["essential_full"]["payload_tokens"] <= 3700
+    assert profiles["repeat_refresh_short"]["call_count"] == 8
+    assert any(call["tool"] == "haxaml_context_pack" for call in profiles["repeat_refresh_short"]["calls"])
     assert profiles["expanded_short"]["call_count"] > profiles["essential_short"]["call_count"]
     assert profiles["essential_full"]["call_count"] == profiles["essential_short"]["call_count"]
     assert "transport_overhead" in data

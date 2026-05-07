@@ -97,6 +97,11 @@ def _compact_context_pack_payload(payload: dict) -> dict:
         "likely_relevant_sources": meta.get("likely_relevant_sources", []),
         "candidate_file_refs": meta.get("candidate_file_refs", []),
         "archive_available": bool(meta.get("archive_available", False)),
+        "refresh_mode": payload.get("refresh_mode", meta.get("refresh_mode", "full")),
+        "refresh_summary": payload.get("refresh_summary", meta.get("refresh_summary", "")),
+        "changed_sections": payload.get("changed_sections", meta.get("changed_sections", [])),
+        "unchanged_sections": payload.get("unchanged_sections", meta.get("unchanged_sections", [])),
+        "token_delta": int(payload.get("token_delta", meta.get("token_delta", 0)) or 0),
     }
     if payload.get("session_id"):
         compact["session_id"] = payload.get("session_id")

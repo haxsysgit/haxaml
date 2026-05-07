@@ -260,6 +260,59 @@ def test_export_dry_run_with_diff_preview_does_not_write_target():
         assert "Dry run complete" in export.output
 
 
+def test_dashboard_prints_install_guidance_when_ui_extra_is_missing(monkeypatch):
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        os.mkdir(".haxaml")
+
+        import haxaml.cli as cli_module
+
+        original_find_spec = cli_module.importlib.util.find_spec
+
+        def fake_find_spec(name):
+            if name == "starlette":
+                return None
+            return original_find_spec(name)
+
+        monkeypatch.setattr(cli_module.importlib.util, "find_spec", fake_find_spec)
+        result = runner.invoke(cli, ["dashboard", "--project-dir", ".", "--no-open"])
+
+        assert result.exit_code == 1
+        assert 'pip install "haxaml[ui]"' in result.output
+
+
+def test_dashboard_resolves_project_root_and_passes_launcher_flags(monkeypatch):
+    runner = CliRunner()
+    captured = {}
+
+    with runner.isolated_filesystem():
+        os.mkdir(".haxaml")
+        os.mkdir("nested")
+
+        import haxaml.cli as cli_module
+
+        def fake_runner(**kwargs):
+            captured.update(kwargs)
+            return "http://127.0.0.1:9001/"
+
+        monkeypatch.setattr(cli_module, "_load_dashboard_runtime", lambda: fake_runner)
+        cwd = os.getcwd()
+        try:
+            os.chdir("nested")
+            result = runner.invoke(cli, ["dashboard", "--project-dir", ".", "--host", "127.0.0.1", "--port", "9001", "--no-open"])
+        finally:
+            os.chdir(cwd)
+
+        assert result.exit_code == 0, result.output
+        assert "http://127.0.0.1:9001/" in result.output
+        assert captured["project_dir"].endswith(os.sep + os.path.basename(cwd))
+        assert captured["host"] == "127.0.0.1"
+        assert captured["port"] == 9001
+        assert captured["open_browser"] is False
+        assert captured["read_only"] is True
+
+
 def test_upgrade_dry_run_prints_uv_command():
     runner = CliRunner()
 

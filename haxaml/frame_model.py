@@ -14,9 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from haxaml.paths import resolve_frame_file
+from haxaml.runtime_cache import runtime_cache
 
 
 @dataclass
@@ -44,36 +42,18 @@ class FrameModel:
         Missing files are recorded in missing_files. Load errors (bad YAML, etc.)
         are recorded in load_errors. Never raises on missing or malformed files.
         """
-        project = Path(project_dir).resolve()
-        load_errors: list[str] = []
-        missing_files: list[str] = []
-
-        def _load(name: str) -> dict[str, Any] | None:
-            path = resolve_frame_file(project, name)
-            if path is None:
-                missing_files.append(name)
-                return None
-            try:
-                with open(path, encoding="utf-8") as f:
-                    # Empty YAML files are treated as empty dicts so downstream selectors can
-                    # distinguish "file exists but blank" from "file missing entirely".
-                    return yaml.safe_load(f) or {}
-            except Exception as exc:
-                load_errors.append(f"{name}: {exc}")
-                return None
-
-        facts = _load("facts.yaml")
-        rules = _load("rules.yaml")
-        acts = _load("acts.yaml")
-        map_data = _load("map.yaml")
-        expect = _load("expect.yaml")
+        bundle = runtime_cache().get_frame_bundle(project_dir)
+        project = Path(bundle["project_dir"]).resolve()
+        data = bundle["data"]
+        load_errors = list(bundle["load_errors"])
+        missing_files = list(bundle["missing_files"])
 
         return cls(
-            facts=facts,
-            rules=rules,
-            acts=acts,
-            map=map_data,
-            expect=expect,
+            facts=data.get("facts"),
+            rules=data.get("rules"),
+            acts=data.get("acts"),
+            map=data.get("map"),
+            expect=data.get("expect"),
             project_dir=project,
             load_errors=load_errors,
             missing_files=missing_files,

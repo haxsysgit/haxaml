@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "haxaml-mcp"
+name = "haxaml-ui"
 version = "0.6.7b0"
-description = "One-command MCP server launcher for Haxaml."
+description = "Local read-only dashboard package for Haxaml."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -13,14 +13,14 @@ authors = [
   { name = "Hax" }
 ]
 keywords = [
-  "mcp",
   "haxaml",
-  "ai-agents",
+  "dashboard",
+  "ui",
   "developer-tools"
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
-  "Environment :: Console",
+  "Environment :: Web Environment",
   "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
@@ -29,15 +29,21 @@ classifiers = [
 ]
 dependencies = [
   "haxaml>=0.6.7b0,<0.7.0",
-  "mcp>=1.0"
+  "jinja2>=3.1",
+  "starlette>=0.37",
+  "uvicorn>=0.30"
 ]
 
 [project.scripts]
-haxaml-mcp = "haxaml.mcp_server:main"
+haxaml-dashboard = "haxaml_ui.dashboard:main"
 
 [project.urls]
 Homepage = "https://github.com/haxsysgit/haxaml"
 Repository = "https://github.com/haxsysgit/haxaml"
 
 [tool.setuptools]
-py-modules = []
+package-dir = {"" = "../.."}
+
+[tool.setuptools.packages.find]
+where = ["../.."]
+include = ["haxaml_ui*"]

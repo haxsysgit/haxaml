@@ -16,9 +16,11 @@ import tomllib
 
 PACKAGE_NAME = "haxaml"
 MCP_LAUNCHER_PACKAGE = "haxaml-mcp"
+UI_PACKAGE_NAME = "haxaml-ui"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_PYPROJECT = REPO_ROOT / "pyproject.toml"
 MCP_PYPROJECT = REPO_ROOT / "packages" / "haxaml-mcp" / "pyproject.toml"
+UI_PYPROJECT = REPO_ROOT / "packages" / "haxaml-ui" / "pyproject.toml"
 
 
 def _load_project(path: Path) -> dict:
@@ -36,6 +38,12 @@ def project_version() -> str:
 def mcp_launcher_version() -> str:
     """Return the launcher package version declared in packages/haxaml-mcp/pyproject.toml."""
     return str(_load_project(MCP_PYPROJECT).get("version", "0.0.0"))
+
+
+@lru_cache(maxsize=1)
+def ui_package_version() -> str:
+    """Return the UI package version declared in packages/haxaml-ui/pyproject.toml."""
+    return str(_load_project(UI_PYPROJECT).get("version", "0.0.0"))
 
 
 @lru_cache(maxsize=1)
@@ -60,15 +68,19 @@ def release_version_snapshot(tag_ref: str | None = None) -> dict[str, object]:
     """Return deterministic version alignment details for release checks."""
     core = project_version()
     launcher = mcp_launcher_version()
+    ui = ui_package_version()
     mcp_deps = _load_project(MCP_PYPROJECT).get("dependencies", [])
+    ui_deps = _load_project(UI_PYPROJECT).get("dependencies", [])
     expected_dep_prefix = f"{PACKAGE_NAME}>={core}"
+    expected_ui_dep_prefix = f"{PACKAGE_NAME}>={core}"
     dep_aligned = any(str(dep).startswith(expected_dep_prefix) for dep in mcp_deps)
+    ui_dep_aligned = any(str(dep).startswith(expected_ui_dep_prefix) for dep in ui_deps)
 
     tag_version = None
     if tag_ref:
-        match = re.fullmatch(r"v(\d+\.\d+\.\d+)", tag_ref.strip())
+        match = re.fullmatch(r"v(\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)", tag_ref.strip())
         if not match:
-            raise ValueError(f"Invalid tag format '{tag_ref}'. Expected vX.Y.Z.")
+            raise ValueError(f"Invalid tag format '{tag_ref}'. Expected vX.Y.Z or prerelease form like vX.Y.Zb0.")
         tag_version = match.group(1)
 
     return {
@@ -76,9 +88,12 @@ def release_version_snapshot(tag_ref: str | None = None) -> dict[str, object]:
         "tag_version": tag_version,
         "core_version": core,
         "mcp_version": launcher,
-        "versions_match": core == launcher,
+        "ui_version": ui,
+        "versions_match": core == launcher == ui,
         "mcp_dependency_aligned": dep_aligned,
+        "ui_dependency_aligned": ui_dep_aligned,
         "expected_dependency_prefix": expected_dep_prefix,
+        "expected_ui_dependency_prefix": expected_ui_dep_prefix,
     }
 
 
@@ -88,7 +103,9 @@ def validate_release_versions(tag_ref: str | None = None) -> dict[str, object]:
     if not snapshot["versions_match"]:
         raise ValueError(
             "Version mismatch: "
-            f"{PACKAGE_NAME}={snapshot['core_version']} vs {MCP_LAUNCHER_PACKAGE}={snapshot['mcp_version']}"
+            f"{PACKAGE_NAME}={snapshot['core_version']} vs "
+            f"{MCP_LAUNCHER_PACKAGE}={snapshot['mcp_version']} vs "
+            f"{UI_PACKAGE_NAME}={snapshot['ui_version']}"
         )
     if tag_ref and snapshot["tag_version"] != snapshot["core_version"]:
         raise ValueError(
@@ -99,5 +116,10 @@ def validate_release_versions(tag_ref: str | None = None) -> dict[str, object]:
         raise ValueError(
             f"{MCP_LAUNCHER_PACKAGE} dependency must start with "
             f"'{snapshot['expected_dependency_prefix']}', but it does not."
+        )
+    if not snapshot["ui_dependency_aligned"]:
+        raise ValueError(
+            f"{UI_PACKAGE_NAME} dependency must start with "
+            f"'{snapshot['expected_ui_dependency_prefix']}', but it does not."
         )
     return snapshot

@@ -27,6 +27,15 @@ def acts_history_path(project_dir: str | Path) -> Path:
     return archive_dir(project_dir) / "acts-history.yaml"
 
 
+def detect_project_root(start_dir: str | Path = ".") -> Path | None:
+    """Find the nearest ancestor that contains .haxaml/."""
+    current = Path(start_dir).resolve()
+    for candidate in [current, *current.parents]:
+        if frame_dir(candidate).exists():
+            return candidate
+    return None
+
+
 def resolve_frame_file(project_dir: str | Path, filename: str) -> Path | None:
     """Resolve a canonical FRAME file inside .haxaml/."""
     project = Path(project_dir)

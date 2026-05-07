@@ -8,6 +8,7 @@ from haxaml.versioning import (
     PACKAGE_NAME,
     project_version,
     mcp_launcher_version,
+    ui_package_version,
     release_version_snapshot,
     validate_release_versions,
 )
@@ -15,6 +16,7 @@ from haxaml.versioning import (
 
 def test_versions_are_aligned_in_repo():
     assert project_version() == mcp_launcher_version()
+    assert project_version() == ui_package_version()
 
 
 def test_release_snapshot_for_valid_tag():
@@ -23,11 +25,17 @@ def test_release_snapshot_for_valid_tag():
     assert snap["tag_version"] == current
     assert snap["versions_match"] is True
     assert snap["mcp_dependency_aligned"] is True
+    assert snap["ui_dependency_aligned"] is True
 
 
 def test_validate_release_versions_rejects_mismatched_tag():
     with pytest.raises(ValueError, match="Tag/version mismatch"):
         validate_release_versions("v9.9.9")
+
+
+def test_release_snapshot_accepts_beta_tag():
+    snap = release_version_snapshot("v0.6.7b0")
+    assert snap["tag_version"] == "0.6.7b0"
 
 
 def test_get_version_prefers_local_pyproject(monkeypatch):

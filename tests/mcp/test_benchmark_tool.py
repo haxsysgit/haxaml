@@ -11,6 +11,7 @@ class TestBenchmarkTool:
         assert data["mode"] == "workflow"
         assert "profiles" in data
         assert "essential_short" in data["profiles"]
+        assert "repeat_refresh_short" in data["profiles"]
         assert "guardrails" in data
         assert "results" in data["guardrails"]
 

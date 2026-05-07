@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "haxaml"
-version = "0.6.6"
+version = "0.6.7b0"
 description = "Deterministic agent-management framework that implements FRAME governance for AI-assisted software development."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,7 +20,7 @@ keywords = [
   "context-engineering"
 ]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Environment :: Console",
   "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
@@ -32,13 +32,15 @@ classifiers = [
 dependencies = [
   "click>=8.1",
   "jsonschema>=4.20",
-  "mcp>=1.0",
   "pyyaml>=6.0"
 ]
 
 [project.optional-dependencies]
 bench = [
   "tiktoken>=0.5"
+]
+ui = [
+  "haxaml-ui==0.6.7b0"
 ]
 dev = [
   "build>=1.2",
@@ -47,6 +49,7 @@ dev = [
 ]
 all = [
   "build>=1.2",
+  "haxaml-ui==0.6.7b0",
   "pytest>=8.0",
   "tiktoken>=0.5",
   "twine>=5.0"
@@ -61,10 +64,13 @@ Homepage = "https://github.com/haxsysgit/haxaml"
 Repository = "https://github.com/haxsysgit/haxaml"
 
 [tool.setuptools.packages.find]
-include = ["haxaml*"]
+include = ["haxaml", "haxaml.*"]
 
 [tool.setuptools.package-data]
 haxaml = ["schemas/*.yaml"]
+
+[tool.uv.sources]
+haxaml-ui = { path = "packages/haxaml-ui", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

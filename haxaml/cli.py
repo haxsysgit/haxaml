@@ -1,5 +1,6 @@
 """Haxaml CLI — deterministic agent-management tooling for FRAME."""
 
+import importlib.util
 import json
 import os
 import shutil
@@ -12,7 +13,7 @@ import click
 from haxaml.state_manager import StateManager
 from haxaml.brain_builder import interactive_build
 from haxaml.benchmarks import format_benchmark_report
-from haxaml.paths import frame_path, resolve_frame_file
+from haxaml.paths import detect_project_root, frame_path, resolve_frame_file
 from haxaml.versioning import MCP_LAUNCHER_PACKAGE, PACKAGE_NAME, get_version, version_spec
 
 
@@ -72,6 +73,18 @@ def _echo_tool_result(result, *, exit_on_failure: bool = True) -> None:
     click.echo(_result_text(result))
     if exit_on_failure and _is_failure(result):
         sys.exit(1)
+
+
+def _load_dashboard_runtime():
+    required = ["haxaml_ui", "starlette", "jinja2", "uvicorn"]
+    missing = [name for name in required if importlib.util.find_spec(name) is None]
+    if missing:
+        click.echo("✗ Dashboard UI package is not installed.")
+        click.echo('  Install with: pip install "haxaml[ui]" or pip install haxaml-ui')
+        sys.exit(1)
+    from haxaml_ui.dashboard import run_dashboard_server
+
+    return run_dashboard_server
 
 
 @cli.command()
@@ -357,6 +370,31 @@ def context_pack(project_dir, task, pack, no_state, session_id, refresh_reason):
         session_id=session_id,
         refresh_reason=refresh_reason,
     ))
+
+
+@cli.command("dashboard")
+@click.option("--project-dir", default=".", help="Project directory or nested path inside a FRAME project")
+@click.option("--host", default="127.0.0.1", help="Host interface to bind")
+@click.option("--port", default=8421, type=int, help="Port to bind")
+@click.option("--no-open", is_flag=True, help="Do not auto-open a browser")
+@click.option("--read-only", is_flag=True, help="Explicitly mark the dashboard as read-only")
+def dashboard(project_dir, host, port, no_open, read_only):
+    """Launch the read-only local browser dashboard."""
+    root = detect_project_root(project_dir)
+    if root is None:
+        click.echo(f"✗ No .haxaml directory found from {Path(project_dir).resolve()}")
+        sys.exit(1)
+    url = f"http://{host}:{port}/"
+    click.echo(f"Haxaml dashboard: {url}")
+    runner = _load_dashboard_runtime()
+    runner(
+        project_dir=str(root),
+        host=host,
+        port=port,
+        open_browser=not no_open,
+        read_only=True,
+    )
+
 
 
 @cli.command("context-fetch")
