@@ -1,11 +1,11 @@
 # MCP Tool Reference
 
-Compact operator reference for the supported Haxaml MCP surface in `0.6.5`.
+Compact operator reference for the supported Haxaml MCP surface in `0.6.6`.
 
 ## Stable Contracts
 
 - Entrypoint stays `haxaml.mcp_server:main`.
-- Public governed flow is `about -> guidance -> prebuild -> context_pack -> verify -> record -> expect_sync`.
+- Public governed flow is `about -> guidance -> prebuild -> context_pack -> [context_fetch]* -> verify -> record -> expect_sync`.
 - Governed lifecycle order is enforced.
 - FRAME is canonical-only: `.haxaml/facts.yaml`, `.haxaml/rules.yaml`, `.haxaml/acts.yaml`, `.haxaml/expect.yaml`, `.haxaml/map.yaml`.
 
@@ -24,6 +24,7 @@ Compact operator reference for the supported Haxaml MCP surface in `0.6.5`.
 - `haxaml_guidance`
 - `haxaml_prebuild`
 - `haxaml_context_pack`
+- `haxaml_context_fetch`
 - `haxaml_session_verify`
 - `haxaml_session_record`
 - `haxaml_expect_sync`
@@ -59,9 +60,10 @@ Compact operator reference for the supported Haxaml MCP surface in `0.6.5`.
 2. `haxaml_guidance`
 3. `haxaml_prebuild`
 4. `haxaml_context_pack`
-5. `haxaml_session_verify`
-6. `haxaml_session_record`
-7. `haxaml_expect_sync`
+5. `haxaml_context_fetch` as needed
+6. `haxaml_session_verify`
+7. `haxaml_session_record`
+8. `haxaml_expect_sync`
 
 Use visibility and repair tools such as `haxaml_health`, `haxaml_needs`, and `haxaml_reconcile` only when the governed path surfaces warnings or blockers.
 
@@ -69,13 +71,17 @@ Use visibility and repair tools such as `haxaml_health`, `haxaml_needs`, and `ha
 
 - Out-of-order governed calls fail with `lifecycle_contract_violation`.
 - `haxaml_prebuild` is the only public governed session-entry tool.
-- `session_id` is required for governed `context_pack`, `session_verify`, and `session_record`.
+- `session_id` is required for governed `context_pack`, `context_fetch`, `session_verify`, and `session_record`.
 - Repeated `haxaml_context_pack` calls require `refresh_reason`.
+- Repeated `haxaml_context_fetch` calls are allowed because each call is query-driven.
 - `pack` must be one of `minimal`, `balanced`, or `full`.
+- `haxaml_state_compact` archives older runs, sessions, and verifications into `.haxaml/archive/acts-history.yaml`; it does not summarize them away.
 - `haxaml_validate` can fail with `governance_evidence_missing`, `lifecycle_drift`, or `derivation_conflicts`.
 
 ## Design Note
 
 `haxaml_prebuild` decides whether the task is ready and opens the governed session.
 
-`haxaml_context_pack` stays separate because it decides how much task-scoped context the agent should load. Keeping those steps separate preserves the anti-bloat boundary.
+`haxaml_context_pack` stays separate because it decides how much task-scoped context the agent should load first.
+
+`haxaml_context_fetch` exists so the agent can ask for more governed memory later without rerunning the whole first-pass context step. That keeps the default path lean while still allowing archive-backed follow-up retrieval.

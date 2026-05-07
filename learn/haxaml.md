@@ -19,7 +19,7 @@ Haxaml is what turns those buckets into a working system for AI agents.
 
 That distinction matters. FRAME by itself is the shape. Haxaml is the machinery
 around the shape: files, schemas, MCP tools, lifecycle gates, context packs,
-exports, validation, adoption, state recording, and compaction.
+exports, validation, adoption, state recording, tiered history, and guided retrieval.
 
 So the short version is:
 
@@ -821,7 +821,7 @@ the next agent inherits it.
 
 So Haxaml treats recording as a meaningful write, not just a nice closing note.
 
-## Why Acts Need Compaction
+## Why Acts Need Tiered Memory
 
 Acts are the diary.
 
@@ -832,22 +832,24 @@ valuable over time. It also gets larger over time.
 
 That is the tradeoff.
 
-Haxaml handles this with compaction. Old runs can be summarized while recent
-runs stay detailed. This keeps the project memory useful without letting old
-history eat the context budget.
+Haxaml handles this with tiered memory. Recent state stays in `acts.yaml`.
+Older runs, sessions, and verifications move into a readable archive file.
+This keeps the default context path lean without throwing away project memory.
 
 Think of it like this:
 
 Recent work needs detail.
 
-Old work needs memory.
+Older work still needs to stay available.
 
 Those are not always the same thing.
 
-A future agent usually does not need every line of every old run. It needs the
-important decisions, risks, and outcomes.
+A future agent usually does not need every old record loaded by default. It
+does need a governed way to ask for older decisions, risks, file references,
+and outcomes when they matter.
 
-Compaction keeps those while reducing the noise.
+That is why Haxaml now keeps a hot current diary plus a cold searchable
+history, instead of trying to squeeze old work into one smaller summary.
 
 ## Why Map Is Optional Until It Is Not
 

@@ -27,7 +27,8 @@ Haxaml exposes a lifecycle through MCP tools. The agent follows this flow before
 |---|---|---|
 | **about** | `haxaml_about` | The agent learns what Haxaml is, what FRAME means, and how to operate inside the project |
 | **guidance** | `haxaml_guidance` | Haxaml classifies the request and decides whether it is governed project work or a utility task |
-| **prebuild** | `haxaml_prebuild` → `haxaml_context_pack` | Agent classifies the task, checks FRAME readiness, opens a governed session, then pulls task-scoped context |
+| **prebuild** | `haxaml_prebuild` → `haxaml_context_pack` | Agent classifies the task, checks FRAME readiness, opens a governed session, then pulls the first task-scoped context pass |
+| **retrieve** | `haxaml_context_fetch` *(optional, repeatable)* | Agent asks for more governed memory only when the first context pass is not enough |
 | **build** | *(no Haxaml tool)* | The agent edits files, writes code, runs commands, answers a question and performs the actual implementation |
 | **verify** | `haxaml_session_verify` | The agent records what it inspected, what it changed, what was checked, and what risks remain |
 | **record** | `haxaml_session_record` → `haxaml_expect_sync` | The outcome is written into project history and expectations are synced for future work |
@@ -35,10 +36,10 @@ Haxaml exposes a lifecycle through MCP tools. The agent follows this flow before
 In short:
 
 ```text
-about → guidance → prebuild → context_pack → build → verify → record → expect_sync
+about → guidance → prebuild → context_pack → [context_fetch]* → build → verify → record → expect_sync
 ```
 
-Project memory lives in `.haxaml/` — versioned files your agent uses at runtime, not a static wall of text.
+Project memory lives in `.haxaml/` — versioned files your agent uses at runtime, not a static wall of text. Older acts history is kept in `.haxaml/archive/acts-history.yaml` and pulled back only on demand.
 
 ## Install
 

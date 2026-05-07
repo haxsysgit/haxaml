@@ -49,9 +49,10 @@ Use this order for project work:
 2. `haxaml_guidance(task=..., project_dir='.')`
 3. `haxaml_prebuild(task=..., project_dir='.')`
 4. `haxaml_context_pack(task=..., session_id=..., pack='balanced', include_state=True, project_dir='.')`
-5. `haxaml_session_verify(task=..., session_id=..., inspected_context=[...], changed_files=[...], summary=..., project_dir='.')`
-6. `haxaml_session_record(task=..., result='success'|'partial'|'failed', session_id=..., changes=..., decisions=..., risks=..., project_dir='.')`
-7. `haxaml_expect_sync(project_dir='.', run=<optional>)`
+5. `haxaml_context_fetch(task=..., query=..., session_id=..., project_dir='.')` when more governed memory is needed
+6. `haxaml_session_verify(task=..., session_id=..., inspected_context=[...], changed_files=[...], summary=..., project_dir='.')`
+7. `haxaml_session_record(task=..., result='success'|'partial'|'failed', session_id=..., changes=..., decisions=..., risks=..., project_dir='.')`
+8. `haxaml_expect_sync(project_dir='.', run=<optional>)`
 
 Public rule:
 
@@ -72,6 +73,7 @@ What to read from each step:
 - `guidance`: execution mode, task type, risk level, required questions, recommended pack
 - `prebuild`: readiness status, session id, progress summary, required questions
 - `context_pack`: tokens, included sections, omitted sections, window usage
+- `context_fetch`: governed follow-up hits, candidate file references, archive availability
 - `session_verify`: verdict plus verification evidence
 - `session_record`: recorded run id and whether `expect_sync` is now required
 - `expect_sync`: runbook update and lifecycle drift clearance
@@ -82,8 +84,15 @@ What to read from each step:
 - `balanced` should remain the default for most governed work.
 - Repeat `haxaml_context_pack` only when scope changed or context went stale.
 - Repeated calls require `refresh_reason`.
+- Use `haxaml_context_fetch` for follow-up governed lookup instead of repeating `context_pack` just to go hunting for more memory.
 
 Short mode intentionally returns compact execution facts first, not the full context body. Use `detail="full"` only when a client explicitly needs the structured pack object.
+
+Acts history stays tiered:
+
+- hot current state remains in `.haxaml/acts.yaml`
+- older runs, sessions, and verifications move to `.haxaml/archive/acts-history.yaml`
+- archive history is searched only when the agent asks for more governed context
 
 ## Visibility And Repair Tools
 

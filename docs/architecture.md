@@ -14,7 +14,7 @@ haxaml/
     __init__.py
     base.py                  # shared MCP imports and app wiring
     app_core.py              # MCP app object + core constants/caches
-    response_helpers.py      # response envelopes, detail modes, compaction
+    response_helpers.py      # response envelopes, detail modes, compact short outputs
     policy_helpers.py        # about gate, mode gating, retry policy
     lifecycle_helpers.py     # lifecycle/session/state helper functions
     export_helpers.py        # export/bootstrap helper functions
@@ -29,7 +29,7 @@ haxaml/
   validator.py               # FRAME schema + semantic validation
   reconcile.py               # derivation conflict detection
   export_engine.py           # FRAME -> agent-native file generation
-  state_manager.py           # state read/write + compaction
+  state_manager.py           # state read/write + hot/archive acts history control
   runner.py                  # internal run lifecycle helper
   paths.py                   # canonical FRAME path resolution
 
@@ -61,10 +61,11 @@ tests/
 
 ## Canonical Rules
 
-- Public governed path is `about -> guidance -> prebuild -> context_pack -> verify -> record -> expect_sync`.
+- Public governed path is `about -> guidance -> prebuild -> context_pack -> [context_fetch]* -> verify -> record -> expect_sync`.
 - `.haxaml/*.yaml` is the only supported FRAME location.
 - Canonical file names are `facts.yaml`, `rules.yaml`, `acts.yaml`, `expect.yaml`, and `map.yaml`.
 - Context packs are task-scoped and preferred over whole-project context dumps.
+- Older acts history lives in `.haxaml/archive/acts-history.yaml` and is loaded on demand for guided retrieval.
 
 ## MCP Layering
 
