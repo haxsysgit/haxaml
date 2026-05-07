@@ -65,7 +65,15 @@ def governed_project(fresh_project: Path) -> Path:
         "decisions": [],
         "unresolved_dependencies": [],
         "runs": [],
-        "compaction": {"last_compacted": None, "total_runs_compacted": 0, "summary": "No runs yet."},
+        "sessions": [],
+        "verifications": [],
+        "archive": {
+            "path": str(fresh_project / ".haxaml" / "archive" / "acts-history.yaml"),
+            "archive_mode": "manual",
+            "last_archived_at": "",
+            "archived_counts": {"runs": 0, "sessions": 0, "verifications": 0},
+            "hot_limits": {"runs": 5, "sessions": 5, "verifications": 5},
+        },
     }
     expect = {
         "planning": {

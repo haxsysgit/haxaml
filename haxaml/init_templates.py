@@ -125,6 +125,14 @@ context_policy:
   max_items_per_section: 5
   max_chars_per_item: 240
 
+memory_policy:
+  archive_mode: manual
+  max_hot_runs: 5
+  max_hot_sessions: 5
+  max_hot_verifications: 5
+  max_acts_bytes: 16000
+  keep_decisions_hot: true
+
 clarification_policy:
   mode: risk_gated_soft_block
   min_task_chars: 16
@@ -169,10 +177,18 @@ runs: []
 sessions: []
 verifications: []
 
-compaction:
-  last_compacted: null
-  total_runs_compacted: 0
-  summary: ""
+archive:
+  path: ".haxaml/archive/acts-history.yaml"
+  archive_mode: manual
+  last_archived_at: ""
+  archived_counts:
+    runs: 0
+    sessions: 0
+    verifications: 0
+  hot_limits:
+    runs: 5
+    sessions: 5
+    verifications: 5
 
 context_compaction:
   sessions_started: 0

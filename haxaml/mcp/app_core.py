@@ -17,7 +17,7 @@ mcp_app = FastMCP(
 DETAIL_SHORT = "short"
 DETAIL_FULL = "full"
 DETAIL_MODES = {DETAIL_SHORT, DETAIL_FULL}
-ABOUT_PROMPT_VERSION = "0.6.4"
+ABOUT_PROMPT_VERSION = "0.6.6"
 
 _ABOUT_ACK_CACHE: set[str] = set()
 _RETRY_GUARD_CACHE: dict[str, int] = {}

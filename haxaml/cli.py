@@ -232,7 +232,10 @@ def state_show(path):
         click.echo(f"Blocked:    {stats['blocked_count']}")
         click.echo(f"Decisions:  {stats['decision_count']}")
         click.echo(f"Unresolved: {stats['unresolved_count']}")
-        click.echo(f"Runs:       {stats['run_count']} (+ {stats['total_runs_compacted']} compacted)")
+        click.echo(f"Runs:       {stats['run_count']} hot / {stats['archived_run_count']} archived")
+        click.echo(f"Sessions:   {stats['session_count']} hot / {stats['archived_session_count']} archived")
+        click.echo(f"Verify:     {stats['verification_count']} hot / {stats['archived_verification_count']} archived")
+        click.echo(f"Archive:    {stats['archive_mode']}")
         click.echo(f"File size:  {stats['file_size_bytes']} bytes")
         return
 
@@ -245,18 +248,24 @@ def state_show(path):
 @state.command("compact")
 @click.option("--path", default=None, help="Path to acts.yaml")
 @click.option("--keep", default=5, help="Number of recent runs to keep")
-def state_compact(path, keep):
-    """Compact old runs into a summary."""
+@click.option("--dry-run", is_flag=True, help="Preview archival impact without mutating state.")
+def state_compact(path, keep, dry_run):
+    """Archive cold runs, sessions, and verifications out of hot acts state."""
     if path:
         if not os.path.exists(path):
             click.echo(f"✗ acts.yaml not found at {path}")
             sys.exit(1)
         sm = StateManager(path)
-        result = sm.compact(keep_recent=keep)
-        click.echo(f"✓ Compacted {result['compacted']} runs, kept {result['kept']}")
+        result = sm.compact(keep_recent=keep, dry_run=dry_run)
+        click.echo(
+            f"archive_mode={result['archive_mode']} "
+            f"archived runs={result['archived']['runs']} "
+            f"sessions={result['archived']['sessions']} "
+            f"verifications={result['archived']['verifications']}"
+        )
         return
 
-    result = _mcp_tools().haxaml_state_compact(".", keep_recent=keep)
+    result = _mcp_tools().haxaml_state_compact(".", keep_recent=keep, dry_run=dry_run)
     click.echo(_result_text(result))
     if _is_failure(result):
         sys.exit(1)
@@ -348,6 +357,27 @@ def context_pack(project_dir, task, pack, no_state, session_id, refresh_reason):
         session_id=session_id,
         refresh_reason=refresh_reason,
     ))
+
+
+@cli.command("context-fetch")
+@click.option("--dir", "project_dir", default=".", help="Project directory")
+@click.option("--task", required=True, help="Task being worked on")
+@click.option("--query", required=True, help="Follow-up retrieval query")
+@click.option("--session-id", required=True, help="Active governed session ID")
+@click.option("--source", "sources", multiple=True, help="Restrict retrieval source (repeatable)")
+@click.option("--limit", default=5, help="Result limit before tie expansion")
+def context_fetch(project_dir, task, query, session_id, sources, limit):
+    """Search governed FRAME memory and archived acts history for follow-up context."""
+    kwargs = {
+        "task": task,
+        "query": query,
+        "session_id": session_id,
+        "project_dir": project_dir,
+        "limit": limit,
+    }
+    if sources:
+        kwargs["sources"] = list(sources)
+    _echo_tool_result(_mcp_tools().haxaml_context_fetch(**kwargs))
 
 
 @cli.command("verify")

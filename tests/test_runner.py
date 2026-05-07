@@ -39,18 +39,25 @@ def _make_project(tmp_path, brain=None, state=None, instructions=None):
             "decisions": [],
             "unresolved_dependencies": [],
             "runs": [],
-            "compaction": {
-                "last_compacted": None,
-                "total_runs_compacted": 0,
-                "summary": "No runs yet.",
+            "sessions": [],
+            "verifications": [],
+            "archive": {
+                "path": ".haxaml/archive/acts-history.yaml",
+                "archive_mode": "manual",
+                "last_archived_at": "",
+                "archived_counts": {"runs": 0, "sessions": 0, "verifications": 0},
+                "hot_limits": {"runs": 5, "sessions": 5, "verifications": 5},
             },
         }
 
-    facts_path = tmp_path / "facts.yaml"
+    haxaml_dir = tmp_path / ".haxaml"
+    haxaml_dir.mkdir(exist_ok=True)
+
+    facts_path = haxaml_dir / "facts.yaml"
     with open(facts_path, "w") as f:
         yaml.dump(brain, f, default_flow_style=False, sort_keys=False)
 
-    acts_path = tmp_path / "acts.yaml"
+    acts_path = haxaml_dir / "acts.yaml"
     with open(acts_path, "w") as f:
         yaml.dump(state, f, default_flow_style=False, sort_keys=False)
 
@@ -129,9 +136,9 @@ class TestPreflight:
             },
             "runbook": [],
         }
-        with open(tmp_path / "rules.yaml", "w") as f:
+        with open(tmp_path / ".haxaml" / "rules.yaml", "w") as f:
             yaml.dump(rules, f, default_flow_style=False, sort_keys=False)
-        with open(tmp_path / "expect.yaml", "w") as f:
+        with open(tmp_path / ".haxaml" / "expect.yaml", "w") as f:
             yaml.dump(expect, f, default_flow_style=False, sort_keys=False)
 
         runner = ExecutionRunner(project)
@@ -148,7 +155,7 @@ class TestExecutionLoop:
         result = runner.start_run(task="implement feature X")
         assert result.result == "pending"
 
-        sm = StateManager(str(tmp_path / "acts.yaml"))
+        sm = StateManager(str(tmp_path / ".haxaml" / "acts.yaml"))
         state = sm.read()
         assert state["active_task"]["name"] == "implement feature X"
 
@@ -168,7 +175,7 @@ class TestExecutionLoop:
         assert result.result == "success"
         assert result.token_count > 0
 
-        sm = StateManager(str(tmp_path / "acts.yaml"))
+        sm = StateManager(str(tmp_path / ".haxaml" / "acts.yaml"))
         state = sm.read()
         assert len(state["runs"]) == 1
         assert len(state["completed_tasks"]) == 1
@@ -176,6 +183,18 @@ class TestExecutionLoop:
     def test_full_cycle(self, tmp_path):
         """Test complete FRAME → run → acts → compact cycle."""
         project = _make_project(tmp_path)
+        rules = {
+            "memory_policy": {
+                "archive_mode": "on_record",
+                "max_hot_runs": 5,
+                "max_hot_sessions": 5,
+                "max_hot_verifications": 5,
+                "max_acts_bytes": 16000,
+                "keep_decisions_hot": True,
+            }
+        }
+        with open(tmp_path / ".haxaml" / "rules.yaml", "w") as f:
+            yaml.dump(rules, f, default_flow_style=False, sort_keys=False)
         runner = ExecutionRunner(project)
 
         for i in range(12):
@@ -186,10 +205,10 @@ class TestExecutionLoop:
                 auto_compact=True, compact_threshold=10,
             )
 
-        sm = StateManager(str(tmp_path / "acts.yaml"))
+        sm = StateManager(str(tmp_path / ".haxaml" / "acts.yaml"))
         state = sm.read()
         assert len(state["completed_tasks"]) == 12
-        assert state["compaction"]["total_runs_compacted"] > 0
+        assert state["archive"]["archived_counts"]["runs"] > 0
 
     def test_failed_preflight_blocks_run(self, tmp_path):
         project = _make_project(tmp_path, brain={"invalid": "brain"})

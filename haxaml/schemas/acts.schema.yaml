@@ -115,17 +115,56 @@ properties:
         timestamp:
           type: string
           format: date-time
+        file_refs:
+          type: array
+          items:
+            type: string
+        module_refs:
+          type: array
+          items:
+            type: string
+        verification_id:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: string
 
-  compaction:
+  archive:
     type: object
     properties:
-      last_compacted:
+      path:
+        type: string
+      archive_mode:
+        type: string
+        enum: [manual, on_record]
+      last_archived_at:
         type: ["string", "null"]
         format: date-time
-      total_runs_compacted:
-        type: integer
-      summary:
-        type: string
+      archived_counts:
+        type: object
+        properties:
+          runs:
+            type: integer
+            minimum: 0
+          sessions:
+            type: integer
+            minimum: 0
+          verifications:
+            type: integer
+            minimum: 0
+      hot_limits:
+        type: object
+        properties:
+          runs:
+            type: integer
+            minimum: 0
+          sessions:
+            type: integer
+            minimum: 0
+          verifications:
+            type: integer
+            minimum: 0
 
   sessions:
     type: array
@@ -162,6 +201,20 @@ properties:
           type: string
           format: date-time
         plan:
+          type: array
+          items:
+            type: string
+        file_refs:
+          type: array
+          items:
+            type: string
+        module_refs:
+          type: array
+          items:
+            type: string
+        verification_id:
+          type: string
+        keywords:
           type: array
           items:
             type: string
@@ -215,6 +268,18 @@ properties:
         timestamp:
           type: string
           format: date-time
+        file_refs:
+          type: array
+          items:
+            type: string
+        module_refs:
+          type: array
+          items:
+            type: string
+        keywords:
+          type: array
+          items:
+            type: string
 
   context_compaction:
     type: object

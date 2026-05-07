@@ -34,9 +34,14 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Validate tag and package versions
         run: |
-          python3 - <<'PY'
+          python - <<'PY'
           import os
           from haxaml.versioning import validate_release_versions
 
@@ -54,13 +59,11 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Install dependencies
         run: uv sync --all-extras
+
+      - name: Clean old build artifacts
+        run: rm -rf dist packages/haxaml-mcp/dist
 
       - name: Run tests
         run: uv run pytest -q

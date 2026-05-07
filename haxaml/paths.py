@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 FRAME_DIR = ".haxaml"
+ARCHIVE_DIR = "archive"
 
 
 def frame_dir(project_dir: str | Path) -> Path:
@@ -14,6 +15,16 @@ def frame_dir(project_dir: str | Path) -> Path:
 def frame_path(project_dir: str | Path, filename: str) -> Path:
     """Return the default path for a FRAME file."""
     return frame_dir(project_dir) / filename
+
+
+def archive_dir(project_dir: str | Path) -> Path:
+    """Return the Haxaml-managed archive directory."""
+    return frame_dir(project_dir) / ARCHIVE_DIR
+
+
+def acts_history_path(project_dir: str | Path) -> Path:
+    """Return the canonical hot/cold acts history archive path."""
+    return archive_dir(project_dir) / "acts-history.yaml"
 
 
 def resolve_frame_file(project_dir: str | Path, filename: str) -> Path | None:

@@ -1,36 +1,82 @@
-"""Acts evolution system — safe read/write/compact for acts.yaml (FRAME model).
+"""Acts state management with tiered hot/cold history."""
 
-Handles:
-- Atomic writes (write-to-temp then rename)
-- File locking (advisory fcntl locks)
-- Run recording and compaction
-- Decision persistence
-"""
+from __future__ import annotations
 
 import fcntl
 import os
-import shutil
 import tempfile
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import yaml
 
-from haxaml.validator import load_yaml, validate_acts
+from haxaml.acts_archive import (
+    ActsArchive,
+    archive_metadata,
+    default_memory_policy,
+    hot_limits_from_policy,
+    normalize_memory_policy,
+)
+from haxaml.paths import resolve_frame_file
+from haxaml.validator import load_yaml
 
 
 class StateError(Exception):
     """Raised when acts operations fail."""
-    pass
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _clean_refs(items: Any) -> list[str]:
+    if not isinstance(items, list):
+        return []
+    cleaned: list[str] = []
+    seen = set()
+    for item in items:
+        text = str(item or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        cleaned.append(text)
+    return cleaned
+
+
+def _keywords_from_text(*parts: Any, limit: int = 12) -> list[str]:
+    stop = {
+        "the", "and", "for", "with", "that", "this", "from", "into", "have", "will",
+        "when", "what", "where", "then", "than", "them", "they", "been", "were",
+        "your", "about", "after", "before", "only", "over", "under", "task", "tasks",
+        "work", "works", "working", "update", "updated", "using",
+    }
+    tokens: list[str] = []
+    seen = set()
+    for part in parts:
+        text = str(part or "").lower()
+        if not text:
+            continue
+        for raw in text.replace("/", " ").replace("-", " ").replace("_", " ").split():
+            token = "".join(ch for ch in raw if ch.isalnum())
+            if len(token) < 4 or token in stop or token in seen:
+                continue
+            seen.add(token)
+            tokens.append(token)
+            if len(tokens) >= limit:
+                return tokens
+    return tokens
 
 
 class StateManager:
-    """Safe, disciplined acts.yaml manager (FRAME model)."""
+    """Safe, disciplined acts.yaml manager."""
 
     def __init__(self, state_path: str):
         self.path = Path(state_path).resolve()
+        self.project_dir = self.path.parent.parent if self.path.parent.name == ".haxaml" else self.path.parent
+        self.archive = ActsArchive(self.project_dir)
         if not self.path.exists():
             raise StateError(f"Acts file not found: {self.path}")
 
@@ -40,13 +86,7 @@ class StateManager:
             return load_yaml(str(self.path))
 
     def write(self, state: dict) -> None:
-        """Write state atomically with exclusive lock.
-
-        Writes to a temp file first, then renames. This prevents
-        partial writes from corrupting state.
-        """
-        # Validate before we take the exclusive lock so obvious schema failures
-        # do not block other readers/writers longer than necessary.
+        """Write state atomically with exclusive lock."""
         errors = self._validate_dict(state)
         if errors:
             raise StateError(f"Invalid state: {'; '.join(errors)}")
@@ -54,15 +94,25 @@ class StateManager:
         with self._lock(shared=False):
             self._atomic_write(state)
 
-    def record_run(self, task: str, result: str, changes: str = "",
-                   decisions: str = "", risks: str = "") -> str:
+    def record_run(
+        self,
+        task: str,
+        result: str,
+        changes: str = "",
+        decisions: str = "",
+        risks: str = "",
+        *,
+        file_refs: list[str] | None = None,
+        module_refs: list[str] | None = None,
+        verification_id: str = "",
+        keywords: list[str] | None = None,
+    ) -> str:
         """Record a completed run and return its ID."""
         if result not in ("success", "partial", "failed"):
             raise StateError(f"Invalid run result: {result}")
 
         run_id = f"run-{uuid.uuid4().hex[:8]}"
-        now = datetime.now(timezone.utc).isoformat()
-
+        now = _now_iso()
         run_entry = {
             "id": run_id,
             "task": task,
@@ -71,13 +121,20 @@ class StateManager:
             "decisions": decisions,
             "risks": risks,
             "timestamp": now,
+            "file_refs": _clean_refs(file_refs or []),
+            "module_refs": _clean_refs(module_refs or []),
+            "verification_id": str(verification_id or "").strip(),
+            "keywords": _clean_refs(keywords or []) or _keywords_from_text(task, changes, decisions, risks),
         }
 
         with self._lock(shared=False):
             state = load_yaml(str(self.path))
-            if "runs" not in state:
-                state["runs"] = []
-            state["runs"].append(run_entry)
+            runs = state.get("runs", [])
+            if not isinstance(runs, list):
+                runs = []
+            runs.append(run_entry)
+            state["runs"] = runs
+            self._ensure_archive_state(state)
             self._atomic_write(state)
 
         return run_id
@@ -97,121 +154,121 @@ class StateManager:
                 "name": active["name"],
                 "result": result,
                 "summary": summary or active.get("description", ""),
-                "completed": datetime.now(timezone.utc).isoformat(),
+                "completed": _now_iso(),
             }
 
-            if "completed_tasks" not in state:
-                state["completed_tasks"] = []
-            state["completed_tasks"].append(completed_entry)
-
+            completed = state.get("completed_tasks", [])
+            if not isinstance(completed, list):
+                completed = []
+            completed.append(completed_entry)
+            state["completed_tasks"] = completed
             state["active_task"] = {"name": "none"}
+            self._ensure_archive_state(state)
             self._atomic_write(state)
 
-    def set_active_task(self, name: str, description: str = "",
-                        assignee: str = "builder") -> None:
+    def set_active_task(self, name: str, description: str = "", assignee: str = "builder") -> None:
         """Set a new active task."""
         with self._lock(shared=False):
             state = load_yaml(str(self.path))
             state["active_task"] = {
                 "name": name,
                 "description": description,
-                "started": datetime.now(timezone.utc).isoformat(),
+                "started": _now_iso(),
                 "assignee": assignee,
             }
+            self._ensure_archive_state(state)
             self._atomic_write(state)
 
-    def add_decision(self, decision: str, reasoning: str,
-                     reversible: bool = True) -> None:
-        """Record a project decision."""
+    def add_decision(
+        self,
+        decision: str,
+        reasoning: str,
+        reversible: bool = True,
+        *,
+        file_refs: list[str] | None = None,
+        module_refs: list[str] | None = None,
+    ) -> None:
+        """Record a durable project decision."""
         with self._lock(shared=False):
             state = load_yaml(str(self.path))
-            if "decisions" not in state:
-                state["decisions"] = []
-            state["decisions"].append({
-                "decision": decision,
-                "reasoning": reasoning,
-                "date": datetime.now(timezone.utc).isoformat(),
-                "reversible": reversible,
-            })
+            decisions = state.get("decisions", [])
+            if not isinstance(decisions, list):
+                decisions = []
+            decisions.append(
+                {
+                    "decision": decision,
+                    "reasoning": reasoning,
+                    "date": _now_iso(),
+                    "reversible": reversible,
+                    "file_refs": _clean_refs(file_refs or []),
+                    "module_refs": _clean_refs(module_refs or []),
+                }
+            )
+            state["decisions"] = decisions
+            self._ensure_archive_state(state)
             self._atomic_write(state)
 
-    def add_blocker(self, name: str, reason: str,
-                    depends_on: str = "") -> None:
+    def add_blocker(self, name: str, reason: str, depends_on: str = "") -> None:
         """Add a blocked task."""
         with self._lock(shared=False):
             state = load_yaml(str(self.path))
-            if "blocked_tasks" not in state:
-                state["blocked_tasks"] = []
+            blocked = state.get("blocked_tasks", [])
+            if not isinstance(blocked, list):
+                blocked = []
             entry = {"name": name, "reason": reason}
             if depends_on:
                 entry["depends_on"] = depends_on
-            state["blocked_tasks"].append(entry)
+            blocked.append(entry)
+            state["blocked_tasks"] = blocked
+            self._ensure_archive_state(state)
             self._atomic_write(state)
 
-    def compact(self, keep_recent: int = 5) -> dict:
-        """Compact old runs into a summary.
+    def memory_policy(self) -> dict[str, Any]:
+        """Load and normalize rules.memory_policy."""
+        rules_path = resolve_frame_file(self.project_dir, "rules.yaml")
+        if not rules_path:
+            return default_memory_policy()
+        rules = load_yaml(str(rules_path))
+        return normalize_memory_policy((rules.get("memory_policy") or {}))
 
-        Keeps the most recent `keep_recent` runs and summarizes the rest.
-        Returns compaction stats.
-        """
+    def compact(self, keep_recent: int = 5, dry_run: bool = False) -> dict:
+        """Archive cold runs, sessions, and verifications into acts-history.yaml."""
         with self._lock(shared=False):
             state = load_yaml(str(self.path))
-            runs = state.get("runs", [])
+            policy = self.memory_policy()
+            limits = hot_limits_from_policy(policy, keep_recent=keep_recent)
+            return self._archive_cold_history(
+                state,
+                limits=limits,
+                archive_mode="manual",
+                dry_run=dry_run,
+            )
 
-            if len(runs) <= keep_recent:
-                return {"compacted": 0, "kept": len(runs), "total": len(runs)}
-
-            old_runs = runs[:-keep_recent]
-            kept_runs = runs[-keep_recent:]
-
-            success_count = sum(1 for r in old_runs if r.get("result") == "success")
-            partial_count = sum(1 for r in old_runs if r.get("result") == "partial")
-            failed_count = sum(1 for r in old_runs if r.get("result") == "failed")
-
-            key_decisions = [
-                r["decisions"] for r in old_runs
-                if r.get("decisions")
-            ]
-
-            key_changes = [
-                r["changes"] for r in old_runs
-                if r.get("changes")
-            ]
-
-            summary_parts = [
-                f"Compacted {len(old_runs)} runs: "
-                f"{success_count} success, {partial_count} partial, {failed_count} failed.",
-            ]
-            if key_decisions:
-                summary_parts.append(f"Key decisions: {'; '.join(key_decisions[:5])}")
-            if key_changes:
-                summary_parts.append(f"Key changes: {'; '.join(key_changes[:5])}")
-
-            compaction = state.get("compaction", {})
-            prev_compacted = compaction.get("total_runs_compacted", 0)
-            prev_summary = compaction.get("summary", "")
-
-            if prev_summary and prev_summary != "No runs yet.":
-                combined_summary = f"{prev_summary} | {' '.join(summary_parts)}"
-            else:
-                combined_summary = " ".join(summary_parts)
-
-            # Keep only recent runs hot in acts.yaml; older runs stay represented
-            # by a durable summary so agents do not have to reread the full history.
-            state["runs"] = kept_runs
-            state["compaction"] = {
-                "last_compacted": datetime.now(timezone.utc).isoformat(),
-                "total_runs_compacted": prev_compacted + len(old_runs),
-                "summary": combined_summary,
-            }
-
-            self._atomic_write(state)
-
-            return {
-                "compacted": len(old_runs),
-                "kept": len(kept_runs),
-                "total": prev_compacted + len(old_runs) + len(kept_runs),
-            }
+    def archive_on_record(self) -> dict:
+        """Archive cold history after a record when policy enables it."""
+        with self._lock(shared=False):
+            state = load_yaml(str(self.path))
+            policy = self.memory_policy()
+            if policy.get("archive_mode") != "on_record":
+                self._ensure_archive_state(state, archive_mode=policy.get("archive_mode", "manual"))
+                self._atomic_write(state)
+                return {
+                    "archive_mode": policy.get("archive_mode", "manual"),
+                    "archived": {"runs": 0, "sessions": 0, "verifications": 0},
+                    "hot": {
+                        "runs": len(state.get("runs", []) or []),
+                        "sessions": len(state.get("sessions", []) or []),
+                        "verifications": len(state.get("verifications", []) or []),
+                    },
+                    "dry_run": False,
+                }
+            limits = hot_limits_from_policy(policy)
+            return self._archive_cold_history(
+                state,
+                limits=limits,
+                archive_mode="on_record",
+                dry_run=False,
+            )
 
     def get_stats(self) -> dict:
         """Get state statistics for diagnostics."""
@@ -221,22 +278,31 @@ class StateManager:
         blocked = state.get("blocked_tasks", [])
         decisions = state.get("decisions", [])
         unresolved = state.get("unresolved_dependencies", [])
-        compaction = state.get("compaction", {})
-
-        yaml_text = yaml.dump(state, default_flow_style=False)
+        archive = archive_metadata(state)
+        archive_counts = archive.get("archived_counts", {})
         file_size = self.path.stat().st_size
+        yaml_text = yaml.dump(state, default_flow_style=False)
 
         return {
             "current_phase": state.get("current_phase", "unknown"),
             "active_task": state.get("active_task", {}).get("name", "none"),
-            "completed_count": len(completed),
-            "blocked_count": len(blocked),
-            "decision_count": len(decisions),
-            "unresolved_count": len(unresolved),
-            "run_count": len(runs),
-            "total_runs_compacted": compaction.get("total_runs_compacted", 0),
+            "completed_count": len(completed) if isinstance(completed, list) else 0,
+            "blocked_count": len(blocked) if isinstance(blocked, list) else 0,
+            "decision_count": len(decisions) if isinstance(decisions, list) else 0,
+            "unresolved_count": len(unresolved) if isinstance(unresolved, list) else 0,
+            "run_count": len(runs) if isinstance(runs, list) else 0,
+            "session_count": len(state.get("sessions", []) or []),
+            "verification_count": len(state.get("verifications", []) or []),
+            "archived_run_count": int(archive_counts.get("runs", 0) or 0),
+            "archived_session_count": int(archive_counts.get("sessions", 0) or 0),
+            "archived_verification_count": int(archive_counts.get("verifications", 0) or 0),
+            "archive_mode": archive.get("archive_mode", "manual"),
+            "archive_path": archive.get("path", ""),
             "file_size_bytes": file_size,
             "yaml_chars": len(yaml_text),
+            "total_runs": (len(runs) if isinstance(runs, list) else 0) + int(archive_counts.get("runs", 0) or 0),
+            "total_sessions": len(state.get("sessions", []) or []) + int(archive_counts.get("sessions", 0) or 0),
+            "total_verifications": len(state.get("verifications", []) or []) + int(archive_counts.get("verifications", 0) or 0),
         }
 
     @contextmanager
@@ -258,16 +324,134 @@ class StateManager:
         """Write state to temp file then rename for atomicity."""
         dir_path = self.path.parent
         fd, tmp_path = tempfile.mkstemp(
-            suffix=".yaml", prefix=".state_", dir=str(dir_path)
+            suffix=".yaml",
+            prefix=".state_",
+            dir=str(dir_path),
         )
         try:
-            with os.fdopen(fd, "w") as f:
-                yaml.dump(state, f, default_flow_style=False, sort_keys=False)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                yaml.dump(state, handle, default_flow_style=False, sort_keys=False)
             os.replace(tmp_path, str(self.path))
         except Exception:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
             raise
+
+    def _archive_cold_history(
+        self,
+        state: dict[str, Any],
+        *,
+        limits: dict[str, int],
+        archive_mode: str,
+        dry_run: bool,
+    ) -> dict[str, Any]:
+        runs = list(state.get("runs", []) or [])
+        sessions = list(state.get("sessions", []) or [])
+        verifications = list(state.get("verifications", []) or [])
+
+        cold_runs = runs[:-limits["runs"]] if len(runs) > limits["runs"] else []
+        cold_sessions = sessions[:-limits["sessions"]] if len(sessions) > limits["sessions"] else []
+        cold_verifications = (
+            verifications[:-limits["verifications"]]
+            if len(verifications) > limits["verifications"]
+            else []
+        )
+
+        archived_counts = {
+            "runs": len(cold_runs),
+            "sessions": len(cold_sessions),
+            "verifications": len(cold_verifications),
+        }
+        hot_counts = {
+            "runs": len(runs) - len(cold_runs),
+            "sessions": len(sessions) - len(cold_sessions),
+            "verifications": len(verifications) - len(cold_verifications),
+        }
+
+        self._ensure_archive_state(state, archive_mode=archive_mode, hot_limits=limits)
+        archive = archive_metadata(state)
+        prior_counts = archive.get("archived_counts", {})
+        result = {
+            "archive_mode": archive_mode,
+            "archive_path": str(self.archive.path),
+            "archived": archived_counts,
+            "hot": hot_counts,
+            "totals": {
+                "runs": hot_counts["runs"] + int(prior_counts.get("runs", 0) or 0) + archived_counts["runs"],
+                "sessions": hot_counts["sessions"] + int(prior_counts.get("sessions", 0) or 0) + archived_counts["sessions"],
+                "verifications": hot_counts["verifications"] + int(prior_counts.get("verifications", 0) or 0) + archived_counts["verifications"],
+            },
+            "dry_run": dry_run,
+            "hot_limits": dict(limits),
+        }
+
+        if dry_run:
+            return result
+
+        if archived_counts["runs"] or archived_counts["sessions"] or archived_counts["verifications"]:
+            append_counts = self.archive.append(
+                runs=cold_runs,
+                sessions=cold_sessions,
+                verifications=cold_verifications,
+                archive_mode=archive_mode,
+            )
+        else:
+            append_counts = {"runs": 0, "sessions": 0, "verifications": 0}
+
+        state["runs"] = runs[-limits["runs"] :] if limits["runs"] > 0 else []
+        state["sessions"] = sessions[-limits["sessions"] :] if limits["sessions"] > 0 else []
+        state["verifications"] = (
+            verifications[-limits["verifications"] :]
+            if limits["verifications"] > 0
+            else []
+        )
+        self._ensure_archive_state(state, archive_mode=archive_mode, hot_limits=limits)
+        archive_counts_total = self.archive.get_counts()
+        state["archive"]["last_archived_at"] = _now_iso()
+        state["archive"]["archived_counts"] = archive_counts_total
+        self._atomic_write(state)
+
+        result["archived"] = append_counts
+        result["hot"] = {
+            "runs": len(state["runs"]),
+            "sessions": len(state["sessions"]),
+            "verifications": len(state["verifications"]),
+        }
+        result["totals"] = {
+            "runs": len(state["runs"]) + archive_counts_total["runs"],
+            "sessions": len(state["sessions"]) + archive_counts_total["sessions"],
+            "verifications": len(state["verifications"]) + archive_counts_total["verifications"],
+        }
+        return result
+
+    def _ensure_archive_state(
+        self,
+        state: dict[str, Any],
+        *,
+        archive_mode: str | None = None,
+        hot_limits: dict[str, int] | None = None,
+    ) -> None:
+        current = archive_metadata(state)
+        if archive_mode is None:
+            archive_mode = current.get("archive_mode", "manual")
+        if hot_limits is None:
+            hot_limits = hot_limits_from_policy(self.memory_policy())
+        if not self.archive.exists():
+            archived_counts = current.get("archived_counts", {})
+        else:
+            archived_counts = self.archive.get_counts()
+        relative_archive_path = str(self.archive.path.relative_to(self.project_dir))
+        state["archive"] = {
+            "path": relative_archive_path,
+            "archive_mode": archive_mode,
+            "last_archived_at": current.get("last_archived_at", ""),
+            "archived_counts": archived_counts,
+            "hot_limits": {
+                "runs": int(hot_limits.get("runs", 0) or 0),
+                "sessions": int(hot_limits.get("sessions", 0) or 0),
+                "verifications": int(hot_limits.get("verifications", 0) or 0),
+            },
+        }
 
     def _validate_dict(self, state: dict) -> list[str]:
         """Validate state dict against schema without writing."""

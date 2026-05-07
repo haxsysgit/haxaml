@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 import yaml
 from jsonschema import Draft202012Validator
 
+from haxaml.acts_archive import ActsArchive, ArchiveError, archive_metadata, normalize_memory_policy
+
 if TYPE_CHECKING:
     from haxaml.frame_model import FrameModel
 
@@ -97,6 +99,34 @@ def _expect_sync_state(acts: dict[str, Any]) -> dict[str, str | bool]:
     }
 
 
+def _archive_run_ids(project_dir: Path, acts: dict[str, Any]) -> tuple[set[str], list[str]]:
+    meta = archive_metadata(acts)
+    archive_path = meta.get("path", "")
+    archived_total = sum(int(meta.get("archived_counts", {}).get(key, 0) or 0) for key in ("runs", "sessions", "verifications"))
+    if not archive_path and archived_total <= 0:
+        return set(), []
+
+    archive = ActsArchive(project_dir)
+    expected_path = archive.path.resolve()
+    actual_path = (project_dir / archive_path).resolve() if archive_path and not Path(archive_path).is_absolute() else Path(archive_path).resolve() if archive_path else expected_path
+    if archive_path and actual_path != expected_path:
+        return set(), [f"acts.archive.path points to '{archive_path}' but expected '{archive.path}'."]
+    if archived_total > 0 and not archive.exists():
+        return set(), [f"acts.archive reports archived history but '{archive.path}' is missing."]
+
+    try:
+        entries = archive.index_entries()
+    except ArchiveError as exc:
+        return set(), [f"Archive history is unreadable: {exc}"]
+
+    run_ids = {
+        _normalized_text(item.get("id", ""))
+        for item in entries
+        if isinstance(item, dict) and _normalized_text(item.get("kind", "")) == "run" and _normalized_text(item.get("id", ""))
+    }
+    return run_ids, []
+
+
 def frame_consistency_report(frame: "FrameModel") -> dict[str, Any]:
     """Return deterministic consistency findings and a derived progress summary."""
 
@@ -104,8 +134,12 @@ def frame_consistency_report(frame: "FrameModel") -> dict[str, Any]:
     rules: dict[str, Any] = frame.rules or {}
     acts: dict[str, Any] = frame.acts or {}
     expect: dict[str, Any] = frame.expect or {}
-
+    memory_policy = normalize_memory_policy((rules.get("memory_policy") or {}))
+    project_dir = Path(getattr(frame, "project_dir", Path(".")))
+    memory_policy = normalize_memory_policy((rules.get("memory_policy") or {}))
+    project_dir = Path(getattr(frame, "project_dir", Path(".")))
     findings: list[ConsistencyFinding] = []
+    project_dir = getattr(frame, "project_dir", Path("."))
 
     phases = [item for item in (expect.get("phases") or []) if isinstance(item, dict)]
     phase_names = {_normalized_text(item.get("name", "")) for item in phases if _normalized_text(item.get("name", ""))}
@@ -264,6 +298,19 @@ def frame_consistency_report(frame: "FrameModel") -> dict[str, Any]:
 
     runs = [item for item in (acts.get("runs") or []) if isinstance(item, dict)]
     run_ids = {_normalized_text(item.get("id", "")) for item in runs if _normalized_text(item.get("id", ""))}
+    archived_run_ids, archive_errors = _archive_run_ids(Path(project_dir), acts)
+    run_ids.update(archived_run_ids)
+    for message in archive_errors:
+        findings.append(
+            ConsistencyFinding(
+                code="archive_corrupt",
+                severity="blocking",
+                area="archive_coherence",
+                message=message,
+                hint="Repair acts.archive metadata or restore .haxaml/archive/acts-history.yaml.",
+                paths=[".haxaml/acts.yaml:archive", ".haxaml/archive/acts-history.yaml"],
+            )
+        )
     expect_sync = _expect_sync_state(acts)
     if bool(expect_sync["required"]):
         if not expect_sync["pending_run_id"] or not expect_sync["pending_task"] or not expect_sync["pending_result"]:
@@ -491,6 +538,8 @@ def semantic_validate(frame: "FrameModel") -> SemanticValidationResult:
     rules: dict[str, Any] = frame.rules or {}
     acts: dict[str, Any] = frame.acts or {}
     expect: dict[str, Any] = frame.expect or {}
+    memory_policy = normalize_memory_policy((rules.get("memory_policy") or {}))
+    project_dir = Path(getattr(frame, "project_dir", Path(".")))
 
     # --- blocking: required structural facts ---
     # Block only when the key is entirely absent — not when it exists but is
@@ -563,6 +612,15 @@ def semantic_validate(frame: "FrameModel") -> SemanticValidationResult:
 
     if not _goal.get("out_of_scope"):
         warnings.append("facts.goal.out_of_scope is missing — agents may attempt out-of-scope work")
+
+    acts_path = project_dir / ".haxaml" / "acts.yaml"
+    if acts_path.exists():
+        max_acts_bytes = int(memory_policy.get("max_acts_bytes", 16000) or 16000)
+        hot_size = acts_path.stat().st_size
+        if hot_size > max_acts_bytes:
+            warnings.append(
+                f"Hot acts state is {hot_size} bytes, above memory_policy.max_acts_bytes={max_acts_bytes} — archive cold history with haxaml_state_compact."
+            )
 
     # --- advisory: vague rules ---
     for key, value in rules.items():

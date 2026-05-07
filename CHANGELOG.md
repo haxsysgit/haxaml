@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.6 - 2026-05-07
+
+- Replaced summary-style state compaction with tiered acts memory so `acts.yaml` stays small while older runs, sessions, and verifications move losslessly into `.haxaml/archive/acts-history.yaml`.
+- Added guided follow-up retrieval through `haxaml_context_fetch`, including retrieval hints from `context_pack` and archive-aware search across governed FRAME memory only.
+- Kept durable decisions hot by default and enriched run, session, and verification records with searchable file references, module references, verification links, and keywords.
+- Made archive search easier to read in code by switching from jargon-heavy record-loading names to plain-language helpers and comments.
+- Hardened the publish workflow by validating release versions under the pinned Python toolchain before build and publish steps run.
+- Aligned `haxaml` and `haxaml-mcp` package versions at `0.6.6`.
+
 ## 0.6.5 - 2026-05-07
 
 - Shipped the current governed lifecycle, export, resource, and documentation updates as the `0.6.5` release snapshot.

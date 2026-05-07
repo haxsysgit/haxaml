@@ -40,9 +40,11 @@ from haxaml.mcp.base import (
     _utility_mode_eval,
     _utility_mode_error,
     _utility_mode_policy,
+    build_context_hints,
     mcp_app,
     DETAIL_SHORT,
     ExecutionRunner,
+    search_context_memory,
 )
 
 
@@ -254,6 +256,34 @@ def haxaml_prebuild(
                 "expect": frame.expect,
             }
             guidance = _guidance_eval(task, frame_dict)
+            hints = build_context_hints(project_dir, task=task, frame_data=frame_dict)
+            session_file_refs = [
+                ".haxaml/facts.yaml",
+                ".haxaml/rules.yaml",
+                ".haxaml/acts.yaml",
+                ".haxaml/expect.yaml",
+                *list(hints.get("candidate_file_refs", [])),
+            ]
+            session_module_refs = []
+            for hit in search_context_memory(
+                project_dir,
+                task=task,
+                query=task,
+                sources=["map", "expect"],
+                limit=3,
+                frame_data=frame_dict,
+            )["hits"]:
+                for module in hit.get("module_refs", []):
+                    if module not in session_module_refs:
+                        session_module_refs.append(module)
+            session_keywords = []
+            for raw in f"{task} {description} {' '.join(session_module_refs)}".lower().replace("/", " ").replace("-", " ").split():
+                token = "".join(ch for ch in raw if ch.isalnum())
+                if len(token) < 4 or token in session_keywords:
+                    continue
+                session_keywords.append(token)
+                if len(session_keywords) >= 12:
+                    break
 
             sessions = state.get("sessions", [])
             if not isinstance(sessions, list):
@@ -273,6 +303,9 @@ def haxaml_prebuild(
                     "started": now,
                     "updated": now,
                     "plan": plan,
+                    "file_refs": session_file_refs,
+                    "module_refs": session_module_refs,
+                    "keywords": session_keywords,
                 }
             )
             state["sessions"] = sessions

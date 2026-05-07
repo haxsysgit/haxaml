@@ -61,6 +61,17 @@ def _benchmark_profile_steps(name: str) -> list[str]:
             "haxaml_session_record",
             "haxaml_expect_sync",
         ]
+    if name == "retrieval_short":
+        return [
+            "haxaml_about",
+            "haxaml_guidance",
+            "haxaml_prebuild",
+            "haxaml_context_pack",
+            "haxaml_context_fetch",
+            "haxaml_session_verify",
+            "haxaml_session_record",
+            "haxaml_expect_sync",
+        ]
     raise ValueError(f"Unknown workflow benchmark profile: {name}")
 
 
@@ -74,6 +85,7 @@ def _benchmark_tool_registry() -> dict[str, Any]:
         "haxaml_guidance": tools_lifecycle.haxaml_guidance,
         "haxaml_prebuild": tools_prebuild.haxaml_prebuild,
         "haxaml_context_pack": tools_lifecycle.haxaml_context_pack,
+        "haxaml_context_fetch": tools_lifecycle.haxaml_context_fetch,
         "haxaml_session_verify": tools_lifecycle.haxaml_session_verify,
         "haxaml_session_record": tools_lifecycle.haxaml_session_record,
         "haxaml_expect_sync": tools_lifecycle.haxaml_expect_sync,
@@ -108,6 +120,14 @@ def _benchmark_run_profile(project_dir: str, name: str, detail: str) -> dict[str
                 "pack": "balanced",
                 "include_state": True,
                 "session_id": session_id,
+                **common,
+            }
+        elif tool_name == "haxaml_context_fetch":
+            kwargs = {
+                "task": WORKFLOW_BENCHMARK_TASK,
+                "query": "lifecycle guidance verification docs",
+                "session_id": session_id,
+                "limit": 4,
                 **common,
             }
         elif tool_name == "haxaml_session_verify":
@@ -176,8 +196,8 @@ def _benchmark_workflow_mode() -> dict[str, Any]:
 
     guardrails = {
         "essential_short_max_payload_tokens": 2100,
-        "expanded_short_max_payload_tokens": 2600,
-        "essential_full_max_payload_tokens": 3500,
+        "expanded_short_max_payload_tokens": 2700,
+        "essential_full_max_payload_tokens": 3700,
     }
     def _run_isolated_profile(name: str, detail: str) -> dict[str, Any]:
         with tempfile.TemporaryDirectory(prefix=f"haxaml-benchmark-workflow-{name}-") as td:
@@ -191,6 +211,7 @@ def _benchmark_workflow_mode() -> dict[str, Any]:
         "essential_short": _run_isolated_profile("essential_short", DETAIL_SHORT),
         "expanded_short": _run_isolated_profile("expanded_short", DETAIL_SHORT),
         "essential_full": _run_isolated_profile("essential_full", DETAIL_FULL),
+        "retrieval_short": _run_isolated_profile("retrieval_short", DETAIL_SHORT),
     }
     essential = profiles["essential_short"]["payload_tokens"]
     expanded = profiles["expanded_short"]["payload_tokens"]

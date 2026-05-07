@@ -59,6 +59,33 @@ properties:
         minimum: 40
         maximum: 2000
 
+  memory_policy:
+    type: object
+    description: "Policy for hot/cold acts history and governed retrieval memory pressure."
+    additionalProperties: false
+    properties:
+      archive_mode:
+        type: string
+        enum: [manual, on_record]
+      max_hot_runs:
+        type: integer
+        minimum: 1
+        maximum: 500
+      max_hot_sessions:
+        type: integer
+        minimum: 1
+        maximum: 500
+      max_hot_verifications:
+        type: integer
+        minimum: 1
+        maximum: 500
+      max_acts_bytes:
+        type: integer
+        minimum: 512
+        maximum: 5000000
+      keep_decisions_hot:
+        type: boolean
+
   clarification_policy:
     type: object
     description: "Policy controlling when agent should ask clarifying questions before acting."

@@ -153,7 +153,8 @@ def measure_context_budget(project_dir: str) -> dict:
     project = Path(project_dir)
     results = {}
 
-    # Canonical FRAME files only
+    # Prefer canonical FRAME files in .haxaml/. For benchmark fixtures and older
+    # ad hoc samples, fall back to same-name files in the project root.
     for filename, label in [
         ("facts.yaml", "facts"),
         ("rules.yaml", "rules"),
@@ -161,6 +162,10 @@ def measure_context_budget(project_dir: str) -> dict:
         ("expect.yaml", "expect"),
     ]:
         fpath = resolve_frame_file(project, filename)
+        if not fpath:
+            root_fallback = project / filename
+            if root_fallback.exists():
+                fpath = root_fallback
         if fpath:
             with open(fpath) as f:
                 text = f.read()

@@ -634,10 +634,14 @@ def _acts_template(plan: AdoptionPlan) -> dict:
             }
         ],
         "runs": [],
-        "compaction": {
-            "last_compacted": None,
-            "total_runs_compacted": 0,
-            "summary": "No adoption runs have been compacted yet.",
+        "sessions": [],
+        "verifications": [],
+        "archive": {
+            "path": ".haxaml/archive/acts-history.yaml",
+            "archive_mode": "manual",
+            "last_archived_at": "",
+            "archived_counts": {"runs": 0, "sessions": 0, "verifications": 0},
+            "hot_limits": {"runs": 5, "sessions": 5, "verifications": 5},
         },
     }
 

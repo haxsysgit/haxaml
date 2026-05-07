@@ -2,8 +2,10 @@
 
 import yaml
 
+from haxaml.acts_archive import ActsArchive
 from haxaml.mcp_server import (
     haxaml_about,
+    haxaml_context_fetch,
     haxaml_context_pack,
     haxaml_expect_sync,
     haxaml_guidance,
@@ -12,6 +14,7 @@ from haxaml.mcp_server import (
     haxaml_prebuild,
     haxaml_session_record,
     haxaml_session_verify,
+    haxaml_state_compact,
     haxaml_validate,
 )
 
@@ -199,6 +202,114 @@ class TestLifecycle:
         )
         assert third["ok"] is True
         assert third["data"]["refresh_reason_category"] == "stale_context"
+
+    def test_context_fetch_allows_repeated_query_driven_calls(self, governed_project):
+        session_id = _start_governed_session(
+            governed_project,
+            task="update lifecycle guidance docs",
+            description="workflow note",
+        )
+
+        first = haxaml_context_fetch(
+            task="update lifecycle guidance docs",
+            query="lifecycle guidance docs",
+            project_dir=str(governed_project),
+            session_id=session_id,
+        )
+        assert first["ok"] is True
+        assert first["data"]["context_fetch_calls"] == 1
+        assert first["data"]["lifecycle"]["preferred_next"] == "haxaml_session_verify"
+
+        second = haxaml_context_fetch(
+            task="update lifecycle guidance docs",
+            query="verification rules and touched files",
+            project_dir=str(governed_project),
+            session_id=session_id,
+        )
+        assert second["ok"] is True
+        assert second["data"]["context_fetch_calls"] == 2
+
+    def test_context_fetch_returns_archived_hits(self, governed_project):
+        acts_path = governed_project / ".haxaml" / "acts.yaml"
+        state = yaml.safe_load(acts_path.read_text())
+        state["runs"] = [
+            {"id": f"run-{i}", "task": f"old task {i}", "result": "success", "changes": f"archived docs change {i}", "timestamp": f"2026-01-0{i+1}T00:00:00+00:00"}
+            for i in range(7)
+        ]
+        acts_path.write_text(yaml.dump(state, default_flow_style=False, sort_keys=False))
+        archived = haxaml_state_compact(str(governed_project), keep_recent=2)
+        assert archived["ok"] is True
+
+        session_id = _start_governed_session(
+            governed_project,
+            task="update lifecycle guidance docs",
+            description="workflow note",
+        )
+        fetched = haxaml_context_fetch(
+            task="update lifecycle guidance docs",
+            query="archived docs change",
+            project_dir=str(governed_project),
+            session_id=session_id,
+        )
+        assert fetched["ok"] is True
+        assert any(hit["source"] == "archived_acts" for hit in fetched["data"]["hits"])
+
+    def test_context_fetch_loads_only_returned_archived_records(self, governed_project, monkeypatch):
+        acts_path = governed_project / ".haxaml" / "acts.yaml"
+        state = yaml.safe_load(acts_path.read_text())
+        state["runs"] = [
+            {
+                "id": "run-needle",
+                "task": "needle alpha beta",
+                "result": "success",
+                "changes": "needle alpha beta",
+                "timestamp": "2026-01-01T00:00:00+00:00",
+            }
+        ] + [
+            {
+                "id": f"run-{i}",
+                "task": f"cold record {i}",
+                "result": "success",
+                "changes": f"misc update {i}",
+                "timestamp": f"2026-01-{i+2:02d}T00:00:00+00:00",
+            }
+            for i in range(8)
+        ]
+        acts_path.write_text(yaml.dump(state, default_flow_style=False, sort_keys=False))
+        archived = haxaml_state_compact(str(governed_project), keep_recent=2)
+        assert archived["ok"] is True
+
+        session_id = _start_governed_session(
+            governed_project,
+            task="update lifecycle guidance docs",
+            description="workflow note",
+        )
+
+        requested_record_batches: list[list[tuple[str, str]]] = []
+        original_loader = ActsArchive.load_selected_record_details
+
+        def counted_loader(self, records):
+            requested_record_batches.append(list(records))
+            return original_loader(self, records)
+
+        monkeypatch.setattr(ActsArchive, "load_selected_record_details", counted_loader)
+
+        fetched = haxaml_context_fetch(
+            task="update lifecycle guidance docs",
+            query="needle alpha beta",
+            project_dir=str(governed_project),
+            session_id=session_id,
+            limit=1,
+            sources=["archived_acts"],
+            detail="full",
+        )
+
+        assert fetched["ok"] is True
+        archived_hits = [hit for hit in fetched["data"]["hits"] if hit["source"] == "archived_acts"]
+        assert len(archived_hits) == 1
+        assert archived_hits[0]["id"] == "run-needle"
+        assert archived_hits[0]["details"]["changes"] == "needle alpha beta"
+        assert requested_record_batches == [[("run", "run-needle")]]
 
     def test_prebuild_short_response_is_compact(self, governed_project):
         assert haxaml_about(str(governed_project))["ok"] is True

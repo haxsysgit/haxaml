@@ -514,7 +514,10 @@ def haxaml_state_show(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dic
         f"Blocked:    {stats['blocked_count']}\n"
         f"Decisions:  {stats['decision_count']}\n"
         f"Unresolved: {stats['unresolved_count']}\n"
-        f"Runs:       {stats['run_count']} (+ {stats['total_runs_compacted']} compacted)\n"
+        f"Runs:       {stats['run_count']} hot / {stats['archived_run_count']} archived\n"
+        f"Sessions:   {stats['session_count']} hot / {stats['archived_session_count']} archived\n"
+        f"Verify:     {stats['verification_count']} hot / {stats['archived_verification_count']} archived\n"
+        f"Archive:    {stats['archive_mode']}\n"
         f"File size:  {stats['file_size_bytes']} bytes"
     )
     return _ok("haxaml_state_show", {"message": message, "stats": stats}, detail=detail_mode)
@@ -524,12 +527,10 @@ def haxaml_state_show(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dic
 def haxaml_state_compact(
     project_dir: str = ".",
     keep_recent: int = 5,
+    dry_run: bool = False,
     detail: str = DETAIL_SHORT,
 ) -> dict:
-    """Compact old runs in acts.yaml to save context tokens.
-
-    Summarizes old runs and keeps only the most recent ones.
-    """
+    """Archive cold runs, sessions, and verifications out of hot acts state."""
     detail_mode, detail_err = _normalize_detail("haxaml_state_compact", detail)
     if detail_err:
         return detail_err
@@ -541,9 +542,16 @@ def haxaml_state_compact(
 
     try:
         sm = StateManager(str(acts_path))
-        result = sm.compact(keep_recent=keep_recent)
+        result = sm.compact(keep_recent=keep_recent, dry_run=dry_run)
     except StateError as e:
         return _err("haxaml_state_compact", "state_error", str(e))
 
-    message = f"✓ Compacted {result['compacted']} runs, kept {result['kept']}"
+    message = (
+        f"Archive preview complete." if dry_run else "Archive complete."
+    )
+    message += (
+        f" archived runs={result['archived']['runs']},"
+        f" sessions={result['archived']['sessions']},"
+        f" verifications={result['archived']['verifications']}."
+    )
     return _ok("haxaml_state_compact", {"message": message, "result": result}, detail=detail_mode)

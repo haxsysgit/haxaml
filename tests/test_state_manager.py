@@ -6,6 +6,7 @@ import threading
 import pytest
 import yaml
 
+from haxaml.acts_archive import ActsArchive
 from haxaml.state_manager import StateManager, StateError
 
 
@@ -20,10 +21,14 @@ def _make_state(tmp_path, data=None):
             "decisions": [],
             "unresolved_dependencies": [],
             "runs": [],
-            "compaction": {
-                "last_compacted": None,
-                "total_runs_compacted": 0,
-                "summary": "No runs yet.",
+            "sessions": [],
+            "verifications": [],
+            "archive": {
+                "path": str(tmp_path / ".haxaml" / "archive" / "acts-history.yaml"),
+                "archive_mode": "manual",
+                "last_archived_at": "",
+                "archived_counts": {"runs": 0, "sessions": 0, "verifications": 0},
+                "hot_limits": {"runs": 5, "sessions": 5, "verifications": 5},
             },
         }
     path = str(tmp_path / "acts.yaml")
@@ -165,8 +170,8 @@ class TestCompaction:
             sm.record_run(task=f"task {i}", result="success")
 
         result = sm.compact(keep_recent=5)
-        assert result["compacted"] == 0
-        assert result["kept"] == 3
+        assert result["archived"]["runs"] == 0
+        assert result["hot"]["runs"] == 3
 
     def test_compact_archives_old_runs(self, tmp_path):
         path = _make_state(tmp_path)
@@ -177,13 +182,13 @@ class TestCompaction:
                           decisions=f"decision {i}" if i % 3 == 0 else "")
 
         result = sm.compact(keep_recent=5)
-        assert result["compacted"] == 7
-        assert result["kept"] == 5
+        assert result["archived"]["runs"] == 7
+        assert result["hot"]["runs"] == 5
 
         state = sm.read()
         assert len(state["runs"]) == 5
-        assert state["compaction"]["total_runs_compacted"] == 7
-        assert "Compacted 7 runs" in state["compaction"]["summary"]
+        assert state["archive"]["archived_counts"]["runs"] == 7
+        assert ActsArchive(tmp_path).get_counts()["runs"] == 7
 
     def test_compact_accumulates(self, tmp_path):
         path = _make_state(tmp_path)
@@ -198,8 +203,9 @@ class TestCompaction:
         result = sm.compact(keep_recent=3)
 
         state = sm.read()
-        assert state["compaction"]["total_runs_compacted"] == 7 + 10
+        assert state["archive"]["archived_counts"]["runs"] == 7 + 10
         assert len(state["runs"]) == 3
+        assert result["archived"]["runs"] == 10
 
     def test_compact_preserves_recent_runs(self, tmp_path):
         path = _make_state(tmp_path)
@@ -211,6 +217,48 @@ class TestCompaction:
         state = sm.read()
         tasks = [r["task"] for r in state["runs"]]
         assert tasks == ["task 7", "task 8", "task 9"]
+
+    def test_compact_dry_run_does_not_mutate_state(self, tmp_path):
+        path = _make_state(tmp_path)
+        sm = StateManager(path)
+        for i in range(8):
+            sm.record_run(task=f"task {i}", result="success")
+
+        before = sm.read()
+        result = sm.compact(keep_recent=3, dry_run=True)
+        after = sm.read()
+
+        assert result["dry_run"] is True
+        assert result["archived"]["runs"] == 5
+        assert len(after["runs"]) == len(before["runs"]) == 8
+        assert after.get("archive", {}).get("archived_counts", {}).get("runs", 0) == 0
+
+    def test_compact_preserves_full_archived_record(self, tmp_path):
+        path = _make_state(tmp_path)
+        sm = StateManager(path)
+        sm.record_run(
+            task="seed archive",
+            result="success",
+            changes="Updated docs and tests",
+            decisions="Kept hot state lean",
+            risks="Need another docs pass",
+            file_refs=["docs/lifecycle.md", "tests/test_state_manager.py"],
+            module_refs=["docs"],
+            verification_id="verify-abc123",
+            keywords=["archive", "docs"],
+        )
+        for i in range(6):
+            sm.record_run(task=f"task {i}", result="success")
+
+        sm.compact(keep_recent=5)
+        archive = ActsArchive(tmp_path)
+        runs = archive.read()["history"]["runs"]
+        record = next(item for item in runs if item["task"] == "seed archive")
+
+        assert record["changes"] == "Updated docs and tests"
+        assert record["decisions"] == "Kept hot state lean"
+        assert record["verification_id"] == "verify-abc123"
+        assert "docs/lifecycle.md" in record["file_refs"]
 
 
 class TestStats:

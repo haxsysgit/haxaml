@@ -78,6 +78,69 @@ def _latest_verification_for_session(
     return latest_verdict, latest_verification_id
 
 
+def _dedupe_strs(items: list[str]) -> list[str]:
+    out: list[str] = []
+    seen = set()
+    for item in items:
+        text = str(item or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
+def _record_keywords(*parts: Any) -> list[str]:
+    tokens: list[str] = []
+    seen = set()
+    for part in parts:
+        text = str(part or "").lower()
+        for raw in text.replace("/", " ").replace("-", " ").replace("_", " ").split():
+            token = "".join(ch for ch in raw if ch.isalnum())
+            if len(token) < 4 or token in seen:
+                continue
+            seen.add(token)
+            tokens.append(token)
+            if len(tokens) >= 12:
+                return tokens
+    return tokens
+
+
+def _module_refs_for_files(frame: dict[str, Any], file_refs: list[str], task: str = "") -> list[str]:
+    map_data = frame.get("map") or {}
+    modules = map_data.get("modules", []) if isinstance(map_data, dict) else []
+    task_l = task.lower()
+    matched: list[str] = []
+    for module in modules if isinstance(modules, list) else []:
+        if not isinstance(module, dict):
+            continue
+        name = str(module.get("name", "")).strip()
+        if not name:
+            continue
+        files = [str(item).strip() for item in (module.get("files") or []) if str(item).strip()]
+        if name.lower() in task_l:
+            matched.append(name)
+            continue
+        for ref in file_refs:
+            if any(pattern in ref or ref in pattern for pattern in files):
+                matched.append(name)
+                break
+    return _dedupe_strs(matched)
+
+
+def _session_seed_refs(project_dir: str, frame: dict[str, Any], task: str) -> tuple[list[str], list[str], list[str]]:
+    hints = build_context_hints(project_dir, task=task, frame_data=frame)
+    file_refs = _dedupe_strs(
+        [".haxaml/facts.yaml", ".haxaml/rules.yaml", ".haxaml/acts.yaml", ".haxaml/expect.yaml"]
+        + list(hints.get("candidate_file_refs", []))
+    )
+    module_refs = _dedupe_strs(
+        _module_refs_for_files(frame, file_refs, task=task)
+    )
+    keywords = _record_keywords(task, " ".join(file_refs), " ".join(module_refs))
+    return file_refs, module_refs, keywords
+
+
 @mcp_app.tool()
 def haxaml_about(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
     """Return onboarding context for Haxaml and FRAME. Call once per active agent/MCP session."""
@@ -388,7 +451,7 @@ def haxaml_context_pack(
     contract = _contract_touch(
         contract,
         phase="context",
-        required_next=["haxaml_session_verify"],
+        required_next=["haxaml_context_fetch", "haxaml_session_verify"],
         tool_name="haxaml_context_pack",
         active_session_id=session_id,
         active_task=str(session.get("task", "") or task),
@@ -415,7 +478,125 @@ def haxaml_context_pack(
                 phase="context",
                 depends_on=["haxaml_prebuild"],
                 preferred_next="haxaml_session_verify",
-                allowed_next=["haxaml_session_verify"],
+                allowed_next=["haxaml_context_fetch", "haxaml_session_verify"],
+            ),
+        },
+        warnings=warnings,
+        detail=detail_mode,
+    )
+
+
+@mcp_app.tool()
+def haxaml_context_fetch(
+    task: str,
+    query: str,
+    session_id: str,
+    project_dir: str = ".",
+    sources: Optional[list[str]] = None,
+    limit: int = 5,
+    detail: str = DETAIL_SHORT,
+) -> dict:
+    """Follow-up governed retrieval across hot and archived FRAME memory."""
+    detail_mode, detail_err = _normalize_detail("haxaml_context_fetch", detail)
+    if detail_err:
+        return detail_err
+
+    frame = load_frame_data(project_dir)
+    if not frame.get("facts"):
+        return _err("haxaml_context_fetch", "missing_facts", "facts.yaml not found")
+    if not session_id:
+        return _err(
+            "haxaml_context_fetch",
+            "lifecycle_contract_violation",
+            "session_id is required for governed context fetch calls.",
+            {
+                "project_dir": str(Path(project_dir).resolve()),
+                "expected_next": ["haxaml_context_fetch", "haxaml_session_verify"],
+            },
+        )
+    if not str(query or "").strip():
+        return _err("haxaml_context_fetch", "missing_query", "query is required")
+
+    sm, state, state_err = _load_state_or_error("haxaml_context_fetch", project_dir)
+    if state_err:
+        return state_err
+    contract = _lifecycle_contract_state(state)
+    required_next = contract.get("required_next", [])
+    allow_repeat = (
+        isinstance(required_next, list)
+        and "haxaml_session_verify" in required_next
+        and contract.get("active_session_id", "") == session_id
+    )
+    if not _contract_allows(contract, "haxaml_context_fetch") and not allow_repeat:
+        return _contract_violation(
+            "haxaml_context_fetch",
+            project_dir=project_dir,
+            contract=contract,
+            reason="Context fetch is out of lifecycle order.",
+            retry_after=contract.get("required_next", []),
+        )
+    if contract.get("active_session_id", "") != session_id:
+        return _active_session_violation(
+            "haxaml_context_fetch",
+            project_dir=project_dir,
+            contract=contract,
+            session_id=session_id,
+            reason="Context fetch must target the active governed session.",
+        )
+
+    result = search_context_memory(
+        project_dir,
+        task=task,
+        query=query,
+        sources=sources,
+        limit=limit,
+        frame_data=frame,
+    )
+
+    session = _find_session(state, session_id)
+    if not session:
+        return _err("haxaml_context_fetch", "unknown_session", f"Session not found: {session_id}")
+    prior_calls = session.get("context_fetch_calls", 0)
+    if not isinstance(prior_calls, int) or prior_calls < 0:
+        prior_calls = 0
+    session["context_fetch_calls"] = prior_calls + 1
+    session["last_context_fetch_at"] = _now_iso()
+    session["last_context_fetch_query"] = query
+    session["last_context_fetch_sources"] = result["sources"]
+    contract = _contract_touch(
+        contract,
+        phase="context",
+        required_next=["haxaml_context_fetch", "haxaml_session_verify"],
+        tool_name="haxaml_context_fetch",
+        active_session_id=session_id,
+        active_task=str(session.get("task", "") or task),
+    )
+    _set_lifecycle_contract_state(state, contract)
+    err = _persist_state(sm, state)
+    warnings = [f"Could not persist context fetch state: {err}"] if err else []
+
+    return _ok(
+        "haxaml_context_fetch",
+        {
+            "message": (
+                f"Retrieved {len(result['hits'])} governed memory hit(s) for query '{query}'. "
+                "Archive and hot FRAME state were searched without repo-wide content search."
+            ),
+            "task": task,
+            "query": query,
+            "session_id": session_id,
+            "sources": result["sources"],
+            "hits": result["hits"],
+            "candidate_file_refs": result["candidate_file_refs"],
+            "archive_available": result["archive_available"],
+            "context_fetch_calls": prior_calls + 1,
+            "next_step": "haxaml_session_verify",
+            "lifecycle": _lifecycle_hint(
+                tool="haxaml_context_fetch",
+                phase="context",
+                depends_on=["haxaml_context_pack"],
+                preferred_next="haxaml_session_verify",
+                allowed_next=["haxaml_context_fetch", "haxaml_session_verify"],
             ),
         },
         warnings=warnings,
@@ -516,6 +697,8 @@ def haxaml_session_verify(
     ]
 
     evidence_refs = [".haxaml/facts.yaml", ".haxaml/rules.yaml", ".haxaml/acts.yaml"] + changed_files
+    file_refs = _dedupe_strs(evidence_refs + inspected_context)
+    module_refs = _module_refs_for_files(frame, file_refs, task=task)
     verification_id = f"verify-{uuid.uuid4().hex[:10]}"
     timestamp = _now_iso()
 
@@ -555,6 +738,9 @@ def haxaml_session_verify(
             "follow_ups": guidance["required_questions"] if verdict in ("fail", "needs_clarification") else [],
             "checks": check_rows,
             "evidence_refs": evidence_refs,
+            "file_refs": file_refs,
+            "module_refs": module_refs,
+            "keywords": _record_keywords(task, summary, " ".join(file_refs), " ".join(module_refs)),
             "timestamp": timestamp,
         }
     )
@@ -607,6 +793,8 @@ def haxaml_session_verify(
             "verdict": verdict,
             "checks": check_rows,
             "evidence_refs": evidence_refs,
+            "file_refs": file_refs,
+            "module_refs": module_refs,
             "risky_paths": risky_paths,
             "unresolved_questions": unresolved_questions,
             "assumptions": assumptions,
@@ -676,6 +864,15 @@ def haxaml_session_record(
         session_id=session_id,
         task=task,
     )
+    latest_verification = None
+    verifications = state.get("verifications", []) if isinstance(state, dict) else []
+    if isinstance(verifications, list):
+        for item in reversed(verifications):
+            if not isinstance(item, dict):
+                continue
+            if item.get("id") == latest_verification_id:
+                latest_verification = item
+                break
     required_next = contract.get("required_next", [])
     if not _contract_allows(contract, "haxaml_session_record"):
         if (
@@ -785,6 +982,20 @@ def haxaml_session_record(
         changes=changes,
         decisions=decisions,
         risks=risks,
+        file_refs=_dedupe_strs(
+            list((latest_verification or {}).get("file_refs", []))
+            or list((latest_verification or {}).get("evidence_refs", []))
+        ),
+        module_refs=_dedupe_strs(list((latest_verification or {}).get("module_refs", []))),
+        verification_id=latest_verification_id,
+        keywords=_record_keywords(
+            task,
+            changes,
+            decisions,
+            risks,
+            " ".join(list((latest_verification or {}).get("file_refs", []))),
+            " ".join(list((latest_verification or {}).get("module_refs", []))),
+        ),
     )
     if run_result.errors:
         return _err(
@@ -816,6 +1027,20 @@ def haxaml_session_record(
         session["status"] = "recorded"
         session["updated"] = _now_iso()
         session["ended"] = _now_iso()
+        session["verification_id"] = latest_verification_id
+        session["file_refs"] = _dedupe_strs(
+            list((latest_verification or {}).get("file_refs", []))
+            or list((latest_verification or {}).get("evidence_refs", []))
+        )
+        session["module_refs"] = _dedupe_strs(list((latest_verification or {}).get("module_refs", [])))
+        session["keywords"] = _record_keywords(
+            task,
+            changes,
+            decisions,
+            risks,
+            " ".join(session.get("file_refs", [])),
+            " ".join(session.get("module_refs", [])),
+        )
     contract = _contract_touch(
         contract,
         phase="record",

@@ -12,6 +12,7 @@ from haxaml.mcp.tools_frame import (
 )
 from haxaml.mcp.tools_lifecycle import (
     haxaml_about,
+    haxaml_context_fetch,
     haxaml_context_pack,
     haxaml_expect_sync,
     haxaml_guidance,
@@ -50,6 +51,7 @@ __all__ = [
     "haxaml_doctor",
     "haxaml_guidance",
     "haxaml_context_pack",
+    "haxaml_context_fetch",
     "haxaml_session_verify",
     "haxaml_session_record",
     "haxaml_expect_sync",

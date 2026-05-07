@@ -6,7 +6,7 @@ from haxaml.mcp_server import haxaml_prebuild, main, mcp_app
 class TestServerRegistration:
     def test_tool_count(self):
         tools = mcp_app._tool_manager._tools
-        assert len(tools) >= 19
+        assert len(tools) >= 20
 
     def test_expected_tools_registered(self):
         tools = mcp_app._tool_manager._tools
@@ -29,6 +29,7 @@ class TestServerRegistration:
             "haxaml_state_compact",
             "haxaml_benchmark",
             "haxaml_context_pack",
+            "haxaml_context_fetch",
             "haxaml_guidance",
             "haxaml_session_verify",
             "haxaml_session_record",

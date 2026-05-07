@@ -94,6 +94,9 @@ def _compact_context_pack_payload(payload: dict) -> dict:
         "omitted_context": meta.get("omitted_context", meta.get("compaction_notes", [])),
         "state_included": bool(meta.get("state_included", True)),
         "limits": meta.get("limits", {}),
+        "likely_relevant_sources": meta.get("likely_relevant_sources", []),
+        "candidate_file_refs": meta.get("candidate_file_refs", []),
+        "archive_available": bool(meta.get("archive_available", False)),
     }
     if payload.get("session_id"):
         compact["session_id"] = payload.get("session_id")
@@ -145,6 +148,31 @@ def _compact_success(tool: str, payload: dict) -> dict:
             )
         else:
             compact["policy"] = payload.get("policy", {})
+        compact["lifecycle"] = _compact_lifecycle(payload)
+        return compact
+
+    if tool == "haxaml_context_fetch":
+        compact = _pick_fields(
+            payload,
+            [
+                "message",
+                "task",
+                "query",
+                "session_id",
+                "sources",
+                "candidate_file_refs",
+                "archive_available",
+                "context_fetch_calls",
+            ],
+        )
+        hits = payload.get("hits", []) if isinstance(payload.get("hits"), list) else []
+        compact["hits"] = [
+            _pick_fields(
+                hit,
+                ["source", "kind", "title", "id", "status_or_result", "timestamp", "text", "file_refs", "module_refs", "score", "match_counts"],
+            )
+            for hit in hits
+        ]
         compact["lifecycle"] = _compact_lifecycle(payload)
         return compact
 

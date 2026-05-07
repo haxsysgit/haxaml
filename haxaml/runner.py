@@ -199,10 +199,14 @@ class ExecutionRunner:
                    changes: str = "", decisions: str = "",
                    risks: str = "", summary: str = "",
                    auto_compact: bool = True,
+                   file_refs: Optional[list[str]] = None,
+                   module_refs: Optional[list[str]] = None,
+                   verification_id: str = "",
+                   keywords: Optional[list[str]] = None,
                    compact_threshold: int = 10) -> RunResult:
         """Complete an execution run.
 
-        Records the run, completes the task, and optionally compacts state.
+        Records the run, completes the task, and optionally archives cold state.
         """
         run_result = RunResult(task=task, result=result, changes=changes,
                                decisions=decisions, risks=risks)
@@ -215,19 +219,24 @@ class ExecutionRunner:
         try:
             run_id = sm.record_run(
                 task=task, result=result, changes=changes,
-                decisions=decisions, risks=risks
+                decisions=decisions, risks=risks,
+                file_refs=file_refs,
+                module_refs=module_refs,
+                verification_id=verification_id,
+                keywords=keywords,
             )
             run_result.run_id = run_id
 
             sm.complete_task(result=result, summary=summary or changes)
 
             if auto_compact:
-                state = sm.read()
-                run_count = len(state.get("runs", []))
-                if run_count > compact_threshold:
-                    compact_result = sm.compact(keep_recent=5)
+                archive_result = sm.archive_on_record()
+                if any(int(archive_result["archived"].get(kind, 0) or 0) > 0 for kind in ("runs", "sessions", "verifications")):
                     run_result.warnings.append(
-                        f"Auto-compacted: {compact_result['compacted']} runs archived"
+                        "Auto-archived cold history: "
+                        f"{archive_result['archived']['runs']} run(s), "
+                        f"{archive_result['archived']['sessions']} session(s), "
+                        f"{archive_result['archived']['verifications']} verification(s)."
                     )
 
             ctx = build_context(str(self.project_dir))
@@ -266,7 +275,9 @@ class ExecutionRunner:
                 "active_task": stats["active_task"],
                 "completed_tasks": stats["completed_count"],
                 "blocked_tasks": stats["blocked_count"],
-                "total_runs": stats["run_count"] + stats["total_runs_compacted"],
+                "total_runs": stats["total_runs"],
+                "archive_mode": stats["archive_mode"],
+                "archived_runs": stats["archived_run_count"],
                 "state_size_bytes": stats["file_size_bytes"],
             })
 

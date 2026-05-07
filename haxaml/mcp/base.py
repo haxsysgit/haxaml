@@ -15,6 +15,7 @@ from typing import Any, Optional
 
 from mcp.server.fastmcp import FastMCP
 
+from haxaml.acts_archive import ActsArchive, ArchiveError, archive_metadata, default_memory_policy, normalize_memory_policy
 from haxaml.frame_model import FrameModel
 
 # Core haxaml imports shared across MCP modules.
@@ -27,10 +28,12 @@ from haxaml.adoption import (
 from haxaml.auto_export import export_if_stale
 from haxaml.context import (
     build_context,
+    build_context_hints,
     build_context_pack,
     count_tokens,
     format_context_pack,
     load_frame_data,
+    search_context_memory,
 )
 from haxaml.export_engine import (
     AGENT_CONFIGS,

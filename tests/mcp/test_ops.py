@@ -389,7 +389,7 @@ class TestState:
     def test_compact_no_runs(self, governed_project):
         result = haxaml_state_compact(str(governed_project))
         assert result["ok"] is True
-        assert "Compacted 0" in _msg(result)
+        assert "archived runs=0" in _msg(result)
 
     def test_show_missing(self, tmp_path):
         result = haxaml_state_show(str(tmp_path))
