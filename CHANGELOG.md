@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.4 - 2026-05-07
+
+- Added deterministic 0.6.4 consistency checks and derived progress summaries across validator, reconcile, doctor, health, and prebuild without introducing a new inference layer.
+- Tightened lifecycle flow guidance with machine-readable next-step hints while keeping short-mode responses lean and benchmark-safe.
+- Standardized release version alignment through the central bump script so `haxaml`, `haxaml-mcp`, and release tags stay in sync.
+
 ## 0.6.3 - 2026-05-05
 
 ### Changed
