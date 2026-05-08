@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.8 - 2026-05-08
+
+- Added `haxaml[full]` convenience extra in the core package.
+- Restored `mcp` as a required core `haxaml` dependency because MCP is integral to the base runtime.
+- Removed the `haxaml-mcp` console script from the core distribution so MCP launcher wiring stays in the `haxaml-mcp` adapter package.
+- Updated CLI guidance for missing MCP runtime to point users to reinstall core `haxaml`.
+- Refreshed release bump tooling and docs so root extras stay aligned with adapter package version bumps.
+- Refactored dashboard lifecycle-state reads into `haxaml.lifecycle_state` and made `haxaml.mcp` lazy to prevent dashboard imports from requiring MCP app startup internals.
+
 ## 0.6.7 - 2026-05-07
 
 - Added a shared in-process runtime snapshot cache so long-lived runtimes reuse canonical FRAME reads, invalidate only changed files, and keep archive indexing shallow until drilldown detail is requested.

@@ -16,7 +16,7 @@ from starlette.routing import Route
 
 from haxaml.frame_model import FrameModel
 from haxaml.map_policy import evaluate_map_complexity, format_map_complexity_summary, map_complexity_issues
-from haxaml.mcp.lifecycle_helpers import _expect_sync_state
+from haxaml.lifecycle_state import expect_sync_state
 from haxaml.paths import detect_project_root, frame_path
 from haxaml.reconcile import reconcile_derivation
 from haxaml.runner import ExecutionRunner
@@ -301,7 +301,7 @@ def _overview_body(project_dir: str) -> tuple[str, str]:
     consistency = frame_consistency_report(frame)
     map_assessment = evaluate_map_complexity(project_dir)
     map_errors, map_warnings = map_complexity_issues(map_assessment)
-    sync_state = _expect_sync_state(frame.acts or {})
+    sync_state = expect_sync_state(frame.acts or {})
     cards = [
         _render_card("Ready", "yes" if health.get("ready") else "no", "Validation and lifecycle readiness", warning=not health.get("ready")),
         _render_card("Context Tokens", str(health.get("context_tokens", 0)), "Current full-context size"),

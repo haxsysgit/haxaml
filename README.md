@@ -58,6 +58,7 @@ pip install haxaml
 pip install haxaml-mcp
 pip install haxaml-ui
 pip install "haxaml[ui]"
+pip install "haxaml[full]"
 ```
 
 If you want to run the MCP server without a persistent install:
@@ -100,7 +101,9 @@ Supported flags:
 Install note:
 
 - `haxaml dashboard` is the primary human launcher
-- `haxaml[ui]` is the install selector
+- core `haxaml` install now includes the MCP runtime dependency (`mcp`)
+- `haxaml[ui]` installs the dashboard package (`haxaml-ui`)
+- `haxaml[full]` installs both optional adapter packages
 - `haxaml-ui` is the separate dashboard distribution
 
 ## MCP Start
@@ -223,14 +226,15 @@ Do not edit .haxaml/* for utility or side tasks that are not governed project wo
 - `.haxaml/facts.yaml` - project truth
 - `.haxaml/rules.yaml` - agent operating rules
 - `.haxaml/acts.yaml` - execution diary and decisions
-- `.haxaml/expect.yaml` - run plan and milestones
 - `.haxaml/map.yaml` - optional module ownership and impact map
+- `.haxaml/expect.yaml` - run plan and milestones
 
 ## Docs
 
 - [learn/FRAME.md](https://github.com/haxsysgit/haxaml/blob/main/learn/FRAME.md) - FRAME memory model
 - [learn/haxaml.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml.md) - how Haxaml makes FRAME operational
 - [learn/haxaml-mcp.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml-mcp.md) - MCP setup, architecture mapping, and lifecycle contract
+- [0.7.x.md](https://github.com/haxsysgit/haxaml/blob/main/0.7.x.md) - setup, onboarding, and target support roadmap for the `0.7.x` line
 - [v1.0_Roadmap.md](https://github.com/haxsysgit/haxaml/blob/main/v1.0_Roadmap.md) - roadmap from `0.6.0` to `1.0`
 - [docs/architecture.md](https://github.com/haxsysgit/haxaml/blob/main/docs/architecture.md) - module layout and MCP split overview
 - [docs/mcp-tool-reference.md](https://github.com/haxsysgit/haxaml/blob/main/docs/mcp-tool-reference.md) - compact MCP tool and resource index

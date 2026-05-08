@@ -26,6 +26,8 @@ def test_release_snapshot_for_valid_tag():
     assert snap["versions_match"] is True
     assert snap["mcp_dependency_aligned"] is True
     assert snap["ui_dependency_aligned"] is True
+    assert snap["core_ui_extra_aligned"] is True
+    assert snap["core_full_extra_aligned"] is True
 
 
 def test_validate_release_versions_rejects_mismatched_tag():

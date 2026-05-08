@@ -24,13 +24,13 @@ MCP_PYPROJECT = REPO_ROOT / "packages" / "haxaml-mcp" / "pyproject.toml"
 UI_PYPROJECT = REPO_ROOT / "packages" / "haxaml-ui" / "pyproject.toml"
 
 
-def _bump(path: Path, pattern: str, replacement: str) -> None:
+def _bump(path: Path, pattern: str, replacement: str, *, count: int = 1) -> None:
     text = path.read_text(encoding="utf-8")
-    new_text, n = re.subn(pattern, replacement, text, count=1, flags=re.MULTILINE)
+    new_text, n = re.subn(pattern, replacement, text, count=count, flags=re.MULTILINE)
     if n == 0:
         raise ValueError(f"Pattern not found in {path}: {pattern!r}")
     path.write_text(new_text, encoding="utf-8")
-    print(f"  Updated {path.relative_to(REPO_ROOT)}")
+    print(f"  Updated {path.relative_to(REPO_ROOT)} ({n} replacements)")
 
 
 def bump(new_version: str) -> None:
@@ -71,6 +71,13 @@ def bump(new_version: str) -> None:
         CORE_PYPROJECT,
         r'"haxaml-ui==[^"]+"',
         f'"haxaml-ui=={new_version}"',
+        count=0,
+    )
+    _bump(
+        CORE_PYPROJECT,
+        r'"haxaml-mcp==[^"]+"',
+        f'"haxaml-mcp=={new_version}"',
+        count=0,
     )
 
     # Invalidate lru_cache so validate_release_versions re-reads fresh files

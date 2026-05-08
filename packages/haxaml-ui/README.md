@@ -24,6 +24,12 @@ Or install through the core extra:
 pip install "haxaml[ui]"
 ```
 
+If you also want MCP runtime tooling in one install:
+
+```bash
+pip install "haxaml[full]"
+```
+
 Direct package entrypoint is also available:
 
 ```bash

@@ -69,10 +69,17 @@ def release_version_snapshot(tag_ref: str | None = None) -> dict[str, object]:
     core = project_version()
     launcher = mcp_launcher_version()
     ui = ui_package_version()
+    core_optional = _load_project(PROJECT_PYPROJECT).get("optional-dependencies", {})
+    if not isinstance(core_optional, dict):
+        core_optional = {}
+    core_ui_extra = [str(item) for item in core_optional.get("ui", [])] if isinstance(core_optional.get("ui", []), list) else []
+    core_full_extra = [str(item) for item in core_optional.get("full", [])] if isinstance(core_optional.get("full", []), list) else []
     mcp_deps = _load_project(MCP_PYPROJECT).get("dependencies", [])
     ui_deps = _load_project(UI_PYPROJECT).get("dependencies", [])
     expected_dep_prefix = f"{PACKAGE_NAME}>={core}"
     expected_ui_dep_prefix = f"{PACKAGE_NAME}>={core}"
+    expected_core_mcp_pin = f"{MCP_LAUNCHER_PACKAGE}=={core}"
+    expected_core_ui_pin = f"{UI_PACKAGE_NAME}=={core}"
     dep_aligned = any(str(dep).startswith(expected_dep_prefix) for dep in mcp_deps)
     ui_dep_aligned = any(str(dep).startswith(expected_ui_dep_prefix) for dep in ui_deps)
 
@@ -92,8 +99,14 @@ def release_version_snapshot(tag_ref: str | None = None) -> dict[str, object]:
         "versions_match": core == launcher == ui,
         "mcp_dependency_aligned": dep_aligned,
         "ui_dependency_aligned": ui_dep_aligned,
+        "core_ui_extra_aligned": expected_core_ui_pin in core_ui_extra,
+        "core_full_extra_aligned": (
+            expected_core_mcp_pin in core_full_extra and expected_core_ui_pin in core_full_extra
+        ),
         "expected_dependency_prefix": expected_dep_prefix,
         "expected_ui_dependency_prefix": expected_ui_dep_prefix,
+        "expected_core_mcp_pin": expected_core_mcp_pin,
+        "expected_core_ui_pin": expected_core_ui_pin,
     }
 
 
@@ -121,5 +134,15 @@ def validate_release_versions(tag_ref: str | None = None) -> dict[str, object]:
         raise ValueError(
             f"{UI_PACKAGE_NAME} dependency must start with "
             f"'{snapshot['expected_ui_dependency_prefix']}', but it does not."
+        )
+    if not snapshot["core_ui_extra_aligned"]:
+        raise ValueError(
+            f"{PACKAGE_NAME}[ui] must include "
+            f"'{snapshot['expected_core_ui_pin']}'."
+        )
+    if not snapshot["core_full_extra_aligned"]:
+        raise ValueError(
+            f"{PACKAGE_NAME}[full] must include both "
+            f"'{snapshot['expected_core_mcp_pin']}' and '{snapshot['expected_core_ui_pin']}'."
         )
     return snapshot

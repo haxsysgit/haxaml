@@ -1,6 +1,8 @@
 """Tests for the Haxaml CLI surface."""
 
+import builtins
 import os
+import sys
 
 from click.testing import CliRunner
 import yaml
@@ -280,6 +282,36 @@ def test_dashboard_prints_install_guidance_when_ui_extra_is_missing(monkeypatch)
 
         assert result.exit_code == 1
         assert 'pip install "haxaml[ui]"' in result.output
+
+
+def test_cli_prints_install_guidance_when_mcp_runtime_is_missing(monkeypatch):
+    runner = CliRunner()
+    import haxaml
+
+    if hasattr(haxaml, "mcp_server"):
+        delattr(haxaml, "mcp_server")
+
+    for module_name in list(sys.modules):
+        if (
+            module_name == "haxaml.mcp_server"
+            or module_name.startswith("haxaml.mcp")
+            or module_name == "mcp"
+            or module_name.startswith("mcp.")
+        ):
+            sys.modules.pop(module_name, None)
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "mcp" or name.startswith("mcp."):
+            raise ModuleNotFoundError("No module named 'mcp'")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    result = runner.invoke(cli, ["validate", "--dir", "."])
+
+    assert result.exit_code == 1
+    assert "pip install -U haxaml" in result.output
 
 
 def test_dashboard_resolves_project_root_and_passes_launcher_flags(monkeypatch):

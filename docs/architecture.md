@@ -100,16 +100,19 @@ tests/
   - core governance engine
   - canonical FRAME loaders and context logic
   - CLI surface including `haxaml dashboard`
-  - does not require MCP runtime deps by default
+  - includes MCP runtime dependency by default
 
 - `haxaml-mcp`
   - tiny launcher/runtime package for stdio MCP use
-  - carries the `mcp` dependency so core installs stay leaner
+  - provides standalone MCP launcher install path (`haxaml-mcp`)
 
 - `haxaml-ui`
   - local browser dashboard package
   - pulled in directly with `pip install haxaml-ui`
   - also reachable via the convenience extra `pip install "haxaml[ui]"`
+
+- `haxaml[full]`
+  - convenience extra to install both optional adapter packages (`haxaml-mcp` + `haxaml-ui`)
 
 ## Incremental Read Path
 

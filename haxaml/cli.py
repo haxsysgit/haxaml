@@ -28,10 +28,13 @@ def _mcp_tools():
     """Load MCP tool implementations used as thin CLI backends."""
     try:
         from haxaml import mcp_server
-    except ImportError:
-        click.echo("✗ MCP support requires the 'mcp' package.")
-        click.echo("  Install with: pip install haxaml")
-        sys.exit(1)
+    except ModuleNotFoundError as exc:
+        missing = exc.name or ""
+        if missing == "mcp" or missing.startswith("mcp.") or "No module named 'mcp'" in str(exc):
+            click.echo("✗ MCP runtime is not installed.")
+            click.echo("  Reinstall with: pip install -U haxaml")
+            sys.exit(1)
+        raise
     return mcp_server
 
 

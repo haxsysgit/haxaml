@@ -10,6 +10,7 @@ import yaml
 from jsonschema import Draft202012Validator
 
 from haxaml.acts_archive import ActsArchive, ArchiveError, archive_metadata, normalize_memory_policy
+from haxaml.lifecycle_state import expect_sync_state as _base_expect_sync_state
 
 if TYPE_CHECKING:
     from haxaml.frame_model import FrameModel
@@ -87,15 +88,13 @@ def _recorded_sessions(acts: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _expect_sync_state(acts: dict[str, Any]) -> dict[str, str | bool]:
-    raw = acts.get("expect_sync", {}) if isinstance(acts, dict) else {}
-    if not isinstance(raw, dict):
-        raw = {}
+    state = _base_expect_sync_state(acts)
     return {
-        "required": bool(raw.get("required", False)),
-        "pending_run_id": _normalized_text(raw.get("pending_run_id", "")),
-        "pending_task": _normalized_text(raw.get("pending_task", "")),
-        "pending_result": _normalized_text(raw.get("pending_result", "")),
-        "last_synced_run_id": _normalized_text(raw.get("last_synced_run_id", "")),
+        "required": bool(state.get("required", False)),
+        "pending_run_id": _normalized_text(state.get("pending_run_id", "")),
+        "pending_task": _normalized_text(state.get("pending_task", "")),
+        "pending_result": _normalized_text(state.get("pending_result", "")),
+        "last_synced_run_id": _normalized_text(state.get("last_synced_run_id", "")),
     }
 
 

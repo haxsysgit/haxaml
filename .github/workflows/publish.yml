@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing release tag to publish, for example v0.6.3"
+        description: "Existing release tag to publish, for example v0.6.8"
         required: true
         type: string
       package_target:
@@ -61,7 +61,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install dependencies
-        run: uv sync --extra dev --extra ui
+        run: uv sync --extra dev --extra full
 
       - name: Clean old build artifacts
         run: rm -rf dist packages/haxaml-mcp/dist packages/haxaml-ui/dist

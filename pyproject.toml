@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "haxaml"
-version = "0.6.7"
+version = "0.6.8"
 description = "Prebuild and governance for AI coding agents."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -32,6 +32,7 @@ classifiers = [
 dependencies = [
   "click>=8.1",
   "jsonschema>=4.20",
+  "mcp>=1.0",
   "pyyaml>=6.0"
 ]
 
@@ -40,7 +41,11 @@ bench = [
   "tiktoken>=0.5"
 ]
 ui = [
-  "haxaml-ui==0.6.7"
+  "haxaml-ui==0.6.8"
+]
+full = [
+  "haxaml-mcp==0.6.8",
+  "haxaml-ui==0.6.8"
 ]
 dev = [
   "build>=1.2",
@@ -50,7 +55,8 @@ dev = [
 ]
 all = [
   "build>=1.2",
-  "haxaml-ui==0.6.7",
+  "haxaml-mcp==0.6.8",
+  "haxaml-ui==0.6.8",
   "mcp>=1.0",
   "pytest>=8.0",
   "tiktoken>=0.5",
@@ -59,7 +65,6 @@ all = [
 
 [project.scripts]
 haxaml = "haxaml.cli:cli"
-haxaml-mcp = "haxaml.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/haxsysgit/haxaml"
@@ -72,6 +77,7 @@ include = ["haxaml", "haxaml.*"]
 haxaml = ["schemas/*.yaml"]
 
 [tool.uv.sources]
+haxaml-mcp = { path = "packages/haxaml-mcp", editable = true }
 haxaml-ui = { path = "packages/haxaml-ui", editable = true }
 
 [tool.pytest.ini_options]
