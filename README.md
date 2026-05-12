@@ -2,148 +2,96 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/haxaml.svg)](https://pypi.org/project/haxaml/)
 
-**Workflow governance for AI coding agents.**
+**Force Agents to Plan. Record the Acts. Build the End from the Beginning.**
 
-Most AI coding failures do not start when an agent writes code. They start earlier, when the agent jumps from a vague request straight into implementation without understanding the project, the missing context, the real risks, or what "done" actually means.
+I started Haxaml because I noticed a recurring pattern: AI agents are builders who skip the blueprints. They read a few chunks of code, make a guess about the intent, and head straight for implementation. This improvisation is where the real failures begin. Most coding issues do not happen because the model is limited; they happen because the agent is working in a vacuum without understanding the project, the rules, or the criteria for being "done."
 
-Haxaml exists to turn that early phase into a governed workflow. It gives agent work a durable project contract: what is true, what rules apply, what changed recently, what areas are affected, and what evidence is required before a task is considered complete.
+This project is my attempt to fix that. Haxaml is essentially an agent diary and a workflow protocol. It is built on a simple rule: no planning, no building.
 
-Under the hood, Haxaml is a token and context-efficient engine built on FRAME: a simple model that splits project understanding into five parts, Facts, Rules, Acts, Map, and Expect.
+It uses a model I call **FRAME** to split project understanding into five parts: Facts, Rules, Acts, Map, and Expect. Instead of letting an agent guess, I give them a notebook that they are required to fill out. If they skip a step or ignore a project rule, the contract breaks.
 
-The goal is straightforward: agent work should begin with preparation instead of improvisation. Haxaml keeps project rules, current state, expected runs, and verification evidence in the repository so the workflow survives model switches, tool changes, and long-running projects.
+The goal is to move the "brain" of the project out of the AI provider's temporary memory and into the repository itself. When you switch between Claude Code, Cursor, Windsurf, or any other tool, the next agent should be able to read the "Diary" (the Acts) and continue exactly where the last one left off without re-reading the whole codebase.
 
-Instead of dumping the whole project into an agent and hoping it figures things out, Haxaml gives the agent a governed path. It helps the agent prepare before coding, pull only the context needed for the task, verify the work with evidence, and record useful state for the next agent.
+## The Agent Diary Philosophy
 
-The result is less guessing, less prompt drift, better handoffs, and a project state that can travel across Claude Code, Codex CLI, Cursor, Copilot, Windsurf, Gemini CLI, and other agent-native environments.
+I want to move away from agents that act like code generators with intelligence and toward agents that act like seasoned builders. A real professional does not start by hammering nails: they study the site and verify the materials before the first tool is ever lifted. Haxaml provides the structure they need to maintain that discipline:
 
-## What Haxaml Is Not
+1. **Gather Materials:** Just like a builder cannot work if the owner does not buy the materials: the agent must identify and ask for every tool, API key, or DB URI they need before they start.
+2. **Plan the End:** They have to define what "success" looks like before they touch a single line of code.
+3. **Budget Tokens:** While token budgeting is a convenience feature here: it matters for efficiency. Haxaml uses incremental reads to ensure agents only pull the context delta they need for the specific task.
+4. **Clarify Intent:** I want the agent to stop and ask me questions if the task is high-risk or the intent is vague.
 
-- **Not an AI memory backpack.** Haxaml is not mainly about storing random facts for an agent to recall later. It is about shaping project understanding so agents can prepare, plan, verify, and record their work properly.
-- **Not just a prompt file.** `AGENTS.md`, `CLAUDE.md`, Cursor rules, Copilot instructions, and similar files are adapters. Haxaml is the governed engine underneath them.
-- **Not a replacement for your agent.** Haxaml does not write the code for the agent. It gives the agent a workflow spine so the work starts with context, follows project rules, and ends with verification.
-- **Not a giant context dump.** Haxaml is built to reduce context noise by giving the agent the right project signals at the right time.
+## How the Lifecycle Works
 
-## How It Works
+Haxaml operates through an MCP (Model Context Protocol) server that enforces a deterministic sequence. Every agent that enters the repo follows this playbook:
 
-Haxaml exposes a lifecycle through MCP tools. The agent follows this flow before, during, and after implementation:
-
-| Phase | Tool(s) | What happens |
+| Phase | Tool | The Purpose |
 |---|---|---|
-| **about** | `haxaml_about` | The agent learns what Haxaml is, what FRAME means, and how to operate inside the project |
-| **guidance** | `haxaml_guidance` | Haxaml classifies the request and decides whether it is governed project work or a utility task |
-| **prebuild** | `haxaml_prebuild` → `haxaml_context_pack` | Agent classifies the task, checks FRAME readiness, opens a governed session, then pulls the first task-scoped context pass |
-| **retrieve** | `haxaml_context_fetch` *(optional, repeatable)* | Agent asks for more governed memory only when the first context pass is not enough |
-| **build** | *(no Haxaml tool)* | The agent edits files, writes code, runs commands, answers a question and performs the actual implementation |
-| **verify** | `haxaml_session_verify` | The agent records what it inspected, what it changed, what was checked, and what risks remain |
-| **record** | `haxaml_session_record` → `haxaml_expect_sync` | The outcome is written into project history and expectations are synced for future work |
-
-In short:
-
-```text
-about → guidance → prebuild → context_pack → [context_fetch]* → build → verify → record → expect_sync
-```
-
-Project memory lives in `.haxaml/` — versioned files your agent uses at runtime, not a static wall of text. Older acts history is kept in `.haxaml/archive/acts-history.yaml` and pulled back only on demand.
-
-In `0.6.7`, long-lived runtimes also stop rereading unchanged FRAME files blindly. Repeated `context_pack` calls now compare the current runtime snapshot to the earlier session snapshot, report what changed, and return smaller refresh deltas when only part of the governed context moved.
+| **About** | `haxaml_about` | The agent reads the "Laws of the Land" and learns how to operate here. |
+| **Guidance** | `haxaml_guidance` | Haxaml determines if the request is real project work or just a quick off-topic question. |
+| **Prebuild** | `haxaml_prebuild` | **The Architect Phase.** This is where the agent classifies the task, checks risks, and identifies missing materials. |
+| **Context** | `haxaml_context_pack` | **The Builder Phase.** The agent pulls a task-scoped context pack. This uses refresh deltas to save tokens. |
+| **Build** | *(External)* | The implementing agent does the work (edits, tests, commands) outside Haxaml tools. |
+| **Verify** | `haxaml_session_verify` | **The Inspection Phase.** The agent must provide evidence of what they checked and what risks still exist. |
+| **Record** | `haxaml_session_record` | The outcome is written into the Acts diary for the next agent to pick up. |
 
 ## Install
 
-Haxaml now ships as three related packages:
+Haxaml is split into three related packages:
+- `haxaml`: the core engine and CLI.
+- `haxaml-mcp`: the stdio launcher for your editor.
+- `haxaml-ui`: a local browser dashboard for humans.
 
-- `haxaml` - core FRAME governance engine and CLI
-- `haxaml-mcp` - MCP launcher/runtime package
-- `haxaml-ui` - local read-only dashboard package
+**Note on requirements:** I highly recommend installing [uv](https://docs.astral.sh/uv/) first. Haxaml uses it internally for managed upgrades: bootstrap tasks: and fast tool execution.
 
-Common install paths:
-
+### 1. Recommended: uv tool
+This is the cleanest way to add Haxaml to your global path:
 ```bash
-pip install haxaml
-pip install haxaml-mcp
-pip install haxaml-ui
-pip install "haxaml[ui]"
+uv tool install "haxaml[full]"
+```
+
+### 2. Traditional: pip
+You can also install the full suite into your active environment:
+```bash
 pip install "haxaml[full]"
 ```
 
-If you want to run the MCP server without a persistent install:
-
+### 3. Run Immediately
+If you want to run the MCP server instantly without a persistent install:
 ```bash
 uvx haxaml-mcp
 ```
 
-For persistent local installs:
+## Setup and Adoption
 
-```bash
-uv tool install haxaml-mcp
-```
+I want Haxaml to be "hard to use badly." In version 0.7.0: the tool can now install itself into your favorite environment.
 
-After install, the main onboarding command is:
+### Starting Fresh
+If you are starting a new project: run `haxaml setup`. This creates your `.haxaml/` folder and drops a generic `AGENTS.md` so any agent knows they are in a governed repo.
 
-```bash
-haxaml setup
-```
+### Adopting Existing Projects
+If you already have a `CLAUDE.md`, `.cursorrules`, or `GEMINI.md`: I do not want Haxaml to overwrite your hard work. Run `haxaml setup --adopt auto`. Haxaml will scan your files, add a "Managed Pointer" block to the end of them, and store the "Blueprint" state in `.haxaml/adoption/`. This gives you the power of the governance engine without losing your existing instructions.
 
 ## Local Dashboard
 
-The first dashboard release is intentionally narrow:
-
-- browser UI, not TUI
-- localhost only
-- read-only
-- overview-first
-- all five FRAME files rendered
-- archive summary plus drilldown
-
-Launch it with:
+I built a lightweight dashboard so you can see the "state of the union" for your repo. It is read-only and runs on localhost. It lets you drill down into the Acts history, check your project Facts, and see what the agent is currently Expecting to build next.
 
 ```bash
 haxaml dashboard
 ```
 
-Supported flags:
+## The FRAME Files
 
-- `--project-dir`
-- `--host`
-- `--port`
-- `--no-open`
-- `--read-only`
+- `.haxaml/facts.yaml`: The project truth (the stack, the goals, and the hard constraints).
+- `.haxaml/rules.yaml`: The operating laws for the agent.
+- `.haxaml/acts.yaml`: The diary of what happened: recent decisions: and recorded runs.
+- `.haxaml/map.yaml`: The module ownership and impact rules (prevents "fix the kitchen: break the bathroom" issues).
+- `.haxaml/expect.yaml`: The forward-looking runbook and milestones.
 
-Install note:
+## Roadmap and Docs
 
-- `haxaml dashboard` is the primary human launcher
-- core `haxaml` install now includes the MCP runtime dependency (`mcp`)
-- `haxaml[ui]` installs the dashboard package (`haxaml-ui`)
-- `haxaml[full]` installs both optional adapter packages
-- `haxaml-ui` is the separate dashboard distribution
-
-## Setup and adoption
-
-`haxaml setup` is the onboarding command in `0.7.0`.
-
-On a clean repository it creates `.haxaml/`, writes a root `AGENTS.md` adapter, and installs the shared Haxaml skill in `.agents/skills/haxaml/SKILL.md`. That gives the repository a governed default path before you add target-specific files.
-
-For established codebases, `haxaml setup --adopt auto` scans native instruction files such as `CLAUDE.md`, `AGENTS.md`, Cursor rules, Copilot instructions, and `GEMINI.md`. It preserves those files, adds a small managed pointer block where appropriate, and stores the detailed adoption inventory under `.haxaml/adoption/` instead of pushing that state into core FRAME files.
-
-Use `haxaml setup print` to inspect exactly what setup would write, and `haxaml setup doctor` to audit installed files, drift, missing managed files, and manual follow-up. `--scope user` targets home-directory installs, while `--target` narrows setup to a specific environment such as `claude`, `codex`, `cursor`, `copilot`, or `gemini`.
-
-Where a target has a stable documented file-backed MCP config, setup writes it. Where the surface is settings-backed or not safely documented, setup prints the exact manual step and tracks it in doctor output.
-
-## FRAME Files
-
-- `.haxaml/facts.yaml` - project truth
-- `.haxaml/rules.yaml` - agent operating rules
-- `.haxaml/acts.yaml` - execution diary and decisions
-- `.haxaml/map.yaml` - optional module ownership and impact map
-- `.haxaml/expect.yaml` - run plan and milestones
-
-## Docs
-
-- [learn/FRAME.md](https://github.com/haxsysgit/haxaml/blob/main/learn/FRAME.md) - FRAME memory model
-- [learn/haxaml.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml.md) - how Haxaml makes FRAME operational
-- [learn/haxaml-mcp.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml-mcp.md) - MCP setup, architecture mapping, and lifecycle contract
-- [0.7.x_Roadmap.md](https://github.com/haxsysgit/haxaml/blob/main/0.7.x_Roadmap.md) - setup, onboarding, and target support roadmap for the `0.7.x` line
-- [v1.0_Roadmap.md](https://github.com/haxsysgit/haxaml/blob/main/v1.0_Roadmap.md) - roadmap from `0.6.0` to `1.0`
-- [docs/architecture.md](https://github.com/haxsysgit/haxaml/blob/main/docs/architecture.md) - module layout and MCP split overview
-- [docs/mcp-tool-reference.md](https://github.com/haxsysgit/haxaml/blob/main/docs/mcp-tool-reference.md) - compact MCP tool and resource index
-- [CONTRIBUTING.md](https://github.com/haxsysgit/haxaml/blob/main/CONTRIBUTING.md) - contributor workflow and expectations
-- [examples/minimal-governed-flow](https://github.com/haxsysgit/haxaml/tree/main/examples/minimal-governed-flow) - minimal FRAME project for governed-flow smoke tests
+- [learn/FRAME.md](./learn/FRAME.md): the underlying memory model.
+- [0.7.x_Roadmap.md](./0.7.x_Roadmap.md): details on our current focus for onboarding and target support.
+- [v1.0_Roadmap.md](./v1.0_Roadmap.md): the path to a stable core.
+- [docs/architecture.md](./docs/architecture.md): how the modules are split.
+- [CONTRIBUTING.md](./CONTRIBUTING.md): how to help build the protocol.
