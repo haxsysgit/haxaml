@@ -19,6 +19,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 CORE_PYPROJECT = REPO_ROOT / "pyproject.toml"
 MCP_PYPROJECT = REPO_ROOT / "packages" / "haxaml-mcp" / "pyproject.toml"
 UI_PYPROJECT = REPO_ROOT / "packages" / "haxaml-ui" / "pyproject.toml"
@@ -95,8 +98,8 @@ def bump(new_version: str) -> None:
         f"  git add {CORE_PYPROJECT.relative_to(REPO_ROOT)} "
         f"{MCP_PYPROJECT.relative_to(REPO_ROOT)} {UI_PYPROJECT.relative_to(REPO_ROOT)}"
     )
-    print(f"  git commit -m 'chore: bump version to {new_version}'")
-    print(f"  git tag -a v{new_version} -m 'v{new_version}'")
+    print(f"  git commit -m 'Release {new_version} package versions'")
+    print(f"  git tag -a v{new_version} -m 'Release {new_version}'")
     print(f"  git push origin main --tags")
 
 

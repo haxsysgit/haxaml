@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0 - 2026-05-12
+
+- Added a new `haxaml/setup/` package with a shared target registry, deterministic planning, target renderers, managed writes, adoption state, and drift-aware doctor output.
+- Added `haxaml setup`, `haxaml setup print`, and `haxaml setup doctor` as the setup-owned onboarding surface for fresh repositories and established-codebase adoption.
+- Replaced the old standalone adoption CLI path with setup-driven adoption that preserves native instruction files, writes managed sidecars and pointer blocks, and keeps detailed adoption inventory under `.haxaml/adoption/`.
+- Refreshed the `0.7.x` roadmap, README onboarding story, and CLI coverage around setup, adoption, project vs user scope, and setup doctor behavior.
+
 ## 0.6.8 - 2026-05-08
 
 - Added `haxaml[full]` convenience extra in the core package.

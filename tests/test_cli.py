@@ -1,6 +1,7 @@
 """Tests for the Haxaml CLI surface."""
 
 import builtins
+import json
 import os
 import sys
 
@@ -8,8 +9,8 @@ from click.testing import CliRunner
 import yaml
 
 from haxaml.cli import cli
-from haxaml.adoption import scan_native_sources
 from haxaml.export_engine import AGENT_CONFIGS
+from haxaml.setup.registry import get_target, list_targets
 
 COMMIT_STYLE_DISCIPLINE = "Do not use commit prefixes like fix:, feat:, refactor:, chore:, or docs:."
 
@@ -51,30 +52,65 @@ def test_export_supports_current_native_agent_files():
     assert AGENT_CONFIGS["generic"]["filename"] == "HAXAML.md"
 
 
-def test_adopt_dry_run_scans_native_agent_files_without_writing():
+def test_setup_registry_covers_documented_targets_and_capabilities():
+    targets = list_targets()
+    assert any(target.target_id == "generic" for target in targets)
+    for target in targets:
+        if target.target_id != "generic":
+            assert target.docs_urls
+        assert set(target.project_capabilities) == {"instructions", "skills", "agents", "mcp"}
+        assert set(target.user_capabilities) == {"instructions", "skills", "agents", "mcp"}
+
+    claude = get_target("claude")
+    assert any(surface.path == ".claude/skills/haxaml/SKILL.md" for surface in claude.surfaces_for("project"))
+
+    gemini = get_target("gemini")
+    project_surfaces = gemini.surfaces_for("project")
+    assert any(surface.path == ".gemini/skills/haxaml/SKILL.md" for surface in project_surfaces)
+    assert any(surface.path == ".gemini/settings.json" for surface in project_surfaces)
+
+
+def test_setup_clean_repo_creates_frame_generic_agents_and_skill():
     runner = CliRunner()
 
     with runner.isolated_filesystem():
-        with open("CLAUDE.md", "w") as f:
-            f.write("Use pytest.\n")
-        with open("AGENTS.md", "w") as f:
-            f.write("Follow repo rules.\n")
-        with open("README.md", "w") as f:
-            f.write("# Existing Project\n")
-
-        result = runner.invoke(cli, ["adopt", "--from-native"])
+        result = runner.invoke(cli, ["setup"])
 
         assert result.exit_code == 0, result.output
-        assert "Claude Code: `CLAUDE.md`" in result.output
-        assert "OpenAI Codex: `AGENTS.md`" in result.output
-        assert "`README.md`" in result.output
-        assert "Dry run. Call with write=True to create files." in result.output
+        assert os.path.exists(".haxaml/facts.yaml")
+        assert os.path.exists("AGENTS.md")
+        assert os.path.exists(".agents/skills/haxaml/SKILL.md")
+        assert os.path.exists(".haxaml/setup/manifest.yaml")
 
-        assert scan_native_sources(".").native_files
-        assert runner.invoke(cli, ["validate", "--dir", "."]).exit_code != 0
+        with open(".haxaml/facts.yaml", "r") as f:
+            facts = yaml.safe_load(f)
+        assert facts["origin"]["mode"] == "fresh"
+        assert facts["origin"]["managed_by"] == "haxaml-setup"
+
+        with open("AGENTS.md", "r") as f:
+            agents = f.read()
+        assert "HAXAML:FILE" in agents
+        assert "Lifecycle Checklist" in agents
+        assert "Fallback Path" in agents
 
 
-def test_adopt_write_creates_valid_frame_scaffold_and_report():
+def test_setup_dry_run_and_print_match_json_without_writing():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        dry_run = runner.invoke(cli, ["setup", "--dry-run", "--format", "json"])
+        printed = runner.invoke(cli, ["setup", "print", "--format", "json"])
+
+        assert dry_run.exit_code == 0, dry_run.output
+        assert printed.exit_code == 0, printed.output
+
+        dry_plan = json.loads(dry_run.output)
+        print_plan = json.loads(printed.output)
+        assert dry_plan["planned_files"] == print_plan["planned_files"]
+        assert os.path.exists(".haxaml") is False
+
+
+def test_setup_adopt_auto_preserves_native_files_and_writes_adoption_state():
     runner = CliRunner()
 
     with runner.isolated_filesystem():
@@ -85,72 +121,84 @@ def test_adopt_write_creates_valid_frame_scaffold_and_report():
         with open("README.md", "w") as f:
             f.write("# Existing Project\n")
 
-        result = runner.invoke(cli, ["adopt", "--from-native", "--write"])
+        result = runner.invoke(cli, ["setup", "--adopt", "auto"])
 
         assert result.exit_code == 0, result.output
-        assert "wrote .haxaml/ADOPTION.md" in result.output
-        assert "wrote .haxaml/facts.yaml" in result.output
-        assert "wrote .haxaml/rules.yaml" in result.output
-        assert "wrote .haxaml/acts.yaml" in result.output
-        assert "wrote .haxaml/expect.yaml" in result.output
+        assert os.path.exists(".haxaml/adoption/adoption.yaml")
+        assert os.path.exists(".haxaml/adoption/ADOPTION.md")
+        assert os.path.exists(".haxaml/setup/targets/claude.md")
+        assert os.path.exists(".haxaml/setup/targets/gemini.md")
 
-        validate = runner.invoke(cli, ["validate", "--dir", "."])
-        assert validate.exit_code == 0, validate.output
-
-        with open(".haxaml/facts.yaml") as f:
+        with open(".haxaml/facts.yaml", "r") as f:
             facts = yaml.safe_load(f)
-        assert facts["unresolved"][0]["blocking"] is True
-        assert "CLAUDE.md" in facts["tools"]["other"]
-        assert "GEMINI.md" in facts["tools"]["other"]
+        assert facts["origin"]["mode"] == "adopted"
+        assert facts["origin"]["managed_by"] == "haxaml-setup"
 
-        with open(".haxaml/rules.yaml", "r") as f:
-            rules = yaml.safe_load(f)
-        discipline = rules.get("while_coding", {}).get("discipline", [])
-        assert COMMIT_STYLE_DISCIPLINE in discipline
+        with open("CLAUDE.md", "r") as f:
+            claude = f.read()
+        assert "Existing Claude instructions." in claude
+        assert "HAXAML:MANAGED START" in claude
 
-        with open(".haxaml/ADOPTION.md", "r") as f:
+        with open(".haxaml/adoption/adoption.yaml", "r") as f:
+            adoption = yaml.safe_load(f)
+        assert "claude" in adoption["detected_targets"]
+        assert "gemini" in adoption["detected_targets"]
+        assert adoption["mode"] == "adopted"
+
+        with open(".haxaml/adoption/ADOPTION.md", "r") as f:
             report = f.read()
-        assert "## Instruction Analysis" in report
+        assert "Detected Targets" in report
+        assert "Managed Sidecars" in report
 
 
-def test_adopt_write_preserves_existing_frame_without_force():
+def test_setup_prompt_can_choose_fresh_without_touching_existing_native_files():
     runner = CliRunner()
 
     with runner.isolated_filesystem():
         with open("CLAUDE.md", "w") as f:
             f.write("Existing Claude instructions.\n")
 
-        runner.invoke(cli, ["init", "."])
-        with open(".haxaml/facts.yaml", "r") as f:
-            original_facts = f.read()
-
-        result = runner.invoke(cli, ["adopt", "--from-native", "--write"])
+        result = runner.invoke(cli, ["setup"], input="fresh\n")
 
         assert result.exit_code == 0, result.output
-        assert "Preserved existing:" in result.output
-        with open(".haxaml/facts.yaml", "r") as f:
-            assert f.read() == original_facts
+        assert os.path.exists(".haxaml/adoption/adoption.yaml") is False
+        assert os.path.exists("AGENTS.md")
+        with open("CLAUDE.md", "r") as f:
+            claude = f.read()
+        assert "HAXAML:MANAGED START" not in claude
 
 
-def test_adopt_plan_and_reconcile_commands():
+def test_setup_user_scope_writes_only_home_surfaces(monkeypatch):
     runner = CliRunner()
 
     with runner.isolated_filesystem():
-        with open("CLAUDE.md", "w") as f:
-            f.write("Use tests.\n")
-        with open("README.md", "w") as f:
-            f.write("# Project\n")
+        home = os.path.abspath("home")
+        os.makedirs(home, exist_ok=True)
+        monkeypatch.setenv("HOME", home)
 
-        plan = runner.invoke(cli, ["adopt-plan", "--dir", "."])
-        assert plan.exit_code == 0, plan.output
-        assert "Inventory complete" in plan.output
+        result = runner.invoke(cli, ["setup", "--scope", "user", "--target", "codex"])
 
-        init = runner.invoke(cli, ["init", "."])
-        assert init.exit_code == 0, init.output
+        assert result.exit_code == 0, result.output
+        assert os.path.exists(".haxaml") is False
+        assert os.path.exists("AGENTS.md") is False
+        assert os.path.exists(os.path.join(home, ".codex", "AGENTS.md"))
+        assert os.path.exists(os.path.join(home, ".codex", "config.toml"))
+        assert os.path.exists(os.path.join(home, ".agents", "skills", "haxaml", "SKILL.md"))
 
-        reconcile = runner.invoke(cli, ["reconcile", "--dir", "."])
-        assert reconcile.exit_code == 0, reconcile.output
-        assert "No map.yaml found" in reconcile.output or "No derivation conflicts detected" in reconcile.output
+
+def test_setup_doctor_reports_missing_managed_file():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        setup_result = runner.invoke(cli, ["setup"])
+        assert setup_result.exit_code == 0, setup_result.output
+
+        os.remove(".agents/skills/haxaml/SKILL.md")
+        doctor = runner.invoke(cli, ["setup", "doctor"])
+
+        assert doctor.exit_code == 0, doctor.output
+        assert "Missing:" in doctor.output
+        assert ".agents/skills/haxaml/SKILL.md" in doctor.output
 
 
 def test_init_auto_reexports_agent_files():

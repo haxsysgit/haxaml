@@ -10,6 +10,7 @@ from pathlib import Path
 
 import click
 
+from haxaml.setup.registry import SUPPORTED_TARGET_IDS
 from haxaml.state_manager import StateManager
 from haxaml.brain_builder import interactive_build
 from haxaml.benchmarks import format_benchmark_report
@@ -90,11 +91,113 @@ def _load_dashboard_runtime():
     return run_dashboard_server
 
 
+def _setup_common_options(fn):
+    fn = click.option("--dir", "project_dir", default=".", help="Project directory")(fn)
+    fn = click.option("--scope", default="project", type=click.Choice(["project", "user"]), help="Write into the repo or the user home directory.")(fn)
+    fn = click.option("--target", "target_id", default="auto", type=click.Choice(["auto", *SUPPORTED_TARGET_IDS]), help="Target agent/editor to onboard.")(fn)
+    fn = click.option("--adopt", default=None, help="Adopt an existing provider surface by id, or use `auto`.")(fn)
+    fn = click.option("--only", "only", multiple=True, help="Repeatable or comma-separated subset of: frame,instructions,skills,agents,mcp")(fn)
+    fn = click.option("--format", "output_format", default="text", type=click.Choice(["text", "json"]), help="Output format.")(fn)
+    return fn
+
+
+def _resolve_setup_choice(project_dir, scope, target_id, adopt, only, output_format):
+    from haxaml.setup import cli as setup_commands
+
+    assume_fresh = False
+    if adopt is None and scope == "project":
+        preview = setup_commands.setup_plan(
+            project_dir=project_dir,
+            scope=scope,
+            target=target_id,
+            adopt=adopt,
+            only=only,
+            output_format=output_format,
+        )
+        if preview.get("ok") and preview.get("data", {}).get("needs_adoption_confirmation"):
+            choice = click.prompt(
+                "Native instructions detected. Continue as fresh or adopted setup?",
+                type=click.Choice(["fresh", "adopted"]),
+                default="adopted",
+            )
+            if choice == "adopted":
+                adopt = "auto"
+            else:
+                assume_fresh = True
+    return adopt, assume_fresh
+
+
 @cli.command()
 @click.argument("directory", default=".")
 def init(directory):
     """Initialize FRAME governance files in DIRECTORY."""
     _echo_tool_result(_mcp_tools().haxaml_init(directory), exit_on_failure=False)
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+@_setup_common_options
+@click.option("--force", is_flag=True, help="Overwrite Haxaml-managed files and replace existing files when explicitly requested.")
+@click.option("--dry-run", is_flag=True, help="Plan writes without mutating files.")
+def setup(ctx, project_dir, scope, target_id, adopt, only, output_format, force, dry_run):
+    """Install Haxaml into fresh or existing agent-native surfaces."""
+    from haxaml.setup import cli as setup_commands
+
+    if ctx.invoked_subcommand is not None:
+        ctx.obj = {
+            "project_dir": project_dir,
+            "scope": scope,
+            "target_id": target_id,
+            "adopt": adopt,
+            "only": only,
+            "output_format": output_format,
+            "force": force,
+            "dry_run": dry_run,
+        }
+        return
+
+    adopt, assume_fresh = _resolve_setup_choice(project_dir, scope, target_id, adopt, only, output_format)
+    result = setup_commands.execute_setup(
+        project_dir=project_dir,
+        scope=scope,
+        target=target_id,
+        adopt=adopt,
+        only=only,
+        force=force,
+        dry_run=dry_run,
+        output_format=output_format,
+        assume_fresh=assume_fresh,
+    )
+    _echo_tool_result(result)
+
+
+@setup.command("print")
+@_setup_common_options
+def setup_print(project_dir, scope, target_id, adopt, only, output_format):
+    """Render the planned setup content without writing files."""
+    from haxaml.setup import cli as setup_commands
+
+    adopt, assume_fresh = _resolve_setup_choice(project_dir, scope, target_id, adopt, only, output_format)
+    result = setup_commands.print_plan(
+        project_dir=project_dir,
+        scope=scope,
+        target=target_id,
+        adopt=adopt,
+        only=only,
+        output_format=output_format,
+        assume_fresh=assume_fresh,
+    )
+    _echo_tool_result(result)
+
+
+@setup.command("doctor")
+@click.option("--dir", "project_dir", default=".", help="Project directory")
+@click.option("--format", "output_format", default="text", type=click.Choice(["text", "json"]))
+def setup_doctor(project_dir, output_format):
+    """Audit setup-managed files, drift, and manual follow-up."""
+    from haxaml.setup import cli as setup_commands
+
+    _echo_tool_result(setup_commands.doctor_plan(project_dir=project_dir, output_format=output_format))
 
 
 @cli.command()
@@ -181,27 +284,18 @@ def derive(intent, output):
     click.echo(f"\nEdit the draft, then run `haxaml validate` to check it.")
 
 
-@cli.command()
-@click.option("--dir", "project_dir", default=".", help="Project directory")
-@click.option("--from-native", "from_native", is_flag=True,
-              help="Adopt from native AI-agent files and repository context")
-@click.option("--write", "write_files", is_flag=True,
-              help="Write .haxaml/ADOPTION.md and missing FRAME files")
-@click.option("--force", is_flag=True,
-              help="Overwrite existing adoption report and FRAME files")
-def adopt(project_dir, from_native, write_files, force):
-    """Adopt an existing project into FRAME governance."""
-    if not from_native:
-        click.echo("✗ Only native-file adoption is supported right now. Use `haxaml adopt --from-native`.")
-        sys.exit(1)
-    _echo_tool_result(_mcp_tools().haxaml_adopt(project_dir=project_dir, write=write_files, force=force))
+@cli.command(hidden=True)
+def adopt():
+    """Deprecated in favor of `haxaml setup --adopt ...`."""
+    click.echo("✗ `haxaml adopt` was replaced by `haxaml setup --adopt <provider|auto>`.")
+    sys.exit(1)
 
 
-@cli.command("adopt-plan")
-@click.option("--dir", "project_dir", default=".", help="Project directory")
-def adopt_plan(project_dir):
-    """Inventory native/context files and show non-destructive adoption plan."""
-    _echo_tool_result(_mcp_tools().haxaml_adopt_plan(project_dir=project_dir))
+@cli.command("adopt-plan", hidden=True)
+def adopt_plan():
+    """Deprecated in favor of `haxaml setup print --adopt ...`."""
+    click.echo("✗ `haxaml adopt-plan` was replaced by `haxaml setup print --adopt <provider|auto>`.")
+    sys.exit(1)
 
 
 @cli.command()

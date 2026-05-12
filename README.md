@@ -2,15 +2,19 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/haxaml.svg)](https://pypi.org/project/haxaml/)
 
-**MCP-first, Git-style workflow governance for AI coding agents.**
+**Workflow governance for AI coding agents.**
 
-Most AI coding issues do not begin when an agent writes bad code. They begin earlier, when the agent jumps from a vague request straight into implementation without understanding the project, the missing context, the risks, or what "done" actually means.
+Most AI coding failures do not start when an agent writes code. They start earlier, when the agent jumps from a vague request straight into implementation without understanding the project, the missing context, the real risks, or what "done" actually means.
 
-Haxaml is a token and context-efficient engine built on top of FRAME: a simple model that splits project understanding into five parts: Facts, Rules, Acts, Map, and Expect.
+Haxaml exists to turn that early phase into a governed workflow. It gives agent work a durable project contract: what is true, what rules apply, what changed recently, what areas are affected, and what evidence is required before a task is considered complete.
 
-Instead of dumping the whole project into an agent and hoping it figures things out, Haxaml gives the agent a governed workflow. It helps the agent prepare before coding, pull only the context needed for the task, verify the work with evidence, and record useful state for the next agent.
+Under the hood, Haxaml is a token and context-efficient engine built on FRAME: a simple model that splits project understanding into five parts, Facts, Rules, Acts, Map, and Expect.
 
-The result is a calmer agent workflow: less guessing, less context bloat, better handoffs, and a project state that can travel across Claude Code, Codex CLI, Cursor, Copilot, Windsurf, and any MCP-compatible agent.
+The goal is straightforward: agent work should begin with preparation instead of improvisation. Haxaml keeps project rules, current state, expected runs, and verification evidence in the repository so the workflow survives model switches, tool changes, and long-running projects.
+
+Instead of dumping the whole project into an agent and hoping it figures things out, Haxaml gives the agent a governed path. It helps the agent prepare before coding, pull only the context needed for the task, verify the work with evidence, and record useful state for the next agent.
+
+The result is less guessing, less prompt drift, better handoffs, and a project state that can travel across Claude Code, Codex CLI, Cursor, Copilot, Windsurf, Gemini CLI, and other agent-native environments.
 
 ## What Haxaml Is Not
 
@@ -73,6 +77,12 @@ For persistent local installs:
 uv tool install haxaml-mcp
 ```
 
+After install, the main onboarding command is:
+
+```bash
+haxaml setup
+```
+
 ## Local Dashboard
 
 The first dashboard release is intentionally narrow:
@@ -106,120 +116,17 @@ Install note:
 - `haxaml[full]` installs both optional adapter packages
 - `haxaml-ui` is the separate dashboard distribution
 
-## MCP Start
+## Setup and adoption
 
-Configure your MCP client to launch `haxaml-mcp`. For project-scoped configs, cwd is enough. For user-wide configs, set `HAXAML_PROJECT_DIR` to the project root. See [learn/haxaml-mcp.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml-mcp.md) for the full MCP/architecture guide.
+`haxaml setup` is the onboarding command in `0.7.0`.
 
-Once connected, agents can initialize and validate through MCP tools:
+On a clean repository it creates `.haxaml/`, writes a root `AGENTS.md` adapter, and installs the shared Haxaml skill in `.agents/skills/haxaml/SKILL.md`. That gives the repository a governed default path before you add target-specific files.
 
-- `haxaml_init`
-- `haxaml_validate`
+For established codebases, `haxaml setup --adopt auto` scans native instruction files such as `CLAUDE.md`, `AGENTS.md`, Cursor rules, Copilot instructions, and `GEMINI.md`. It preserves those files, adds a small managed pointer block where appropriate, and stores the detailed adoption inventory under `.haxaml/adoption/` instead of pushing that state into core FRAME files.
 
-Optional fallback: run `haxaml init` / `haxaml validate` directly when MCP is unavailable.
+Use `haxaml setup print` to inspect exactly what setup would write, and `haxaml setup doctor` to audit installed files, drift, missing managed files, and manual follow-up. `--scope user` targets home-directory installs, while `--target` narrows setup to a specific environment such as `claude`, `codex`, `cursor`, `copilot`, or `gemini`.
 
-## MCP Config
-
-Official docs:
-- Claude Code MCP docs: https://docs.claude.com/en/docs/claude-code/mcp
-- OpenAI Codex MCP docs: https://developers.openai.com/docs/mcp
-- MCP architecture: https://modelcontextprotocol.io/docs/learn/architecture
-
-### Project-scoped (recommended)
-
-Place config in the project root. The server uses cwd as the project directory — no env var needed.
-
-**Claude Code** — `.mcp.json` in project root:
-
-```json
-{
-  "mcpServers": {
-    "haxaml": {
-      "command": "uvx",
-      "args": ["haxaml-mcp"]
-    }
-  }
-}
-```
-
-**Codex CLI** — `.codex/config.toml` in project root:
-
-```toml
-[mcp_servers.haxaml]
-command = "haxaml-mcp"
-```
-
-**Generic MCP JSON** (Windsurf, Cursor, etc.):
-
-```json
-{
-  "mcpServers": {
-    "haxaml": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": ["haxaml-mcp"]
-    }
-  }
-}
-```
-
-### User-wide
-
-Set `HAXAML_PROJECT_DIR` to pin the server to a specific project regardless of cwd. Useful for global configs that live outside the project.
-
-**Claude Code** — `~/.claude.json`:
-
-```json
-{
-  "mcpServers": {
-    "haxaml": {
-      "command": "uvx",
-      "args": ["haxaml-mcp"],
-      "env": {
-        "HAXAML_PROJECT_DIR": "/absolute/path/to/project"
-      }
-    }
-  }
-}
-```
-
-**Codex CLI** — `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.haxaml]
-command = "haxaml-mcp"
-env = { HAXAML_PROJECT_DIR = "/absolute/path/to/project" }
-```
-
-**Generic MCP JSON**:
-
-```json
-{
-  "mcpServers": {
-    "haxaml": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": ["haxaml-mcp"],
-      "env": {
-        "HAXAML_PROJECT_DIR": "/absolute/path/to/project"
-      }
-    }
-  }
-}
-```
-
-## Bootstrap Prompt
-
-Paste this into your native agent instruction file (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, etc.):
-
-```md
-This repository uses Haxaml for agent governance.
-
-Use the Haxaml MCP server for governed project work.
-Before governed project work, call haxaml_about(project_dir='.') once in the active MCP session.
-Follow the workflow returned by that tool.
-If a governed step is skipped or out of order, treat Haxaml contract errors as hard blockers and fix the lifecycle step before continuing.
-Do not edit .haxaml/* for utility or side tasks that are not governed project work.
-```
+Where a target has a stable documented file-backed MCP config, setup writes it. Where the surface is settings-backed or not safely documented, setup prints the exact manual step and tracks it in doctor output.
 
 ## FRAME Files
 
@@ -234,7 +141,7 @@ Do not edit .haxaml/* for utility or side tasks that are not governed project wo
 - [learn/FRAME.md](https://github.com/haxsysgit/haxaml/blob/main/learn/FRAME.md) - FRAME memory model
 - [learn/haxaml.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml.md) - how Haxaml makes FRAME operational
 - [learn/haxaml-mcp.md](https://github.com/haxsysgit/haxaml/blob/main/learn/haxaml-mcp.md) - MCP setup, architecture mapping, and lifecycle contract
-- [0.7.x.md](https://github.com/haxsysgit/haxaml/blob/main/0.7.x.md) - setup, onboarding, and target support roadmap for the `0.7.x` line
+- [0.7.x_Roadmap.md](https://github.com/haxsysgit/haxaml/blob/main/0.7.x_Roadmap.md) - setup, onboarding, and target support roadmap for the `0.7.x` line
 - [v1.0_Roadmap.md](https://github.com/haxsysgit/haxaml/blob/main/v1.0_Roadmap.md) - roadmap from `0.6.0` to `1.0`
 - [docs/architecture.md](https://github.com/haxsysgit/haxaml/blob/main/docs/architecture.md) - module layout and MCP split overview
 - [docs/mcp-tool-reference.md](https://github.com/haxsysgit/haxaml/blob/main/docs/mcp-tool-reference.md) - compact MCP tool and resource index
