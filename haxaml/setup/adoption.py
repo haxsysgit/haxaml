@@ -73,7 +73,7 @@ class AdoptionInventory:
         self,
         *,
         selected_targets: list[str],
-        sidecars: list[str],
+        adapter_files: list[str],
         skipped_files: list[str],
     ) -> dict[str, object]:
         return {
@@ -84,7 +84,7 @@ class AdoptionInventory:
             "detected_targets": list(self.detected_targets),
             "native_files": list(self.native_files),
             "analysis": self.analysis,
-            "sidecars": sidecars,
+            "adapter_files": adapter_files,
             "skipped_files": skipped_files,
         }
 

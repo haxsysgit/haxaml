@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -9,12 +10,25 @@ from haxaml.setup.markdown import MANAGED_BLOCK_END
 from haxaml.setup.planner import PlannedFile, SetupPlan
 
 
-_FILE_MARKER = "<!-- HAXAML:FILE "
+_HTML_FILE_MARKER = "<!-- HAXAML:FILE "
+_LINE_FILE_MARKERS = ("# HAXAML:FILE ", "// HAXAML:FILE ")
 _BLOCK_RE = re.compile(r"<!-- HAXAML:MANAGED START .*?<!-- HAXAML:MANAGED END -->\n?", re.DOTALL)
 
 
 def has_managed_file_marker(text: str) -> bool:
-    return text.lstrip().startswith(_FILE_MARKER)
+    stripped = text.lstrip()
+    if stripped.startswith(_HTML_FILE_MARKER):
+        return True
+    if stripped.startswith(_LINE_FILE_MARKERS):
+        return True
+    if not stripped.startswith("{"):
+        return False
+    try:
+        payload = json.loads(stripped)
+    except json.JSONDecodeError:
+        return False
+    metadata = payload.get("_haxaml")
+    return isinstance(metadata, dict) and metadata.get("generator") == "haxaml-setup"
 
 
 def has_managed_block(text: str) -> bool:

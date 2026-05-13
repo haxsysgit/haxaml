@@ -54,7 +54,7 @@ class TargetSpec:
 
 
 def _caps(*enabled: str) -> dict[str, bool]:
-    base = {kind: False for kind in ("instructions", "skills", "agents", "mcp")}
+    base = {kind: False for kind in ("instructions", "skills", "agents", "mcp", "workflow")}
     for kind in enabled:
         base[kind] = True
     return base
@@ -104,7 +104,7 @@ TARGETS: tuple[TargetSpec, ...] = (
             Surface("agents", "user", "~/.claude/agents/haxaml-governor.md", "https://code.claude.com/docs/en/subagents"),
             Surface("mcp", "user", "~/.claude.json", "https://code.claude.com/docs/en/settings", format="json"),
         ),
-        project_capabilities=_caps("instructions", "skills", "agents", "mcp"),
+        project_capabilities=_caps("instructions", "skills", "agents", "mcp", "workflow"),
         user_capabilities=_caps("instructions", "skills", "agents", "mcp"),
     ),
     TargetSpec(
@@ -125,7 +125,7 @@ TARGETS: tuple[TargetSpec, ...] = (
             Surface("skills", "user", "~/.agents/skills/haxaml/SKILL.md", "https://developers.openai.com/codex/skills"),
             Surface("mcp", "user", "~/.codex/config.toml", "https://developers.openai.com/codex/config-reference", format="toml"),
         ),
-        project_capabilities=_caps("instructions", "skills", "mcp"),
+        project_capabilities=_caps("instructions", "skills", "mcp", "workflow"),
         user_capabilities=_caps("instructions", "skills", "mcp"),
     ),
     TargetSpec(
@@ -152,7 +152,7 @@ TARGETS: tuple[TargetSpec, ...] = (
             Surface("mcp", "user", "~/.cursor/mcp.json", "https://docs.cursor.com/advanced/model-context-protocol", format="json"),
         ),
         manual_notes=("User rules are settings-backed; setup prints guidance instead of guessing a file.",),
-        project_capabilities=_caps("instructions", "mcp"),
+        project_capabilities=_caps("instructions", "mcp", "workflow"),
         user_capabilities=_caps("instructions", "mcp"),
     ),
     TargetSpec(
@@ -211,7 +211,7 @@ TARGETS: tuple[TargetSpec, ...] = (
             Surface("mcp", "user", "~/.copilot/mcp-config.json", "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers", format="json"),
         ),
         manual_notes=("Project-level Copilot MCP stays manual until a stable file-backed surface is documented.",),
-        project_capabilities=_caps("instructions", "skills", "mcp"),
+        project_capabilities=_caps("instructions", "skills", "mcp", "workflow"),
         user_capabilities=_caps("instructions", "skills", "mcp"),
     ),
     TargetSpec(
@@ -231,7 +231,7 @@ TARGETS: tuple[TargetSpec, ...] = (
             Surface("mcp", "user", "~/.gemini/settings.json", "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/settings.md", format="json"),
             Surface("skills", "user", "~/.gemini/skills/haxaml/SKILL.md", "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md"),
         ),
-        project_capabilities=_caps("instructions", "skills", "mcp"),
+        project_capabilities=_caps("instructions", "skills", "mcp", "workflow"),
         user_capabilities=_caps("skills", "mcp"),
     ),
     TargetSpec(
@@ -317,7 +317,7 @@ TARGETS: tuple[TargetSpec, ...] = (
             ),
         ),
         manual_notes=("OpenCode MCP config is manual-only in 0.7.0.",),
-        project_capabilities=_caps("instructions", "skills"),
+        project_capabilities=_caps("instructions", "skills", "workflow"),
         user_capabilities=_caps("instructions", "skills", "mcp"),
     ),
     TargetSpec(
@@ -340,7 +340,7 @@ TARGETS: tuple[TargetSpec, ...] = (
             Surface("mcp", "user", "~/.junie/mcp/mcp.json", "https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html", format="json"),
         ),
         manual_notes=("Junie registry coverage is partial until official path docs are hardened.",),
-        project_capabilities=_caps("instructions", "skills", "agents", "mcp"),
+        project_capabilities=_caps("instructions", "skills", "agents", "mcp", "workflow"),
         user_capabilities=_caps("skills", "agents", "mcp"),
     ),
 )

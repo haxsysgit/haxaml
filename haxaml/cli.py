@@ -10,6 +10,7 @@ from pathlib import Path
 
 import click
 
+from haxaml.setup import WORKFLOW_TARGET_IDS
 from haxaml.setup.registry import SUPPORTED_TARGET_IDS
 from haxaml.state_manager import StateManager
 from haxaml.benchmarks import format_benchmark_report
@@ -95,7 +96,8 @@ def _setup_common_options(fn):
     fn = click.option("--scope", default="project", type=click.Choice(["project", "user"]), help="Write into the repo or the user home directory.")(fn)
     fn = click.option("--target", "target_id", default="auto", type=click.Choice(["auto", *SUPPORTED_TARGET_IDS]), help="Target agent/editor to onboard.")(fn)
     fn = click.option("--mode", default="auto", type=click.Choice(["auto", "fresh", "adopted"]), help="Auto-detect setup mode or force fresh/adopted behavior.")(fn)
-    fn = click.option("--only", "only", multiple=True, help="Repeatable or comma-separated subset of: frame,instructions,skills,agents,mcp")(fn)
+    fn = click.option("--only", "only", multiple=True, help="Repeatable or comma-separated subset of: frame,instructions,skills,agents,mcp,workflow")(fn)
+    fn = click.option("--with-workflow", is_flag=True, help="Add project-scoped workflow adaptation assets for supported targets.")(fn)
     fn = click.option("--format", "output_format", default="text", type=click.Choice(["text", "json"]), help="Output format.")(fn)
     return fn
 
@@ -112,7 +114,7 @@ def init(directory):
 @_setup_common_options
 @click.option("--force", is_flag=True, help="Overwrite Haxaml-managed files and replace existing files when explicitly requested.")
 @click.option("--dry-run", is_flag=True, help="Plan writes without mutating files.")
-def setup(ctx, project_dir, scope, target_id, mode, only, output_format, force, dry_run):
+def setup(ctx, project_dir, scope, target_id, mode, only, with_workflow, output_format, force, dry_run):
     """Install Haxaml into fresh or existing agent-native surfaces."""
     from haxaml.setup import cli as setup_commands
 
@@ -123,6 +125,7 @@ def setup(ctx, project_dir, scope, target_id, mode, only, output_format, force, 
             "target_id": target_id,
             "mode": mode,
             "only": only,
+            "with_workflow": with_workflow,
             "output_format": output_format,
             "force": force,
             "dry_run": dry_run,
@@ -135,6 +138,7 @@ def setup(ctx, project_dir, scope, target_id, mode, only, output_format, force, 
         target=target_id,
         mode=mode,
         only=only,
+        with_workflow=with_workflow,
         force=force,
         dry_run=dry_run,
         output_format=output_format,
@@ -144,7 +148,7 @@ def setup(ctx, project_dir, scope, target_id, mode, only, output_format, force, 
 
 @setup.command("print")
 @_setup_common_options
-def setup_print(project_dir, scope, target_id, mode, only, output_format):
+def setup_print(project_dir, scope, target_id, mode, only, with_workflow, output_format):
     """Render the planned setup content without writing files."""
     from haxaml.setup import cli as setup_commands
 
@@ -154,6 +158,7 @@ def setup_print(project_dir, scope, target_id, mode, only, output_format):
         target=target_id,
         mode=mode,
         only=only,
+        with_workflow=with_workflow,
         output_format=output_format,
     )
     _echo_tool_result(result)
@@ -167,6 +172,40 @@ def setup_doctor(project_dir, output_format):
     from haxaml.setup import cli as setup_commands
 
     _echo_tool_result(setup_commands.doctor_plan(project_dir=project_dir, output_format=output_format))
+
+
+@cli.group()
+def workflow():
+    """Workflow adaptation helpers layered on top of setup."""
+    pass
+
+
+@workflow.command("check")
+@click.option("--dir", "project_dir", default=".", help="Project directory")
+@click.option("--target", "target_id", default="auto", type=click.Choice(["auto", *WORKFLOW_TARGET_IDS]), help="Workflow-capable target to inspect.")
+@click.option("--context", default="entry", type=click.Choice(["entry", "hook", "agent", "background", "ci"]), help="Workflow runtime context to validate.")
+@click.option("--signal", default="", help="Optional raw provider event label to record in the check output.")
+@click.option("--strict", is_flag=True, help="Return a non-zero exit code when blocking workflow issues are present.")
+@click.option("--format", "output_format", default="text", type=click.Choice(["text", "json"]), help="Output format.")
+def workflow_check(project_dir, target_id, context, signal, strict, output_format):
+    """Inspect setup-managed workflow adaptation files for one target or auto-detected targets."""
+    from haxaml.setup import cli as setup_commands
+
+    result = setup_commands.workflow_check_plan(
+        project_dir=project_dir,
+        target=target_id,
+        context=context,
+        signal=signal,
+        strict=strict,
+        output_format=output_format,
+    )
+    _echo_tool_result(result, exit_on_failure=False)
+    result_dict = _result_dict(result)
+    if result_dict is not None and result_dict.get("ok") is False:
+        sys.exit(1)
+    data = result_dict.get("data") if isinstance(result_dict, dict) else {}
+    if strict and isinstance(data, dict) and data.get("blocking_count", 0):
+        sys.exit(1)
 
 
 @cli.command()

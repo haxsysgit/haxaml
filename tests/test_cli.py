@@ -10,6 +10,7 @@ import yaml
 
 from haxaml.cli import cli
 from haxaml.export_engine import AGENT_CONFIGS
+from haxaml.setup import WORKFLOW_TARGET_IDS
 from haxaml.setup.registry import get_target, list_targets
 
 COMMIT_STYLE_DISCIPLINE = "Do not use commit prefixes like fix:, feat:, refactor:, chore:, or docs:."
@@ -58,16 +59,18 @@ def test_setup_registry_covers_documented_targets_and_capabilities():
     for target in targets:
         if target.target_id != "generic":
             assert target.docs_urls
-        assert set(target.project_capabilities) == {"instructions", "skills", "agents", "mcp"}
-        assert set(target.user_capabilities) == {"instructions", "skills", "agents", "mcp"}
+        assert set(target.project_capabilities) == {"instructions", "skills", "agents", "mcp", "workflow"}
+        assert set(target.user_capabilities) == {"instructions", "skills", "agents", "mcp", "workflow"}
 
     claude = get_target("claude")
     assert any(surface.path == ".claude/skills/haxaml/SKILL.md" for surface in claude.surfaces_for("project"))
+    assert claude.project_capabilities["workflow"] is True
 
     gemini = get_target("gemini")
     project_surfaces = gemini.surfaces_for("project")
     assert any(surface.path == ".gemini/skills/haxaml/SKILL.md" for surface in project_surfaces)
     assert any(surface.path == ".gemini/settings.json" for surface in project_surfaces)
+    assert set(WORKFLOW_TARGET_IDS) == {"claude", "codex", "gemini", "cursor", "copilot", "opencode", "junie"}
 
 
 def test_setup_clean_repo_creates_frame_generic_agents_and_skill():
@@ -148,7 +151,91 @@ def test_setup_adopt_auto_preserves_native_files_and_writes_adoption_state():
         with open(".haxaml/adoption/ADOPTION.md", "r") as f:
             report = f.read()
         assert "Detected Targets" in report
-        assert "Managed Sidecars" in report
+        assert "Managed Adapter Files" in report
+
+
+def test_setup_with_workflow_adds_workflow_assets_and_manifest_entries():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        result = runner.invoke(cli, ["setup", "--target", "claude", "--with-workflow"])
+
+        assert result.exit_code == 0, result.output
+        assert os.path.exists(".haxaml/setup/workflows/claude/README.md")
+        assert os.path.exists(".haxaml/setup/workflows/claude/check.sh")
+
+        with open(".haxaml/setup/manifest.yaml", "r") as f:
+            manifest = yaml.safe_load(f)
+        assert manifest["workflow_enabled"] is True
+        assert any(
+            item["kind"] == "workflow" and item["path"] == ".haxaml/setup/workflows/claude/check.sh"
+            for item in manifest["managed_files"]
+        )
+
+
+def test_setup_only_workflow_plans_workflow_assets_only():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            cli,
+            ["setup", "--target", "cursor", "--only", "workflow", "--dry-run", "--format", "json"],
+        )
+
+        assert result.exit_code == 0, result.output
+        plan = json.loads(result.output)
+        assert plan["workflow_enabled"] is True
+        assert plan["planned_files"]
+        non_manifest = [item for item in plan["planned_files"] if item["path"] != ".haxaml/setup/manifest.yaml"]
+        assert non_manifest
+        assert {item["kind"] for item in non_manifest} == {"workflow"}
+        assert any(item["path"] == ".haxaml/setup/workflows/cursor/README.md" for item in plan["planned_files"])
+        assert os.path.exists(".cursor/environment.json") is False
+
+
+def test_workflow_check_reports_ready_after_workflow_setup():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        setup_result = runner.invoke(cli, ["setup", "--target", "codex", "--with-workflow"])
+        assert setup_result.exit_code == 0, setup_result.output
+
+        check = runner.invoke(cli, ["workflow", "check", "--target", "codex", "--format", "json"])
+        assert check.exit_code == 0, check.output
+
+        payload = json.loads(check.output)
+        assert payload["ready"] is True
+        assert payload["resolved_targets"] == ["codex"]
+        assert os.path.exists(".haxaml/setup/workflows/codex/run-local.sh")
+        assert os.path.exists(".haxaml/setup/workflows/codex/run-ci.sh")
+
+
+def test_workflow_check_strict_fails_when_required_file_is_missing():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        setup_result = runner.invoke(cli, ["setup", "--target", "gemini", "--with-workflow"])
+        assert setup_result.exit_code == 0, setup_result.output
+
+        os.remove(".haxaml/setup/workflows/gemini/run-local.sh")
+        check = runner.invoke(cli, ["workflow", "check", "--target", "gemini", "--strict"])
+
+        assert check.exit_code == 1
+        assert ".haxaml/setup/workflows/gemini/run-local.sh" in check.output
+
+
+def test_setup_doctor_reports_missing_workflow_file():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        setup_result = runner.invoke(cli, ["setup", "--target", "gemini", "--with-workflow"])
+        assert setup_result.exit_code == 0, setup_result.output
+
+        os.remove(".haxaml/setup/workflows/gemini/run-local.sh")
+        doctor = runner.invoke(cli, ["setup", "doctor"])
+
+        assert doctor.exit_code == 0, doctor.output
+        assert ".haxaml/setup/workflows/gemini/run-local.sh" in doctor.output
 
 
 def test_setup_fresh_mode_preserves_existing_native_files():

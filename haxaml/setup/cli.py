@@ -6,7 +6,15 @@ import json
 from pathlib import Path
 from typing import Any
 
-from haxaml.setup.service import apply_setup, doctor_data, plan_setup, print_data, setup_data, setup_message
+from haxaml.setup.service import (
+    apply_setup,
+    doctor_data,
+    plan_setup,
+    print_data,
+    setup_data,
+    setup_message,
+    workflow_check_data,
+)
 
 
 def _ok(tool: str, data: dict[str, Any], warnings: list[str] | None = None) -> dict[str, Any]:
@@ -30,6 +38,7 @@ def setup_plan(
     target: str = "auto",
     mode: str = "auto",
     only: tuple[str, ...] | list[str] | None = None,
+    with_workflow: bool = False,
     output_format: str = "text",
 ) -> dict[str, Any]:
     try:
@@ -39,6 +48,7 @@ def setup_plan(
             target=target,
             mode=mode,
             only=only,
+            with_workflow=with_workflow,
         )
     except (KeyError, ValueError) as exc:
         return _err("haxaml_setup", "invalid_setup_args", str(exc))
@@ -56,6 +66,7 @@ def execute_setup(
     target: str = "auto",
     mode: str = "auto",
     only: tuple[str, ...] | list[str] | None = None,
+    with_workflow: bool = False,
     force: bool = False,
     dry_run: bool = False,
     output_format: str = "text",
@@ -68,6 +79,7 @@ def execute_setup(
                 target=target,
                 mode=mode,
                 only=only,
+                with_workflow=with_workflow,
             )
             apply_result = None
         else:
@@ -77,6 +89,7 @@ def execute_setup(
                 target=target,
                 mode=mode,
                 only=only,
+                with_workflow=with_workflow,
                 force=force,
             )
     except (KeyError, ValueError) as exc:
@@ -97,6 +110,7 @@ def print_plan(
     target: str = "auto",
     mode: str = "auto",
     only: tuple[str, ...] | list[str] | None = None,
+    with_workflow: bool = False,
     output_format: str = "text",
 ) -> dict[str, Any]:
     try:
@@ -106,6 +120,7 @@ def print_plan(
             target=target,
             mode=mode,
             only=only,
+            with_workflow=with_workflow,
         )
     except (KeyError, ValueError) as exc:
         return _err("haxaml_setup", "invalid_setup_args", str(exc))
@@ -137,3 +152,28 @@ def doctor_plan(*, project_dir: str | Path, output_format: str = "text") -> dict
             lines.append("- none")
         report["message"] = "\n".join(lines)
     return _ok("haxaml_setup_doctor", report)
+
+
+def workflow_check_plan(
+    *,
+    project_dir: str | Path,
+    target: str = "auto",
+    context: str = "entry",
+    signal: str = "",
+    strict: bool = False,
+    output_format: str = "text",
+) -> dict[str, Any]:
+    try:
+        report = workflow_check_data(
+            project_dir=project_dir,
+            target=target,
+            context=context,
+            signal=signal,
+            strict=strict,
+        )
+    except (KeyError, ValueError) as exc:
+        return _err("haxaml_workflow_check", "invalid_workflow_args", str(exc))
+
+    if output_format == "json":
+        report["message"] = json.dumps(report, indent=2, sort_keys=True)
+    return _ok("haxaml_workflow_check", report)

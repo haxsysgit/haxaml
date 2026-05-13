@@ -11,19 +11,27 @@ from haxaml.setup.adoption import build_adoption_inventory, detect_target_files
 from haxaml.setup.registry import Surface, TargetSpec, get_target, list_targets
 from haxaml.setup.renderer import (
     RenderedArtifact,
+    render_adapter_file,
     render_agent,
     render_instruction,
     render_mcp_config,
     render_pointer_block,
-    render_sidecar,
     render_skill,
 )
 from haxaml.setup.templates import render_frame_templates
+from haxaml.setup.workflow import (
+    build_workflow_artifacts,
+    supports_workflow,
+    workflow_absorbs_surface,
+    workflow_adapter_file_path,
+    workflow_manual_actions,
+    workflow_native_entrypoints,
+)
 from haxaml.versioning import get_version
 from haxaml.yaml_utils import dump_yaml
 
 
-FRAME_KINDS = ("frame", "instructions", "skills", "agents", "mcp")
+SETUP_KINDS = ("frame", "instructions", "skills", "agents", "mcp", "workflow")
 MANIFEST_PATH = ".haxaml/setup/manifest.yaml"
 
 
@@ -85,6 +93,7 @@ class SetupPlan:
     requested_target: str
     selected_targets: list[str]
     detected_targets: list[str]
+    workflow_enabled: bool = False
     planned_files: list[PlannedFile] = field(default_factory=list)
     manual_actions: list[ManualAction] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -98,6 +107,7 @@ class SetupPlan:
             "requested_target": self.requested_target,
             "selected_targets": self.selected_targets,
             "detected_targets": self.detected_targets,
+            "workflow_enabled": self.workflow_enabled,
             "planned_files": [item.to_dict() for item in self.planned_files],
             "manual_actions": [item.to_dict() for item in self.manual_actions],
             "warnings": self.warnings,
@@ -107,18 +117,18 @@ class SetupPlan:
 
 def parse_only_values(values: tuple[str, ...] | list[str] | None) -> set[str]:
     if not values:
-        return set(FRAME_KINDS)
+        return set(SETUP_KINDS) - {"workflow"}
     selected: set[str] = set()
     for value in values:
         for chunk in str(value).split(","):
             chunk = chunk.strip().lower()
             if not chunk:
                 continue
-            if chunk not in FRAME_KINDS:
-                supported = ", ".join(FRAME_KINDS)
+            if chunk not in SETUP_KINDS:
+                supported = ", ".join(SETUP_KINDS)
                 raise ValueError(f"Unknown setup kind '{chunk}'. Supported values: {supported}")
             selected.add(chunk)
-    return selected or set(FRAME_KINDS)
+    return selected or (set(SETUP_KINDS) - {"workflow"})
 
 
 def _artifact_from_text(text: str) -> RenderedArtifact:
@@ -198,9 +208,12 @@ def build_setup_plan(
     target: str = "auto",
     mode: str = "auto",
     only: tuple[str, ...] | list[str] | None = None,
+    with_workflow: bool = False,
 ) -> SetupPlan:
     root = Path(project_dir).resolve()
     kinds = parse_only_values(only)
+    if with_workflow:
+        kinds.add("workflow")
     adoption_inventory = build_adoption_inventory(root) if scope == "project" else None
     detected = list(adoption_inventory.detected_targets) if adoption_inventory else []
     normalized_mode = str(mode or "auto").strip().lower()
@@ -240,7 +253,18 @@ def build_setup_plan(
         requested_target=target,
         selected_targets=selected_targets,
         detected_targets=detected,
+        workflow_enabled="workflow" in kinds and scope == "project",
     )
+
+    if "workflow" in kinds and scope != "project":
+        plan.warnings.append("Workflow adaptation is project-only in 0.7.x. User-scope workflow assets are ignored.")
+        kinds.discard("workflow")
+        plan.workflow_enabled = False
+
+    if plan.workflow_enabled and not any(supports_workflow(item) for item in selected_targets):
+        plan.warnings.append(
+            "Workflow adaptation needs an explicit workflow-capable target. Auto mode resolved to setup-only targets."
+        )
 
     files: dict[str, PlannedFile] = {}
 
@@ -275,17 +299,21 @@ def build_setup_plan(
             docs_url=generic_skill_surface.docs_url,
         )
 
-    sidecars: list[str] = []
+    adapter_files: list[str] = []
     skipped_files: list[str] = []
 
     for target_id in selected_targets:
         target_spec = get_target(target_id)
+        workflow_adapter_path = workflow_adapter_file_path(target_id) if plan.workflow_enabled and supports_workflow(target_id) else None
+        workflow_native_paths = workflow_native_entrypoints(target_id) if workflow_adapter_path else ()
         if target_spec.target_id == "generic" and scope == "project":
             pass
         for surface in target_spec.surfaces_for(scope):
             if surface.kind not in kinds:
                 continue
             if surface.manual_only or not surface.writable or surface.path is None:
+                if plan.workflow_enabled and workflow_absorbs_surface(target_spec.target_id, surface, scope=scope):
+                    continue
                 plan.manual_actions.append(
                     ManualAction(
                         target=target_spec.target_id,
@@ -303,19 +331,19 @@ def build_setup_plan(
 
             if surface.kind == "instructions":
                 if plan.mode == "adopted" and scope == "project" and path.exists() and target_spec.target_id != "cursor":
-                    sidecar_path = root / ".haxaml" / "setup" / "targets" / f"{target_spec.target_id}.md"
-                    sidecars.append(sidecar_path.relative_to(root).as_posix())
+                    adapter_file_path = root / ".haxaml" / "setup" / "targets" / f"{target_spec.target_id}.md"
+                    adapter_files.append(adapter_file_path.relative_to(root).as_posix())
                     _add_file(
                         files,
                         project_dir=root,
                         scope=scope,
                         target=target_spec.target_id,
                         kind="instructions",
-                        path=sidecar_path,
-                        artifact=render_sidecar(target_spec, root),
+                        path=adapter_file_path,
+                        artifact=render_adapter_file(target_spec, root),
                         management="file",
                         docs_url=surface.docs_url,
-                        note="Managed sidecar for adopted native instructions.",
+                        note="Managed adapter file for adopted native instructions.",
                     )
                     _add_file(
                         files,
@@ -324,7 +352,7 @@ def build_setup_plan(
                         target=target_spec.target_id,
                         kind="instructions",
                         path=path,
-                        artifact=render_pointer_block(target_spec, sidecar_path.relative_to(root).as_posix()),
+                        artifact=render_pointer_block(target_spec, adapter_file_path.relative_to(root).as_posix()),
                         management="pointer",
                         docs_url=surface.docs_url,
                         note="Managed pointer block appended to an adopted native instruction file.",
@@ -339,7 +367,13 @@ def build_setup_plan(
                     target=target_spec.target_id,
                     kind="instructions",
                     path=path,
-                    artifact=render_instruction(target_spec, scope, root),
+                    artifact=render_instruction(
+                        target_spec,
+                        scope,
+                        root,
+                        workflow_adapter_path=workflow_adapter_path,
+                        workflow_native_paths=workflow_native_paths,
+                    ),
                     management="file",
                     docs_url=surface.docs_url,
                 )
@@ -353,7 +387,12 @@ def build_setup_plan(
                     target=target_spec.target_id,
                     kind="skills",
                     path=path,
-                    artifact=render_skill(target_spec, scope),
+                    artifact=render_skill(
+                        target_spec,
+                        scope,
+                        workflow_adapter_path=workflow_adapter_path,
+                        workflow_native_paths=workflow_native_paths,
+                    ),
                     management="file",
                     docs_url=surface.docs_url,
                 )
@@ -367,7 +406,12 @@ def build_setup_plan(
                     target=target_spec.target_id,
                     kind="agents",
                     path=path,
-                    artifact=render_agent(target_spec, scope),
+                    artifact=render_agent(
+                        target_spec,
+                        scope,
+                        workflow_adapter_path=workflow_adapter_path,
+                        workflow_native_paths=workflow_native_paths,
+                    ),
                     management="file",
                     docs_url=surface.docs_url,
                 )
@@ -386,13 +430,39 @@ def build_setup_plan(
                     docs_url=surface.docs_url,
                 )
 
+        if plan.workflow_enabled and supports_workflow(target_id):
+            for artifact in build_workflow_artifacts(target_id, root):
+                _add_file(
+                    files,
+                    project_dir=root,
+                    scope=scope,
+                    target=target_id,
+                    kind="workflow",
+                    path=root / artifact.path,
+                    artifact=artifact.artifact,
+                    management="file",
+                    docs_url=artifact.docs_url,
+                    note=artifact.note or "Managed workflow adaptation file.",
+                )
+            for item in workflow_manual_actions(target_id):
+                plan.manual_actions.append(
+                    ManualAction(
+                        target=str(item["target"]),
+                        kind=str(item["kind"]),
+                        scope=str(item["scope"]),
+                        path=item["path"],
+                        docs_url=str(item["docs_url"]),
+                        reason=str(item["reason"]),
+                    )
+                )
+
     if scope == "project" and plan.mode == "adopted" and adoption_inventory is not None:
         from haxaml.setup.adoption import ADOPTION_REPORT_PATH, ADOPTION_STATE_PATH, dump_adoption_state
         from haxaml.setup.renderer import render_adoption_report
 
         state = adoption_inventory.to_state(
             selected_targets=selected_targets,
-            sidecars=sorted(set(sidecars)),
+            adapter_files=sorted(set(adapter_files)),
             skipped_files=sorted(set(skipped_files)),
         )
         plan.adoption_state = state
@@ -443,6 +513,7 @@ def build_setup_plan(
         "requested_target": plan.requested_target,
         "selected_targets": plan.selected_targets,
         "detected_targets": plan.detected_targets,
+        "workflow_enabled": plan.workflow_enabled,
         "managed_files": managed_files,
         "manual_actions": [item.to_dict() for item in plan.manual_actions],
     }

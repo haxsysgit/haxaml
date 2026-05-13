@@ -26,6 +26,16 @@ def metadata_comment(metadata: dict[str, object]) -> str:
     return f"<!-- HAXAML:FILE {compact} -->"
 
 
+def metadata_line_comment(metadata: dict[str, object], *, prefix: str = "#") -> str:
+    compact = json.dumps(metadata, sort_keys=True, separators=(",", ":"))
+    return f"{prefix} HAXAML:FILE {compact}"
+
+
+def metadata_json_document(metadata: dict[str, object], payload: dict[str, object]) -> str:
+    document = {"_haxaml": metadata, **payload}
+    return json.dumps(document, indent=2, sort_keys=True) + "\n"
+
+
 def managed_block_start(metadata: dict[str, object]) -> str:
     compact = json.dumps(metadata, sort_keys=True, separators=(",", ":"))
     return f"<!-- HAXAML:MANAGED START {compact} -->"

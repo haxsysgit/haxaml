@@ -7,6 +7,7 @@ from typing import Any
 
 from haxaml.setup.doctor import run_setup_doctor
 from haxaml.setup.planner import SetupPlan, build_setup_plan
+from haxaml.setup.workflow import run_workflow_check
 from haxaml.setup.writer import apply_setup_plan
 
 
@@ -17,6 +18,7 @@ def plan_setup(
     target: str = "auto",
     mode: str = "auto",
     only: tuple[str, ...] | list[str] | None = None,
+    with_workflow: bool = False,
 ) -> SetupPlan:
     """Build a canonical setup plan."""
     return build_setup_plan(
@@ -25,6 +27,7 @@ def plan_setup(
         target=target,
         mode=mode,
         only=only,
+        with_workflow=with_workflow,
     )
 
 
@@ -35,6 +38,7 @@ def apply_setup(
     target: str = "auto",
     mode: str = "auto",
     only: tuple[str, ...] | list[str] | None = None,
+    with_workflow: bool = False,
     force: bool = False,
 ) -> tuple[SetupPlan, dict[str, object]]:
     """Build and apply a setup plan."""
@@ -44,6 +48,7 @@ def apply_setup(
         target=target,
         mode=mode,
         only=only,
+        with_workflow=with_workflow,
     )
     return plan, apply_setup_plan(plan, force=force)
 
@@ -55,6 +60,8 @@ def setup_message(plan: SetupPlan, *, apply_result: dict[str, object] | None = N
         f"Scope: {plan.scope}",
         f"Targets: {', '.join(plan.selected_targets) if plan.selected_targets else '(none)'}",
     ]
+    if plan.workflow_enabled:
+        lines.append("Workflow adaptation: enabled")
     if plan.detected_targets:
         lines.append(f"Detected native targets: {', '.join(plan.detected_targets)}")
     if apply_result is None:
@@ -96,3 +103,21 @@ def print_data(plan: SetupPlan) -> dict[str, Any]:
 def doctor_data(*, project_dir: str | Path) -> dict[str, Any]:
     """Return the canonical setup doctor report."""
     return run_setup_doctor(project_dir)
+
+
+def workflow_check_data(
+    *,
+    project_dir: str | Path,
+    target: str = "auto",
+    context: str = "entry",
+    signal: str = "",
+    strict: bool = False,
+) -> dict[str, Any]:
+    """Return the canonical workflow check report."""
+    return run_workflow_check(
+        project_dir=project_dir,
+        target=target,
+        context=context,
+        signal=signal,
+        strict=strict,
+    )
