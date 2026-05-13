@@ -163,14 +163,12 @@ def test_setup_with_workflow_adds_workflow_assets_and_manifest_entries():
         assert result.exit_code == 0, result.output
         assert os.path.exists(".haxaml/setup/workflows/claude/README.md")
         assert os.path.exists(".haxaml/setup/workflows/claude/check.sh")
+        assert os.path.exists(".claude/settings.json")
 
         with open(".haxaml/setup/manifest.yaml", "r") as f:
             manifest = yaml.safe_load(f)
         assert manifest["workflow_enabled"] is True
-        assert any(
-            item["kind"] == "workflow" and item["path"] == ".haxaml/setup/workflows/claude/check.sh"
-            for item in manifest["managed_files"]
-        )
+        assert any(item["kind"] == "workflow" and item["path"] == ".claude/settings.json" for item in manifest["managed_files"])
 
 
 def test_setup_only_workflow_plans_workflow_assets_only():
@@ -189,7 +187,7 @@ def test_setup_only_workflow_plans_workflow_assets_only():
         non_manifest = [item for item in plan["planned_files"] if item["path"] != ".haxaml/setup/manifest.yaml"]
         assert non_manifest
         assert {item["kind"] for item in non_manifest} == {"workflow"}
-        assert any(item["path"] == ".haxaml/setup/workflows/cursor/README.md" for item in plan["planned_files"])
+        assert any(item["path"] == ".cursor/environment.json" for item in plan["planned_files"])
         assert os.path.exists(".cursor/environment.json") is False
 
 
@@ -197,31 +195,31 @@ def test_workflow_check_reports_ready_after_workflow_setup():
     runner = CliRunner()
 
     with runner.isolated_filesystem():
-        setup_result = runner.invoke(cli, ["setup", "--target", "codex", "--with-workflow"])
+        setup_result = runner.invoke(cli, ["setup", "--target", "copilot", "--with-workflow"])
         assert setup_result.exit_code == 0, setup_result.output
 
-        check = runner.invoke(cli, ["workflow", "check", "--target", "codex", "--format", "json"])
+        check = runner.invoke(cli, ["workflow", "check", "--target", "copilot", "--format", "json"])
         assert check.exit_code == 0, check.output
 
         payload = json.loads(check.output)
         assert payload["ready"] is True
-        assert payload["resolved_targets"] == ["codex"]
-        assert os.path.exists(".haxaml/setup/workflows/codex/run-local.sh")
-        assert os.path.exists(".haxaml/setup/workflows/codex/run-ci.sh")
+        assert payload["resolved_targets"] == ["copilot"]
+        assert os.path.exists(".github/agents/haxaml-governor.md")
+        assert os.path.exists(".mcp.json")
 
 
 def test_workflow_check_strict_fails_when_required_file_is_missing():
     runner = CliRunner()
 
     with runner.isolated_filesystem():
-        setup_result = runner.invoke(cli, ["setup", "--target", "gemini", "--with-workflow"])
+        setup_result = runner.invoke(cli, ["setup", "--target", "cursor", "--with-workflow"])
         assert setup_result.exit_code == 0, setup_result.output
 
-        os.remove(".haxaml/setup/workflows/gemini/run-local.sh")
-        check = runner.invoke(cli, ["workflow", "check", "--target", "gemini", "--strict"])
+        os.remove(".cursor/environment.json")
+        check = runner.invoke(cli, ["workflow", "check", "--target", "cursor", "--strict"])
 
         assert check.exit_code == 1
-        assert ".haxaml/setup/workflows/gemini/run-local.sh" in check.output
+        assert ".cursor/environment.json" in check.output
 
 
 def test_setup_doctor_reports_missing_workflow_file():

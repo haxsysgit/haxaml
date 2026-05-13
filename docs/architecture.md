@@ -28,7 +28,7 @@ haxaml/
     registry.py              # target registry and native surface definitions
     adoption.py              # setup-owned native file discovery and adoption analysis
     planner.py               # fresh/adopted planning and manifest generation
-    renderer.py              # instructions/skills/sidecars/config renderers
+    renderer.py              # instructions/skills/adapter-file/config renderers
     service.py               # transport-neutral setup engine used by CLI and MCP
     writer.py                # safe managed writes and pointer insertion
     doctor.py                # setup drift and missing-file audit
