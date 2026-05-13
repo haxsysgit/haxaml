@@ -1174,7 +1174,6 @@ def haxaml_session_record(
     if err:
         warnings.append(f"Could not persist session close state: {err}")
 
-    stale = export_if_stale(project_dir, agents=["generic"])
     _retry_guard_clear(
         project_dir,
         tool="haxaml_session_record",
@@ -1197,7 +1196,6 @@ def haxaml_session_record(
             "reconcile": reconcile,
             "last_pack_tokens": context_compaction.get("last_pack_tokens", 0) if sm else 0,
             "last_context_window_usage": context_compaction.get("last_window_usage", {}) if sm else {},
-            "auto_exported": stale,
             "expect_sync_required": True,
             "next_step": "haxaml_expect_sync",
             "lifecycle": _lifecycle_hint(

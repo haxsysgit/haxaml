@@ -1,6 +1,5 @@
 """MCP lifecycle/session helper functions."""
 
-from datetime import datetime, timezone
 from pathlib import Path
 import subprocess
 from typing import Any, Optional
@@ -8,12 +7,12 @@ from typing import Any, Optional
 from haxaml.lifecycle_state import expect_sync_state as _expect_sync_state
 from haxaml.paths import resolve_frame_file
 from haxaml.state_manager import StateError, StateManager
+from haxaml.utils import now_iso
 
 from haxaml.mcp.policy_helpers import _utility_mode_eval
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+_now_iso = now_iso
 
 
 def _rules_policy(rules: dict[str, Any], key: str, default: dict[str, Any]) -> dict[str, Any]:
@@ -213,7 +212,14 @@ def _lifecycle_hint(
     allowed_next: list[str] | None = None,
     contract_enforced: bool = True,
 ) -> dict[str, Any]:
-    """Return compact machine-readable lifecycle dependency metadata."""
+    """Return compact machine-readable lifecycle dependency metadata.
+
+    This metadata forms the 'Governance Spine'. It guides the agent through
+    the mandatory lifecycle steps (about -> guidance -> prebuild -> ...).
+    By declaring `depends_on` and `preferred_next`, Haxaml enforces a
+    deterministic operating procedure that prevents agents from skipping
+    critical gates like `verify` or `reconcile`.
+    """
     next_tools = list(allowed_next or ([preferred_next] if preferred_next else []))
     hint = {
         "tool": tool,
@@ -241,7 +247,14 @@ def _has_conflict_stop_reason(changes: str, decisions: str, risks: str) -> bool:
 
 
 def _lifecycle_contract_state(state: dict[str, Any]) -> dict[str, Any]:
-    """Return normalized lifecycle contract state from acts.yaml payload."""
+    """Return normalized lifecycle contract state from acts.yaml payload.
+
+    The Lifecycle Contract is the runtime enforcement mechanism for the
+    Governance Spine. It tracks the agent's current position in the workflow
+    and explicitly lists which tools are 'required_next'. This ensures that
+    mandatory steps (like `haxaml_session_verify` before `haxaml_session_record`)
+    are strictly followed across different agent sessions.
+    """
     raw = state.get("lifecycle_contract", {}) if isinstance(state, dict) else {}
     if not isinstance(raw, dict):
         raw = {}
@@ -317,7 +330,7 @@ def _contract_touch(
         updated["last_record_run_id"] = last_record_run_id
     if last_record_result:
         updated["last_record_result"] = last_record_result
-    updated["updated_at"] = _now_iso()
+    updated["updated_at"] = now_iso()
     return _lifecycle_contract_state({"lifecycle_contract": updated})
 
 

@@ -54,8 +54,9 @@ class TestAbout:
         data = result["data"]
         assert data["about_version"]
         assert "lean_workflow" in data
-        assert data["next_step"] == "haxaml_guidance"
-        assert data["lifecycle"]["preferred_next"] == "haxaml_guidance"
+        assert data["next_step"] == "haxaml_setup"
+        assert data["lifecycle"]["preferred_next"] == "haxaml_setup"
+        assert data["onboarding"]["status"] == "frame_only"
         assert "allowed_next" not in data["lifecycle"]
 
     def test_prebuild_requires_about_first(self, tmp_path):
@@ -332,7 +333,7 @@ class TestLifecycle:
     def test_lifecycle_tools_point_to_next_step(self, governed_project):
         about = haxaml_about(str(governed_project))
         assert about["ok"] is True
-        assert about["data"]["lifecycle"]["preferred_next"] == "haxaml_guidance"
+        assert about["data"]["lifecycle"]["preferred_next"] == "haxaml_setup"
 
         guidance = haxaml_guidance(task="update lifecycle guidance docs", project_dir=str(governed_project))
         assert guidance["ok"] is True

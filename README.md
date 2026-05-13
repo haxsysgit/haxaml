@@ -64,13 +64,15 @@ uvx haxaml-mcp
 
 ## Setup and Adoption
 
-I want Haxaml to be "hard to use badly." In version 0.7.0: the tool can now install itself into your favorite environment.
+I want Haxaml to be hard to use badly, so setup is now the single onboarding surface.
 
-### Starting Fresh
-If you are starting a new project: run `haxaml setup`. This creates your `.haxaml/` folder and drops a generic `AGENTS.md` so any agent knows they are in a governed repo.
+- `haxaml setup` auto-detects whether the repo is fresh or already has native agent files.
+- In a fresh repo it creates `.haxaml/`, a generic `AGENTS.md`, and the matching skill/config adapters for the selected target.
+- In an existing repo it adopts the native files instead of replacing them. Haxaml appends a managed pointer block, keeps the full governed adapter in `.haxaml/setup/targets/`, and records adoption state in `.haxaml/adoption/`.
+- `haxaml setup print` shows the planned files before writing.
+- `haxaml setup doctor` checks for missing managed files, drift, and manual follow-up.
 
-### Adopting Existing Projects
-If you already have a `CLAUDE.md`, `.cursorrules`, or `GEMINI.md`: I do not want Haxaml to overwrite your hard work. Run `haxaml setup --adopt auto`. Haxaml will scan your files, add a "Managed Pointer" block to the end of them, and store the "Blueprint" state in `.haxaml/adoption/`. This gives you the power of the governance engine without losing your existing instructions.
+If you want only the bare FRAME scaffold without onboarding, use `haxaml init`. That command now creates missing core FRAME files and stops there.
 
 ## Local Dashboard
 

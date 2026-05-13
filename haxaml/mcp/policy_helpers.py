@@ -292,11 +292,36 @@ def _require_about(tool: str, project_dir: str) -> Optional[dict]:
 
 
 def _about_payload(project_dir: str) -> dict[str, Any]:
+    project = Path(project_dir).resolve()
+    facts_path = project / ".haxaml" / "facts.yaml"
+    manifest_path = project / ".haxaml" / "setup" / "manifest.yaml"
+    if not facts_path.exists():
+        onboarding = {
+            "status": "missing_frame",
+            "recommended_tool": "haxaml_setup",
+            "message": "Project is not initialized. Run haxaml_setup to install FRAME and agent-native onboarding.",
+        }
+        next_step = "haxaml_setup"
+    elif not manifest_path.exists():
+        onboarding = {
+            "status": "frame_only",
+            "recommended_tool": "haxaml_setup",
+            "message": "FRAME exists, but setup-managed onboarding is missing. Run haxaml_setup to adopt or install native instructions.",
+        }
+        next_step = "haxaml_setup"
+    else:
+        onboarding = {
+            "status": "setup_managed",
+            "recommended_tool": "haxaml_guidance",
+            "message": "Setup-managed onboarding is present. Continue with the governed lifecycle.",
+        }
+        next_step = "haxaml_guidance"
+
     call_budgets = _workflow_budget_catalog()
     return {
         "message": "Haxaml onboarding brief loaded. Call haxaml_about once per active agent/MCP session.",
         "about_version": ABOUT_PROMPT_VERSION,
-        "project_dir": str(Path(project_dir).resolve()),
+        "project_dir": str(project),
         "haxaml": {
             "what_it_is": (
                 "Haxaml is a deterministic governance layer for coding agents. "
@@ -335,6 +360,7 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
             "retry_behavior": "If the same gate error appears twice, stop retries, fix root cause, then retry once.",
             "context_refresh_policy": _compact_context_refresh_policy(),
         },
+        "onboarding": onboarding,
         # Keep the onboarding payload high-signal: enough structure to guide the first call chain,
         # but not so much detail that "full" mode becomes its own source of context bloat.
         "recommended_workflow": {
@@ -354,7 +380,8 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
             "tool": "haxaml_about",
             "phase": "about",
             "depends_on": [],
-            "preferred_next": "haxaml_guidance",
+            "preferred_next": next_step,
         },
+        "next_step": next_step,
         "call_budgets": call_budgets,
     }

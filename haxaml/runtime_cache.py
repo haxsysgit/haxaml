@@ -11,6 +11,7 @@ import hashlib
 import yaml
 
 from haxaml.paths import acts_history_path, resolve_frame_file
+from haxaml.yaml_utils import load_yaml
 
 
 FRAME_FILES = {
@@ -67,8 +68,7 @@ def _top_level_section_fingerprints(data: Any) -> dict[str, str]:
 
 def _read_yaml_file(path: Path) -> tuple[Any, str]:
     try:
-        with open(path, encoding="utf-8") as handle:
-            return yaml.safe_load(handle) or {}, ""
+        return load_yaml(path), ""
     except Exception as exc:  # pragma: no cover - defensive I/O
         return None, str(exc)
 
@@ -307,8 +307,7 @@ class RuntimeSnapshotCache:
             if not path.exists():
                 doc = {}
             else:
-                with open(path, encoding="utf-8") as handle:
-                    doc = yaml.safe_load(handle) or {}
+                doc = load_yaml(path)
             self._archive_docs = {
                 key: value
                 for key, value in self._archive_docs.items()

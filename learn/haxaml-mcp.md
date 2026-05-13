@@ -21,7 +21,7 @@ Prompt files still matter, but they are adapters. The hard governance logic live
 - MCP server: `haxaml-mcp` via `haxaml.mcp_server:main`
 - Project state: repository plus `.haxaml/*.yaml`
 
-Package split in `0.6.7`:
+Package split in `0.7.1`:
 
 - `haxaml` - core governance engine and CLI
 - `haxaml-mcp` - MCP runtime/launcher package
@@ -34,6 +34,17 @@ Canonical FRAME files:
 - `.haxaml/acts.yaml`
 - `.haxaml/expect.yaml`
 - `.haxaml/map.yaml`
+
+## Setup-First Onboarding
+
+`haxaml_setup` is now the single MCP onboarding entrypoint.
+
+- `haxaml_setup(project_dir='.')` auto-detects fresh vs adopted mode.
+- `mode='fresh'` installs FRAME/native adapters without touching existing native instruction files.
+- `mode='adopted'` preserves detected native files and appends managed pointer blocks instead of replacing them.
+- `scope='user'` installs only user-home surfaces and leaves the repo untouched.
+
+`haxaml_init` still exists, but it is now intentionally small: it only creates missing core FRAME files. Use it when you want a scaffold and nothing else.
 
 ## Response Envelope
 
@@ -150,7 +161,7 @@ Use them when:
 
 ## Client Config
 
-Project-local config is preferred.
+Project-local config is preferred. When `haxaml_setup` manages a writable target surface, it writes the matching config file for you. Use the manual snippets below when the target is manual-only or when you want to wire the MCP server yourself.
 
 ### Claude Code
 

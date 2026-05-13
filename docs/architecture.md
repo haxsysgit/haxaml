@@ -17,21 +17,35 @@ haxaml/
     response_helpers.py      # response envelopes, detail modes, compact short outputs
     policy_helpers.py        # about gate, mode gating, retry policy
     lifecycle_helpers.py     # lifecycle/session/state helper functions
-    export_helpers.py        # export/bootstrap helper functions
-    adoption_helpers.py      # adoption inventory helper functions
+    export_helpers.py        # export helper functions
     tools_frame.py           # init/validate/health/doctor
     tools_lifecycle.py       # about/guidance/context/verify/record/sync
     tools_prebuild.py        # prebuild governed entrypoint
-    tools_ops.py             # export/upgrade/bootstrap/adopt/reconcile/needs/impact/state
+    tools_ops.py             # export/upgrade/setup/reconcile/needs/impact/state
     tools_benchmark.py       # benchmark tool and workflow profiling helpers
     resources.py             # MCP resources (haxaml://frame/*)
+  setup/
+    registry.py              # target registry and native surface definitions
+    adoption.py              # setup-owned native file discovery and adoption analysis
+    planner.py               # fresh/adopted planning and manifest generation
+    renderer.py              # instructions/skills/sidecars/config renderers
+    service.py               # transport-neutral setup engine used by CLI and MCP
+    writer.py                # safe managed writes and pointer insertion
+    doctor.py                # setup drift and missing-file audit
+    templates.py             # canonical FRAME scaffold templates
   context.py                 # context assembly and token counting
+  context_memory.py          # governed memory retrieval and ranking helpers
   runtime_cache.py           # shared in-process FRAME/archive snapshot cache
   validator.py               # FRAME schema + semantic validation
   reconcile.py               # derivation conflict detection
   export_engine.py           # FRAME -> agent-native file generation
+  export_profiles.py         # export-time persona/reasoning/example rendering
   state_manager.py           # state read/write + hot/archive acts history control
-  runner.py                  # internal run lifecycle helper
+  runner.py                  # thin compatibility facade over execution services
+  services/
+    execution_models.py      # shared dataclasses for execution results
+    execution_preflight.py   # validation, task-context, and health services
+    execution_records.py     # run start/finish state mutation services
   paths.py                   # canonical FRAME path resolution
 
 haxaml_ui/
@@ -88,7 +102,12 @@ tests/
 
 - `haxaml.mcp.*_helpers`
   - shared internal logic
-  - lifecycle, policy, export, and adoption support
+  - lifecycle, policy, and export support
+
+- `haxaml.setup.*`
+  - canonical onboarding/adoption engine
+  - shared by `haxaml setup` and `haxaml_setup`
+  - owns FRAME scaffold templates, native target registry, and managed setup manifest
 
 - `haxaml.mcp.base`
   - shared imports/constants for MCP modules

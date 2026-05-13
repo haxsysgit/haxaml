@@ -1,21 +1,26 @@
 """Helpers for keeping old acts history in a separate archive file.
 
-The main acts file should stay small and focused on current work.
-Older runs, sessions, and verification records move here so they remain
-available for guided lookup without bloating the default context path.
+Haxaml uses a tiered history strategy to manage context window efficiency:
+1. Hot State (.haxaml/acts.yaml): Contains recent runs, sessions, and active tasks.
+   This is always included in the agent's context to provide immediate continuity.
+2. Cold State (.haxaml/archive/acts-history.yaml): Contains older historical records.
+   This is excluded from the default context pack but remains available for
+   semantic retrieval via `haxaml_context_fetch`.
+
+This separation prevents acts.yaml from bloating over time while ensuring
+the full project diary remains accessible for long-term memory.
 """
 
 from __future__ import annotations
 
 import os
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from haxaml.paths import acts_history_path
+from haxaml.utils import clean_str_list, keywords_from_text, normalized_text, now_iso
+from haxaml.yaml_utils import dump_yaml, load_yaml
 
 
 ARCHIVE_VERSION = "0.6.7"
@@ -37,55 +42,6 @@ ARCHIVE_KINDS = {
 class ArchiveError(Exception):
     """Raised when archive operations fail."""
 
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _clean_text(value: Any) -> str:
-    return str(value or "").strip()
-
-
-def _clean_str_list(items: Any) -> list[str]:
-    if not isinstance(items, list):
-        return []
-    cleaned: list[str] = []
-    seen = set()
-    for item in items:
-        text = _clean_text(item)
-        if not text:
-            continue
-        if text in seen:
-            continue
-        seen.add(text)
-        cleaned.append(text)
-    return cleaned
-
-
-def _keywords_from_text(*parts: Any, limit: int = 12) -> list[str]:
-    stop = {
-        "the", "and", "for", "with", "that", "this", "from", "into", "have", "will",
-        "when", "what", "where", "then", "than", "them", "they", "been", "were",
-        "your", "about", "after", "before", "only", "over", "under", "into", "task",
-        "tasks", "work", "works", "working", "update", "updated", "using",
-    }
-    tokens: list[str] = []
-    seen = set()
-    for part in parts:
-        text = _clean_text(part).lower()
-        if not text:
-            continue
-        for raw in text.replace("/", " ").replace("-", " ").replace("_", " ").split():
-            token = "".join(ch for ch in raw if ch.isalnum())
-            if len(token) < 4 or token in stop or token in seen:
-                continue
-            seen.add(token)
-            tokens.append(token)
-            if len(tokens) >= limit:
-                return tokens
-    return tokens
-
-
 def default_memory_policy() -> dict[str, Any]:
     """Return the default advisory-first memory policy."""
     return dict(DEFAULT_MEMORY_POLICY)
@@ -97,7 +53,7 @@ def normalize_memory_policy(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return policy
 
-    archive_mode = _clean_text(value.get("archive_mode", policy["archive_mode"])).lower()
+    archive_mode = normalized_text(value.get("archive_mode", policy["archive_mode"])).lower()
     if archive_mode not in {"manual", "on_record"}:
         archive_mode = policy["archive_mode"]
     policy["archive_mode"] = archive_mode
@@ -140,9 +96,9 @@ def archive_metadata(state: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(hot_limits, dict):
         hot_limits = {}
     return {
-        "path": _clean_text(raw.get("path", "")),
-        "archive_mode": _clean_text(raw.get("archive_mode", "manual")).lower() or "manual",
-        "last_archived_at": _clean_text(raw.get("last_archived_at", "")),
+        "path": normalized_text(raw.get("path", "")),
+        "archive_mode": normalized_text(raw.get("archive_mode", "manual")).lower() or "manual",
+        "last_archived_at": normalized_text(raw.get("last_archived_at", "")),
         "archived_counts": {
             "runs": int(counts.get("runs", 0) or 0),
             "sessions": int(counts.get("sessions", 0) or 0),
@@ -158,28 +114,32 @@ def archive_metadata(state: dict[str, Any]) -> dict[str, Any]:
 
 def build_index_entry(kind: str, record: dict[str, Any]) -> dict[str, Any]:
     """Build a compact deterministic index entry for an archived record."""
-    record_id = _clean_text(record.get("id", ""))
-    task = _clean_text(record.get("task", ""))
+    record_id = normalized_text(record.get("id", ""))
+    task = normalized_text(record.get("task", ""))
     if kind == "run":
-        status = _clean_text(record.get("result", ""))
-        summary = _clean_text(record.get("changes", "")) or _clean_text(record.get("decisions", ""))
-        timestamp = _clean_text(record.get("timestamp", ""))
+        status = normalized_text(record.get("result", ""))
+        summary = normalized_text(record.get("changes", "")) or normalized_text(record.get("decisions", ""))
+        timestamp = normalized_text(record.get("timestamp", ""))
     elif kind == "session":
-        status = _clean_text(record.get("status", ""))
-        summary = _clean_text(record.get("description", ""))
-        timestamp = _clean_text(record.get("updated", "")) or _clean_text(record.get("ended", "")) or _clean_text(record.get("started", ""))
+        status = normalized_text(record.get("status", ""))
+        summary = normalized_text(record.get("description", ""))
+        timestamp = (
+            normalized_text(record.get("updated", ""))
+            or normalized_text(record.get("ended", ""))
+            or normalized_text(record.get("started", ""))
+        )
     else:
-        status = _clean_text(record.get("verdict", ""))
-        summary = _clean_text(record.get("summary", ""))
-        timestamp = _clean_text(record.get("timestamp", ""))
+        status = normalized_text(record.get("verdict", ""))
+        summary = normalized_text(record.get("summary", ""))
+        timestamp = normalized_text(record.get("timestamp", ""))
 
-    file_refs = _clean_str_list(record.get("file_refs", []))
+    file_refs = clean_str_list(record.get("file_refs", []))
     if not file_refs and kind == "verification":
-        file_refs = _clean_str_list(record.get("evidence_refs", []))
-    module_refs = _clean_str_list(record.get("module_refs", []))
-    keywords = _clean_str_list(record.get("keywords", []))
+        file_refs = clean_str_list(record.get("evidence_refs", []))
+    module_refs = clean_str_list(record.get("module_refs", []))
+    keywords = clean_str_list(record.get("keywords", []))
     if not keywords:
-        keywords = _keywords_from_text(task, summary, status, *file_refs, *module_refs)
+        keywords = keywords_from_text(task, summary, status, *file_refs, *module_refs)
 
     return {
         "kind": kind,
@@ -195,7 +155,12 @@ def build_index_entry(kind: str, record: dict[str, Any]) -> dict[str, Any]:
 
 
 class ActsArchive:
-    """Managed lossless archive for older runs, sessions, and verifications."""
+    """Managed lossless archive for older runs, sessions, and verifications.
+
+    ActsArchive handles the 'cold' storage tier. It maintains a compact index
+    of all archived records to support fast relevance ranking during retrieval
+    without loading the full history body into memory.
+    """
 
     def __init__(self, project_dir: str | Path):
         self.project_dir = Path(project_dir).resolve()
@@ -208,8 +173,7 @@ class ActsArchive:
         if not self.path.exists():
             return self._empty_doc()
         try:
-            with open(self.path, encoding="utf-8") as handle:
-                data = yaml.safe_load(handle) or {}
+            data = load_yaml(self.path)
         except Exception as exc:  # pragma: no cover - defensive I/O
             raise ArchiveError(f"Could not read archive: {exc}") from exc
         return self._normalize_doc(data)
@@ -224,7 +188,7 @@ class ActsArchive:
         )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                yaml.dump(normalized, handle, default_flow_style=False, sort_keys=False)
+                handle.write(dump_yaml(normalized, sort_keys=False))
             os.replace(tmp_path, self.path)
         except Exception as exc:  # pragma: no cover - defensive I/O
             if os.path.exists(tmp_path):
@@ -267,7 +231,7 @@ class ActsArchive:
                 counts[key] += 1
 
         doc["metadata"]["archive_mode"] = archive_mode
-        doc["metadata"]["last_archived_at"] = _now_iso()
+        doc["metadata"]["last_archived_at"] = now_iso()
         doc["metadata"]["counts"] = {
             "runs": len(history["runs"]),
             "sessions": len(history["sessions"]),
@@ -290,11 +254,11 @@ class ActsArchive:
     def has_record(self, record_id: str) -> bool:
         from haxaml.runtime_cache import runtime_cache
 
-        wanted = _clean_text(record_id)
+        wanted = normalized_text(record_id)
         if not wanted:
             return False
         for item in runtime_cache().get_archive_index(self.project_dir).index:
-            if isinstance(item, dict) and _clean_text(item.get("id", "")) == wanted:
+            if isinstance(item, dict) and normalized_text(item.get("id", "")) == wanted:
                 return True
         return False
 
@@ -328,7 +292,7 @@ class ActsArchive:
             "metadata": {
                 "version": ARCHIVE_VERSION,
                 "managed_by": "haxaml",
-                "created_at": _now_iso(),
+                "created_at": now_iso(),
                 "last_archived_at": "",
                 "archive_mode": "manual",
                 "counts": {"runs": 0, "sessions": 0, "verifications": 0},
@@ -348,11 +312,11 @@ class ActsArchive:
         metadata = data.get("metadata", {})
         if not isinstance(metadata, dict):
             raise ArchiveError("Archive metadata must be a mapping.")
-        doc["metadata"]["version"] = _clean_text(metadata.get("version", ARCHIVE_VERSION)) or ARCHIVE_VERSION
-        doc["metadata"]["managed_by"] = _clean_text(metadata.get("managed_by", "haxaml")) or "haxaml"
-        doc["metadata"]["created_at"] = _clean_text(metadata.get("created_at", doc["metadata"]["created_at"]))
-        doc["metadata"]["last_archived_at"] = _clean_text(metadata.get("last_archived_at", ""))
-        doc["metadata"]["archive_mode"] = _clean_text(metadata.get("archive_mode", "manual")).lower() or "manual"
+        doc["metadata"]["version"] = normalized_text(metadata.get("version", ARCHIVE_VERSION)) or ARCHIVE_VERSION
+        doc["metadata"]["managed_by"] = normalized_text(metadata.get("managed_by", "haxaml")) or "haxaml"
+        doc["metadata"]["created_at"] = normalized_text(metadata.get("created_at", doc["metadata"]["created_at"]))
+        doc["metadata"]["last_archived_at"] = normalized_text(metadata.get("last_archived_at", ""))
+        doc["metadata"]["archive_mode"] = normalized_text(metadata.get("archive_mode", "manual")).lower() or "manual"
 
         counts = metadata.get("counts", {})
         if isinstance(counts, dict):

@@ -18,47 +18,34 @@ def haxaml_init(directory: str = ".", detail: str = DETAIL_SHORT) -> dict:
     project_dir.mkdir(parents=True, exist_ok=True)
     haxaml_root = frame_dir(project_dir)
     haxaml_root.mkdir(parents=True, exist_ok=True)
+    created = write_missing_frame_files(project_dir)
+    created_rel = [path.relative_to(project_dir).as_posix() for path in created]
 
-    facts_p = frame_path(project_dir, "facts.yaml")
-    if facts_p.exists():
-        sync_result = sync_rules_governance_version(project_dir)
-        sync_message = ""
-        if sync_result.get("updated"):
-            from_version = sync_result.get("from") or "(empty)"
-            to_version = sync_result.get("to", "?")
-            sync_message = (
-                f"\n  ↻ Synced .haxaml/rules.yaml governance.version "
-                f"{from_version} → {to_version}"
-            )
+    if not created:
+        message = (
+            f"⚠ FRAME scaffold already exists at {haxaml_root}\n"
+            "  → haxaml_init only creates missing core FRAME files\n"
+            "  → Run haxaml_setup for onboarding or adoption"
+        )
         return _ok(
             "haxaml_init",
             {
-                "message": (
-                    f"⚠ facts.yaml already exists at {facts_p}. Use haxaml_validate to check it."
-                    f"{sync_message}"
-                ),
+                "message": message,
                 "project_dir": str(project_dir),
                 "created": False,
-                "rules_version_synced": bool(sync_result.get("updated")),
-                "rules_version_sync": sync_result,
+                "created_files": [],
             },
             detail=detail_mode,
         )
 
-    write_init_templates(project_dir)
-
-    stale = export_if_stale(str(project_dir), agents=["generic"])
-    re_export_msg = ""
-    if stale:
-        re_export_msg = f"\n  ↻ Auto-exported {len(stale)} agent file(s)"
-
     message = (
-        f"✓ Initialized FRAME at {haxaml_root}\n"
+        f"✓ Initialized FRAME scaffold at {haxaml_root}\n"
         f"  → .haxaml/facts.yaml — fill in project truth\n"
         f"  → .haxaml/rules.yaml — define agent rules\n"
         f"  → .haxaml/acts.yaml — diary starts here\n"
         f"  → .haxaml/expect.yaml — plan your runs\n"
-        f"  → Call haxaml_validate when ready{re_export_msg}"
+        f"  → Run haxaml_setup for onboarding or adoption\n"
+        f"  → Call haxaml_validate when ready"
     )
     return _ok(
         "haxaml_init",
@@ -66,7 +53,7 @@ def haxaml_init(directory: str = ".", detail: str = DETAIL_SHORT) -> dict:
             "message": message,
             "project_dir": str(project_dir),
             "created": True,
-            "auto_exported": stale,
+            "created_files": created_rel,
         },
         detail=detail_mode,
     )

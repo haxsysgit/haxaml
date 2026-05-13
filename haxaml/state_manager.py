@@ -7,7 +7,6 @@ import os
 import tempfile
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -21,54 +20,12 @@ from haxaml.acts_archive import (
     normalize_memory_policy,
 )
 from haxaml.paths import resolve_frame_file
+from haxaml.utils import clean_str_list, keywords_from_text, now_iso
 from haxaml.validator import load_yaml
 
 
 class StateError(Exception):
     """Raised when acts operations fail."""
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _clean_refs(items: Any) -> list[str]:
-    if not isinstance(items, list):
-        return []
-    cleaned: list[str] = []
-    seen = set()
-    for item in items:
-        text = str(item or "").strip()
-        if not text or text in seen:
-            continue
-        seen.add(text)
-        cleaned.append(text)
-    return cleaned
-
-
-def _keywords_from_text(*parts: Any, limit: int = 12) -> list[str]:
-    stop = {
-        "the", "and", "for", "with", "that", "this", "from", "into", "have", "will",
-        "when", "what", "where", "then", "than", "them", "they", "been", "were",
-        "your", "about", "after", "before", "only", "over", "under", "task", "tasks",
-        "work", "works", "working", "update", "updated", "using",
-    }
-    tokens: list[str] = []
-    seen = set()
-    for part in parts:
-        text = str(part or "").lower()
-        if not text:
-            continue
-        for raw in text.replace("/", " ").replace("-", " ").replace("_", " ").split():
-            token = "".join(ch for ch in raw if ch.isalnum())
-            if len(token) < 4 or token in stop or token in seen:
-                continue
-            seen.add(token)
-            tokens.append(token)
-            if len(tokens) >= limit:
-                return tokens
-    return tokens
-
 
 class StateManager:
     """Safe, disciplined acts.yaml manager."""
@@ -112,7 +69,7 @@ class StateManager:
             raise StateError(f"Invalid run result: {result}")
 
         run_id = f"run-{uuid.uuid4().hex[:8]}"
-        now = _now_iso()
+        now = now_iso()
         run_entry = {
             "id": run_id,
             "task": task,
@@ -121,10 +78,10 @@ class StateManager:
             "decisions": decisions,
             "risks": risks,
             "timestamp": now,
-            "file_refs": _clean_refs(file_refs or []),
-            "module_refs": _clean_refs(module_refs or []),
+            "file_refs": clean_str_list(file_refs or []),
+            "module_refs": clean_str_list(module_refs or []),
             "verification_id": str(verification_id or "").strip(),
-            "keywords": _clean_refs(keywords or []) or _keywords_from_text(task, changes, decisions, risks),
+            "keywords": clean_str_list(keywords or []) or keywords_from_text(task, changes, decisions, risks),
         }
 
         with self._lock(shared=False):
@@ -154,7 +111,7 @@ class StateManager:
                 "name": active["name"],
                 "result": result,
                 "summary": summary or active.get("description", ""),
-                "completed": _now_iso(),
+                "completed": now_iso(),
             }
 
             completed = state.get("completed_tasks", [])
@@ -173,7 +130,7 @@ class StateManager:
             state["active_task"] = {
                 "name": name,
                 "description": description,
-                "started": _now_iso(),
+                "started": now_iso(),
                 "assignee": assignee,
             }
             self._ensure_archive_state(state)
@@ -198,10 +155,10 @@ class StateManager:
                 {
                     "decision": decision,
                     "reasoning": reasoning,
-                    "date": _now_iso(),
+                    "date": now_iso(),
                     "reversible": reversible,
-                    "file_refs": _clean_refs(file_refs or []),
-                    "module_refs": _clean_refs(module_refs or []),
+                    "file_refs": clean_str_list(file_refs or []),
+                    "module_refs": clean_str_list(module_refs or []),
                 }
             )
             state["decisions"] = decisions
@@ -407,7 +364,7 @@ class StateManager:
         )
         self._ensure_archive_state(state, archive_mode=archive_mode, hot_limits=limits)
         archive_counts_total = self.archive.get_counts()
-        state["archive"]["last_archived_at"] = _now_iso()
+        state["archive"]["last_archived_at"] = now_iso()
         state["archive"]["archived_counts"] = archive_counts_total
         self._atomic_write(state)
 

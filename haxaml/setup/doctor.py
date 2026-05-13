@@ -5,10 +5,9 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-import yaml
-
 from haxaml.setup.planner import MANIFEST_PATH
 from haxaml.setup.writer import extract_managed_block
+from haxaml.yaml_utils import load_yaml
 
 
 def _hash(text: str) -> str:
@@ -19,7 +18,7 @@ def _load_manifest(project_dir: Path) -> dict[str, object] | None:
     path = project_dir / MANIFEST_PATH
     if not path.exists():
         return None
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return load_yaml(path)
 
 
 def run_setup_doctor(project_dir: str | Path) -> dict[str, object]:

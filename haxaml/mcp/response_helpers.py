@@ -207,12 +207,21 @@ def _compact_success(tool: str, payload: dict) -> dict:
         workflow = payload.get("recommended_workflow", {}) if isinstance(payload.get("recommended_workflow"), dict) else {}
         lifecycle = payload.get("lifecycle", {}) if isinstance(payload.get("lifecycle"), dict) else {}
         modes = payload.get("modes", {}) if isinstance(payload.get("modes"), dict) else {}
-        compact = {
-            "message": (
+        onboarding = payload.get("onboarding", {}) if isinstance(payload.get("onboarding"), dict) else {}
+        next_step = payload.get("next_step", lifecycle.get("preferred_next", "haxaml_guidance"))
+        if onboarding.get("recommended_tool") == "haxaml_setup":
+            message = (
+                "Haxaml is the governance layer. FRAME is present, but setup-managed onboarding is missing. "
+                "Run haxaml_setup, then continue with haxaml_guidance."
+            )
+        else:
+            message = (
                 "Haxaml is the governance layer. Use the lean flow: "
                 "about -> guidance -> prebuild -> context_pack -> verify -> record -> expect_sync. "
                 "Use utility mode for unrelated work. Next: haxaml_guidance."
-            ),
+            )
+        compact = {
+            "message": message,
             "about_version": payload.get("about_version", ""),
             "onboarding_prompt": payload.get("agent_prompt", {}).get("role", ""),
             "governed_mode": modes.get("governed", ""),
@@ -220,12 +229,13 @@ def _compact_success(tool: str, payload: dict) -> dict:
             "resume_rule": modes.get("resume_rule", ""),
             "lean_workflow": workflow.get("lean_default", []),
             "visibility_calls_optional": workflow.get("visibility_calls_optional", []),
-            "next_step": "haxaml_guidance",
+            "next_step": next_step,
+            "onboarding": onboarding,
             "lifecycle": {
                 "tool": lifecycle.get("tool", "haxaml_about"),
                 "phase": lifecycle.get("phase", "about"),
                 "depends_on": lifecycle.get("depends_on", []),
-                "preferred_next": lifecycle.get("preferred_next", "haxaml_guidance"),
+                "preferred_next": lifecycle.get("preferred_next", next_step),
             },
         }
         if "allowed_next" in lifecycle:
@@ -260,7 +270,6 @@ def _compact_success(tool: str, payload: dict) -> dict:
                 "gate_reasons",
                 "last_pack_tokens",
                 "last_context_window_usage",
-                "auto_exported",
                 "expect_sync_required",
             ],
         )

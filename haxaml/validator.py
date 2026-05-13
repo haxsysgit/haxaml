@@ -11,9 +11,14 @@ from jsonschema import Draft202012Validator
 
 from haxaml.acts_archive import ActsArchive, ArchiveError, archive_metadata, normalize_memory_policy
 from haxaml.lifecycle_state import expect_sync_state as _base_expect_sync_state
+from haxaml.utils import normalized_text
+from haxaml.yaml_utils import load_yaml as _load_yaml_file
 
 if TYPE_CHECKING:
     from haxaml.frame_model import FrameModel
+
+
+_normalized_text = normalized_text
 
 
 @dataclass
@@ -43,10 +48,6 @@ class ConsistencyFinding:
     message: str
     hint: str = ""
     paths: list[str] = field(default_factory=list)
-
-
-def _normalized_text(value: Any) -> str:
-    return str(value or "").strip()
 
 
 def _normalized_task_name(value: Any) -> str:
@@ -674,8 +675,7 @@ SCHEMA_DIR = Path(__file__).parent / "schemas"
 
 def load_yaml(path: str) -> dict:
     """Load a YAML file and return its contents."""
-    with open(path, "r") as f:
-        return yaml.safe_load(f) or {}
+    return _load_yaml_file(path)
 
 
 def load_schema(schema_name: str) -> dict:

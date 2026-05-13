@@ -23,6 +23,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -95,18 +96,12 @@ jobs:
 
       - name: Publish Haxaml to PyPI
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'core'
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: uv publish --token "$PYPI_TOKEN" dist/*
+        run: uv publish --trusted-publishing always dist/*
 
       - name: Publish Haxaml MCP launcher to PyPI
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'mcp'
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: uv publish --token "$PYPI_TOKEN" packages/haxaml-mcp/dist/*
+        run: uv publish --trusted-publishing always packages/haxaml-mcp/dist/*
 
       - name: Publish Haxaml UI to PyPI
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'ui'
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: uv publish --token "$PYPI_TOKEN" packages/haxaml-ui/dist/*
+        run: uv publish --trusted-publishing always packages/haxaml-ui/dist/*

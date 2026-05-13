@@ -213,7 +213,18 @@ class _ConflictBuilder:
 
 
 def reconcile_derivation(project_dir: str | Path) -> dict[str, Any]:
-    """Return deterministic derivation-boundary conflict report."""
+    """Return deterministic derivation-boundary conflict report.
+
+    Haxaml follows a 'Derived Boundary' architecture. While `map.yaml` serves as
+    the canonical Source of Truth for module boundaries and dependencies, other
+    FRAME files (like `facts.yaml` and `rules.yaml`) are allowed to 'derive' or
+    reference these boundaries to maintain local context.
+
+    Reconciliation is the process of detecting drift between these derivations.
+    If a module is renamed in the Map but still referenced by its old name in
+    a Rule, `reconcile_derivation` surfaces this as a blocking conflict to
+    ensure architectural integrity across the entire governance spine.
+    """
     project = Path(project_dir).resolve()
     assessment = evaluate_map_complexity(project)
     map_path = resolve_frame_file(project, "map.yaml")

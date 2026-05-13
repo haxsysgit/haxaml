@@ -12,7 +12,6 @@ import click
 
 from haxaml.setup.registry import SUPPORTED_TARGET_IDS
 from haxaml.state_manager import StateManager
-from haxaml.brain_builder import interactive_build
 from haxaml.benchmarks import format_benchmark_report
 from haxaml.paths import detect_project_root, frame_path, resolve_frame_file
 from haxaml.versioning import MCP_LAUNCHER_PACKAGE, PACKAGE_NAME, get_version, version_spec
@@ -95,36 +94,10 @@ def _setup_common_options(fn):
     fn = click.option("--dir", "project_dir", default=".", help="Project directory")(fn)
     fn = click.option("--scope", default="project", type=click.Choice(["project", "user"]), help="Write into the repo or the user home directory.")(fn)
     fn = click.option("--target", "target_id", default="auto", type=click.Choice(["auto", *SUPPORTED_TARGET_IDS]), help="Target agent/editor to onboard.")(fn)
-    fn = click.option("--adopt", default=None, help="Adopt an existing provider surface by id, or use `auto`.")(fn)
+    fn = click.option("--mode", default="auto", type=click.Choice(["auto", "fresh", "adopted"]), help="Auto-detect setup mode or force fresh/adopted behavior.")(fn)
     fn = click.option("--only", "only", multiple=True, help="Repeatable or comma-separated subset of: frame,instructions,skills,agents,mcp")(fn)
     fn = click.option("--format", "output_format", default="text", type=click.Choice(["text", "json"]), help="Output format.")(fn)
     return fn
-
-
-def _resolve_setup_choice(project_dir, scope, target_id, adopt, only, output_format):
-    from haxaml.setup import cli as setup_commands
-
-    assume_fresh = False
-    if adopt is None and scope == "project":
-        preview = setup_commands.setup_plan(
-            project_dir=project_dir,
-            scope=scope,
-            target=target_id,
-            adopt=adopt,
-            only=only,
-            output_format=output_format,
-        )
-        if preview.get("ok") and preview.get("data", {}).get("needs_adoption_confirmation"):
-            choice = click.prompt(
-                "Native instructions detected. Continue as fresh or adopted setup?",
-                type=click.Choice(["fresh", "adopted"]),
-                default="adopted",
-            )
-            if choice == "adopted":
-                adopt = "auto"
-            else:
-                assume_fresh = True
-    return adopt, assume_fresh
 
 
 @cli.command()
@@ -139,7 +112,7 @@ def init(directory):
 @_setup_common_options
 @click.option("--force", is_flag=True, help="Overwrite Haxaml-managed files and replace existing files when explicitly requested.")
 @click.option("--dry-run", is_flag=True, help="Plan writes without mutating files.")
-def setup(ctx, project_dir, scope, target_id, adopt, only, output_format, force, dry_run):
+def setup(ctx, project_dir, scope, target_id, mode, only, output_format, force, dry_run):
     """Install Haxaml into fresh or existing agent-native surfaces."""
     from haxaml.setup import cli as setup_commands
 
@@ -148,7 +121,7 @@ def setup(ctx, project_dir, scope, target_id, adopt, only, output_format, force,
             "project_dir": project_dir,
             "scope": scope,
             "target_id": target_id,
-            "adopt": adopt,
+            "mode": mode,
             "only": only,
             "output_format": output_format,
             "force": force,
@@ -156,36 +129,32 @@ def setup(ctx, project_dir, scope, target_id, adopt, only, output_format, force,
         }
         return
 
-    adopt, assume_fresh = _resolve_setup_choice(project_dir, scope, target_id, adopt, only, output_format)
     result = setup_commands.execute_setup(
         project_dir=project_dir,
         scope=scope,
         target=target_id,
-        adopt=adopt,
+        mode=mode,
         only=only,
         force=force,
         dry_run=dry_run,
         output_format=output_format,
-        assume_fresh=assume_fresh,
     )
     _echo_tool_result(result)
 
 
 @setup.command("print")
 @_setup_common_options
-def setup_print(project_dir, scope, target_id, adopt, only, output_format):
+def setup_print(project_dir, scope, target_id, mode, only, output_format):
     """Render the planned setup content without writing files."""
     from haxaml.setup import cli as setup_commands
 
-    adopt, assume_fresh = _resolve_setup_choice(project_dir, scope, target_id, adopt, only, output_format)
     result = setup_commands.print_plan(
         project_dir=project_dir,
         scope=scope,
         target=target_id,
-        adopt=adopt,
+        mode=mode,
         only=only,
         output_format=output_format,
-        assume_fresh=assume_fresh,
     )
     _echo_tool_result(result)
 
@@ -256,46 +225,6 @@ def upgrade(target_version, include_mcp, dry_run):
         sys.exit(1)
 
     click.echo("✓ Upgrade complete via fallback install flow.")
-
-
-@cli.command()
-@click.option("--output", default=".haxaml/facts.yaml", help="Output path for facts.yaml")
-def build(output):
-    """Interactively build a facts.yaml with guided questions."""
-    interactive_build(output_path=output)
-
-
-@cli.command()
-@click.argument("intent")
-@click.option("--output", default="facts.draft.yaml", help="Output path for draft facts")
-def derive(intent, output):
-    """Derive a draft facts.yaml from a natural language intent string."""
-    from haxaml.brain_builder import derive_facts_from_intent, write_facts
-    facts = derive_facts_from_intent(intent)
-    write_facts(facts, output)
-    click.echo(f"✓ Draft facts written to {output}")
-
-    unresolved = facts.get("unresolved", [])
-    blocking = [u for u in unresolved if u.get("blocking", False)]
-    if blocking:
-        click.echo(f"\n⚠ {len(blocking)} blocking item(s) need resolution:")
-        for u in blocking:
-            click.echo(f"  → {u['item']}: {u.get('reason', '')}")
-    click.echo(f"\nEdit the draft, then run `haxaml validate` to check it.")
-
-
-@cli.command(hidden=True)
-def adopt():
-    """Deprecated in favor of `haxaml setup --adopt ...`."""
-    click.echo("✗ `haxaml adopt` was replaced by `haxaml setup --adopt <provider|auto>`.")
-    sys.exit(1)
-
-
-@cli.command("adopt-plan", hidden=True)
-def adopt_plan():
-    """Deprecated in favor of `haxaml setup print --adopt ...`."""
-    click.echo("✗ `haxaml adopt-plan` was replaced by `haxaml setup print --adopt <provider|auto>`.")
-    sys.exit(1)
 
 
 @cli.command()
@@ -653,66 +582,6 @@ def export(
                 click.echo(diff)
     if _is_failure(result):
         sys.exit(1)
-
-
-@cli.command("mcp-bootstrap")
-@click.option("--dir", "project_dir", default=".", help="Project directory")
-@click.option(
-    "--editor",
-    "editors",
-    multiple=True,
-    type=click.Choice(["claude_code", "cursor", "copilot", "generic"]),
-    help="Target editor(s). Repeatable.",
-)
-@click.option("--mode", default="both", type=click.Choice(["snippets", "write", "both"]))
-@click.option("--uvx/--no-uvx", default=True, help="Prefer uvx launcher in config snippets.")
-@click.option("--overwrite", is_flag=True, help="Overwrite existing haxaml MCP server block.")
-def mcp_bootstrap(project_dir, editors, mode, uvx, overwrite):
-    """Generate/write MCP bootstrap config for common editors."""
-    result = _mcp_tools().haxaml_mcp_bootstrap(
-        project_dir=project_dir,
-        editors=list(editors) if editors else None,
-        mode=mode,
-        uvx=uvx,
-        overwrite=overwrite,
-    )
-    click.echo(_result_text(result))
-    if _is_failure(result):
-        sys.exit(1)
-
-
-@cli.command("install-hook")
-@click.option("--dir", "project_dir", default=".", help="Project directory")
-@click.option("--force", is_flag=True, help="Overwrite existing pre-commit hook")
-def install_hook(project_dir, force):
-    """Install a git pre-commit hook that auto-exports FRAME on commit."""
-    from haxaml.auto_export import install_git_hook
-    click.echo(install_git_hook(project_dir, force=force))
-
-
-@cli.command("uninstall-hook")
-@click.option("--dir", "project_dir", default=".", help="Project directory")
-def uninstall_hook(project_dir):
-    """Remove the Haxaml pre-commit hook."""
-    from haxaml.auto_export import uninstall_git_hook
-    click.echo(uninstall_git_hook(project_dir))
-
-
-@cli.command()
-@click.option("--dir", "project_dir", default=".", help="Project directory")
-@click.option("--interval", default=2.0, help="Poll interval in seconds")
-def watch(project_dir, interval):
-    """Watch .haxaml/ for changes and auto re-export agent files."""
-    from haxaml.auto_export import watch_and_export
-    click.echo(f"Watching {Path(project_dir).resolve() / '.haxaml'}/ for changes (Ctrl+C to stop)...")
-    try:
-        watch_and_export(
-            project_dir,
-            interval=interval,
-            callback=lambda paths: click.echo(f"Re-exported {len(paths)} file(s)"),
-        )
-    except KeyboardInterrupt:
-        click.echo("\nStopped.")
 
 
 @cli.command()

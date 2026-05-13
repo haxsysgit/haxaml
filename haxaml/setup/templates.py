@@ -1,8 +1,8 @@
-"""Shared FRAME scaffold templates for CLI and MCP init flows."""
+"""Canonical FRAME scaffold templates owned by setup."""
+
+from __future__ import annotations
 
 from pathlib import Path
-
-import yaml
 
 from haxaml.paths import frame_path
 from haxaml.versioning import get_version
@@ -283,77 +283,27 @@ open_questions: []
 """
 
 
-def write_init_templates(project_dir: Path) -> None:
-    """Write FRAME template files to .haxaml/ when they are missing."""
-    version = get_version()
-    templates = {
-        "facts.yaml": FACTS_TEMPLATE,
-        "rules.yaml": RULES_TEMPLATE.replace("__HAXAML_VERSION__", version),
+def render_frame_templates(*, mode: str | None = None, include_origin: bool = False) -> dict[str, str]:
+    """Return the canonical FRAME scaffold text."""
+    facts = FACTS_TEMPLATE.rstrip()
+    if include_origin and mode:
+        facts += f"\n\norigin:\n  mode: {mode}\n  managed_by: haxaml-setup\n"
+    return {
+        "facts.yaml": facts + "\n",
+        "rules.yaml": RULES_TEMPLATE.replace("__HAXAML_VERSION__", get_version()),
         "acts.yaml": ACTS_TEMPLATE,
         "expect.yaml": EXPECT_TEMPLATE,
     }
-    for filename, content in templates.items():
+
+
+def write_missing_frame_files(project_dir: Path, *, mode: str | None = None, include_origin: bool = False) -> list[Path]:
+    """Write missing FRAME scaffold files and return the created paths."""
+    created: list[Path] = []
+    for filename, content in render_frame_templates(mode=mode, include_origin=include_origin).items():
         path = frame_path(project_dir, filename)
-        if not path.exists():
-            path.write_text(content, encoding="utf-8")
-
-
-def sync_rules_governance_version(project_dir: Path) -> dict:
-    """Sync governance.version in .haxaml/rules.yaml to the current Haxaml version."""
-    rules_path = frame_path(project_dir, "rules.yaml")
-    target_version = get_version()
-    if not rules_path.exists():
-        return {
-            "updated": False,
-            "path": str(rules_path),
-            "reason": "missing",
-            "from": "",
-            "to": target_version,
-        }
-
-    try:
-        data = yaml.safe_load(rules_path.read_text(encoding="utf-8")) or {}
-    except Exception as exc:  # pragma: no cover - defensive parse guard
-        return {
-            "updated": False,
-            "path": str(rules_path),
-            "reason": "parse_error",
-            "from": "",
-            "to": target_version,
-            "error": str(exc),
-        }
-
-    if not isinstance(data, dict):
-        return {
-            "updated": False,
-            "path": str(rules_path),
-            "reason": "invalid_yaml_root",
-            "from": "",
-            "to": target_version,
-        }
-
-    governance = data.get("governance")
-    if not isinstance(governance, dict):
-        governance = {}
-        data["governance"] = governance
-
-    current_version = str(governance.get("version", "")).strip()
-    if current_version == target_version:
-        return {
-            "updated": False,
-            "path": str(rules_path),
-            "reason": "already_current",
-            "from": current_version,
-            "to": target_version,
-        }
-
-    governance["system"] = str(governance.get("system", "")).strip() or "haxaml"
-    governance["version"] = target_version
-    rules_path.write_text(yaml.dump(data, default_flow_style=False, sort_keys=False), encoding="utf-8")
-    return {
-        "updated": True,
-        "path": str(rules_path),
-        "reason": "updated",
-        "from": current_version,
-        "to": target_version,
-    }
+        if path.exists():
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        created.append(path)
+    return created

@@ -19,13 +19,6 @@ from haxaml.acts_archive import ActsArchive, ArchiveError, archive_metadata, def
 from haxaml.frame_model import FrameModel
 
 # Core haxaml imports shared across MCP modules.
-from haxaml.adoption import (
-    analyze_adoption_instructions,
-    render_adoption_report,
-    scan_native_sources,
-    write_adoption_scaffold,
-)
-from haxaml.auto_export import export_if_stale
 from haxaml.context import (
     build_context,
     build_context_hints,
@@ -44,7 +37,6 @@ from haxaml.export_engine import (
     export_to_file,
     list_agents,
 )
-from haxaml.init_templates import write_init_templates, sync_rules_governance_version
 from haxaml.map_policy import (
     evaluate_map_complexity,
     format_map_complexity_summary,
@@ -54,6 +46,7 @@ from haxaml.paths import frame_dir, frame_path, resolve_frame_file
 from haxaml.reconcile import reconcile_derivation
 from haxaml.runtime_cache import ContextPackSnapshot, runtime_cache
 from haxaml.runner import ExecutionRunner
+from haxaml.setup.templates import write_missing_frame_files
 from haxaml.state_manager import StateError, StateManager
 from haxaml.supervision import render_impact, render_needs
 from haxaml.validator import (
@@ -71,7 +64,6 @@ from haxaml.validator import (
 from haxaml.versioning import MCP_LAUNCHER_PACKAGE, PACKAGE_NAME, get_version, version_spec
 
 # Modularized MCP internals.
-from haxaml.mcp.adoption_helpers import _adoption_plan_payload
 from haxaml.mcp.app_core import (
     ABOUT_PROMPT_VERSION,
     DETAIL_FULL,

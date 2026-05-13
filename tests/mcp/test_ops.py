@@ -5,13 +5,11 @@ from unittest.mock import patch
 import yaml
 
 from haxaml.mcp_server import (
-    haxaml_adopt,
-    haxaml_adopt_plan,
     haxaml_export,
     haxaml_impact,
-    haxaml_mcp_bootstrap,
     haxaml_needs,
     haxaml_reconcile,
+    haxaml_setup,
     haxaml_state_compact,
     haxaml_state_show,
     haxaml_upgrade,
@@ -109,23 +107,41 @@ class TestExport:
         assert isinstance(result["data"]["diff"], str)
 
 
-class TestBootstrap:
-    def test_bootstrap_snippets_only(self, governed_project):
-        result = haxaml_mcp_bootstrap(str(governed_project), mode="snippets")
+class TestSetup:
+    def test_auto_fresh_setup_writes_managed_files(self, tmp_path):
+        result = haxaml_setup(project_dir=str(tmp_path))
         assert result["ok"] is True
-        assert "snippets" in result["data"]
-        assert result["data"]["writes"] == []
+        assert (tmp_path / ".haxaml" / "facts.yaml").exists()
+        assert (tmp_path / "AGENTS.md").exists()
+        assert (tmp_path / ".agents" / "skills" / "haxaml" / "SKILL.md").exists()
+        assert result["data"]["apply_result"]["created"]
 
-    def test_bootstrap_write_mode(self, governed_project):
-        result = haxaml_mcp_bootstrap(
-            str(governed_project),
-            editors=["generic"],
-            mode="write",
-        )
+    def test_auto_mode_adopts_existing_native_files(self, tmp_path):
+        (tmp_path / "CLAUDE.md").write_text("Existing Claude instructions.\n", encoding="utf-8")
+        result = haxaml_setup(project_dir=str(tmp_path))
         assert result["ok"] is True
-        statuses = [w["status"] for w in result["data"]["writes"]]
-        assert "written" in statuses or "skipped_exists" in statuses
-        assert (governed_project / ".mcp.json").exists()
+        assert (tmp_path / ".haxaml" / "adoption" / "adoption.yaml").exists()
+        assert (tmp_path / ".haxaml" / "setup" / "targets" / "claude.md").exists()
+        assert "HAXAML:MANAGED START" in (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
+
+    def test_fresh_mode_preserves_existing_native_files(self, tmp_path):
+        native = tmp_path / "CLAUDE.md"
+        native.write_text("Existing Claude instructions.\n", encoding="utf-8")
+        result = haxaml_setup(project_dir=str(tmp_path), mode="fresh")
+        assert result["ok"] is True
+        assert (tmp_path / ".haxaml" / "adoption" / "adoption.yaml").exists() is False
+        assert "HAXAML:MANAGED START" not in native.read_text(encoding="utf-8")
+
+    def test_user_scope_writes_only_home_surfaces(self, tmp_path, monkeypatch):
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+
+        result = haxaml_setup(project_dir=str(tmp_path), scope="user", target="codex")
+        assert result["ok"] is True
+        assert (tmp_path / ".haxaml").exists() is False
+        assert (home / ".codex" / "AGENTS.md").exists()
+        assert (home / ".codex" / "config.toml").exists()
 
 
 class TestUpgrade:
@@ -140,86 +156,6 @@ class TestUpgrade:
         result = haxaml_upgrade()
         assert result["ok"] is False
         assert result["error"]["code"] == "uv_not_found"
-
-
-class TestAdopt:
-    def test_dry_run(self, tmp_path):
-        (tmp_path / "CLAUDE.md").write_text("# Rules\nUse pytest.\n")
-        (tmp_path / "README.md").write_text("# Project\n")
-        result = haxaml_adopt(str(tmp_path), write=False)
-        text = _msg(result)
-        assert result["ok"] is True
-        assert "Dry run" in text
-        assert "CLAUDE.md" in text
-
-    def test_write(self, tmp_path):
-        (tmp_path / "CLAUDE.md").write_text("# Rules\nUse pytest.\n")
-        result = haxaml_adopt(str(tmp_path), write=True)
-        assert result["ok"] is True
-        assert "wrote" in _msg(result)
-        assert (tmp_path / ".haxaml" / "ADOPTION.md").exists()
-
-
-class TestAdoptPlan:
-    def test_returns_non_destructive_inventory(self, tmp_path):
-        (tmp_path / "CLAUDE.md").write_text("# Rules\nUse tests.\n")
-        (tmp_path / "README.md").write_text("# Project\n")
-        result = haxaml_adopt_plan(str(tmp_path))
-        assert result["ok"] is True
-        data = result["data"]
-        assert data["non_destructive"] is True
-        assert data["counts"]["native_files"] >= 1
-        assert "instruction_analysis" in data
-        assert data["instruction_analysis"]["counts"]["sources_scanned"] >= 1
-        assert "human_summary" in data
-        assert (tmp_path / ".haxaml").exists() is False
-
-    def test_reports_conflicts_and_duplicates_with_warnings(self, tmp_path):
-        (tmp_path / "CLAUDE.md").write_text(
-            "# Claude Rules\n- Always run tests before commit.\n",
-            encoding="utf-8",
-        )
-        (tmp_path / "AGENTS.md").write_text(
-            "# Codex Rules\n- Do not run tests before commit.\n",
-            encoding="utf-8",
-        )
-        (tmp_path / "README.md").write_text(
-            "# Project\n\n## Agent Instructions\n- Always run tests before commit.\n",
-            encoding="utf-8",
-        )
-
-        result = haxaml_adopt_plan(str(tmp_path))
-        assert result["ok"] is True
-        assert result["warnings"]
-
-        data = result["data"]
-        analysis = data["instruction_analysis"]
-        assert analysis["counts"]["conflicts"] >= 1
-        assert analysis["counts"]["duplicates"] >= 1
-        assert analysis["precedence_decision_required"] is True
-        assert analysis["counts"]["readme_sections_scanned"] >= 1
-        assert analysis["precedence_candidates"]
-
-        first_conflict = analysis["conflicts"][0]
-        assert first_conflict["severity"] == "warning"
-        assert first_conflict["category"] in ("precedence_conflict", "cross_source_rule_conflict")
-        assert first_conflict["requires_user_choice"] is True
-        assert first_conflict["recommended_next_action"] == "decide_authoritative_source_then_update_frame"
-        assert all("snippet" not in src["scope"].lower() for src in first_conflict["sources"])
-
-        first_duplicate = analysis["duplicates"][0]
-        assert first_duplicate["sources"]
-        assert all("snippet" not in src["scope"].lower() for src in first_duplicate["sources"])
-
-    def test_detects_cursor_rules_directory_files(self, tmp_path):
-        rules_dir = tmp_path / ".cursor" / "rules"
-        rules_dir.mkdir(parents=True)
-        (rules_dir / "policy.txt").write_text("- Always document changes.\n", encoding="utf-8")
-
-        result = haxaml_adopt_plan(str(tmp_path))
-        assert result["ok"] is True
-        paths = [item["path"] for item in result["data"]["native_files"]]
-        assert ".cursor/rules/policy.txt" in paths
 
 
 class TestReconcile:

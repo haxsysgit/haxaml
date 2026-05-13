@@ -1,6 +1,7 @@
 """MCP ops tools for Haxaml."""
 
 from haxaml.mcp.base import *
+from haxaml.setup.service import apply_setup, setup_data
 
 
 @mcp_app.tool()
@@ -227,119 +228,36 @@ def haxaml_upgrade(
 
 
 @mcp_app.tool()
-def haxaml_mcp_bootstrap(
+def haxaml_setup(
     project_dir: str = ".",
-    editors: Optional[list[str]] = None,
-    mode: str = "both",
-    uvx: bool = True,
-    overwrite: bool = False,
+    scope: str = "project",
+    target: str = "auto",
+    mode: str = "auto",
+    only: Optional[list[str]] = None,
+    force: bool = False,
     detail: str = DETAIL_SHORT,
 ) -> dict:
-    """Generate and optionally write MCP config snippets for common editors."""
-    detail_mode, detail_err = _normalize_detail("haxaml_mcp_bootstrap", detail)
+    """Install Haxaml onboarding into project or user-native agent surfaces."""
+    detail_mode, detail_err = _normalize_detail("haxaml_setup", detail)
     if detail_err:
         return detail_err
 
-    valid_modes = {"snippets", "write", "both"}
-    if mode not in valid_modes:
-        return _err(
-            "haxaml_mcp_bootstrap",
-            "invalid_mode",
-            f"mode must be one of: {', '.join(sorted(valid_modes))}",
+    try:
+        plan, apply_result = apply_setup(
+            project_dir=project_dir,
+            scope=scope,
+            target=target,
+            mode=mode,
+            only=only,
+            force=force,
         )
-
-    requested = editors or ["claude_code", "cursor", "copilot", "generic"]
-    supported = {"claude_code", "cursor", "copilot", "generic"}
-    unknown = [e for e in requested if e not in supported]
-    if unknown:
-        return _err(
-            "haxaml_mcp_bootstrap",
-            "unknown_editor",
-            "Unsupported editor requested.",
-            {"unknown_editors": unknown, "supported_editors": sorted(supported)},
-        )
-
-    project = Path(project_dir).resolve()
-    server_block = _mcp_server_config(str(project), uvx=uvx)
-    snippet = {"mcpServers": {"haxaml": server_block}}
-    snippets = {editor: snippet for editor in requested}
-    writes = []
-
-    if mode in {"write", "both"}:
-        targets = _editor_targets(project)
-        seen_paths = set()
-        for editor in requested:
-            target_path = targets.get(editor)
-            if target_path is None:
-                writes.append(
-                    {
-                        "editor": editor,
-                        "path": None,
-                        "status": "skipped_unknown_location",
-                        "message": "No safe project-local target path is defined for this editor.",
-                    }
-                )
-                continue
-            # Some editor aliases intentionally share the same project-local
-            # config file; only write it once per bootstrap run.
-            if str(target_path) in seen_paths:
-                writes.append(
-                    {
-                        "editor": editor,
-                        "path": str(target_path),
-                        "status": "skipped_duplicate_target",
-                        "message": "Target already handled for another requested editor.",
-                    }
-                )
-                continue
-            seen_paths.add(str(target_path))
-            status, message = _write_bootstrap_config(target_path, server_block, overwrite=overwrite)
-            writes.append(
-                {
-                    "editor": editor,
-                    "path": str(target_path),
-                    "status": status,
-                    "message": message,
-                }
-            )
-
-    message = "✓ MCP bootstrap prepared."
-    if mode in {"write", "both"}:
-        written_count = sum(1 for item in writes if item["status"] == "written")
-        message += f" Wrote {written_count} config file(s)."
+    except (KeyError, ValueError) as exc:
+        return _err("haxaml_setup", "invalid_setup_args", str(exc))
 
     return _ok(
-        "haxaml_mcp_bootstrap",
-        {
-            "message": message,
-            "project_dir": str(project),
-            "mode": mode,
-            "snippets": snippets if mode in {"snippets", "both"} else {},
-            "writes": writes,
-            "next_steps": [
-                "Use `/mcp show` (or equivalent) in your client to verify server visibility.",
-                "For Copilot CLI global setup, see ~/.copilot/mcp-config.json docs path.",
-            ],
-        },
-        detail=detail_mode,
-    )
-
-
-@mcp_app.tool()
-def haxaml_adopt_plan(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict:
-    """Inventory native instruction files and return non-destructive adoption plan."""
-    detail_mode, detail_err = _normalize_detail("haxaml_adopt_plan", detail)
-    if detail_err:
-        return detail_err
-
-    payload, warnings = _adoption_plan_payload(project_dir)
-    return _ok(
-        "haxaml_adopt_plan",
-        {
-            "message": payload["human_summary"],
-            **payload,
-        },
-        warnings=warnings,
+        "haxaml_setup",
+        setup_data(plan, apply_result=apply_result),
+        warnings=plan.warnings,
         detail=detail_mode,
     )
 
@@ -369,87 +287,6 @@ def haxaml_reconcile(project_dir: str = ".", detail: str = DETAIL_SHORT) -> dict
             "message": report["human_summary"],
             **report,
         },
-        detail=detail_mode,
-    )
-
-
-@mcp_app.tool()
-def haxaml_adopt(
-    project_dir: str = ".",
-    write: bool = False,
-    force: bool = False,
-    detail: str = DETAIL_SHORT,
-) -> dict:
-    """Adopt an existing project into FRAME governance.
-
-    Scans for native agent files (CLAUDE.md, AGENTS.md, .cursor/rules/, etc.)
-    and repository context (README, package.json, etc.).
-
-    With write=False (default): shows the adoption report (dry run).
-    With write=True: creates .haxaml/ADOPTION.md and scaffold FRAME files.
-    """
-    detail_mode, detail_err = _normalize_detail("haxaml_adopt", detail)
-    if detail_err:
-        return detail_err
-
-    plan = scan_native_sources(project_dir)
-    plan_payload, plan_warnings = _adoption_plan_payload(project_dir, plan=plan)
-
-    if not write:
-        report = render_adoption_report(plan)
-        return _ok(
-            "haxaml_adopt",
-            {
-                "message": f"{report}\n---\nDry run. Call with write=True to create files.",
-                "written": [],
-                "dry_run": True,
-                "adoption_plan": plan_payload,
-            },
-            warnings=[
-                "Prefer haxaml_adopt_plan for non-destructive inventory and migration planning.",
-                *plan_warnings,
-            ],
-            detail=detail_mode,
-        )
-
-    written = write_adoption_scaffold(plan, force=force)
-    if written:
-        lines = []
-        for path in written:
-            lines.append(f"✓ wrote {path.relative_to(plan.project_dir)}")
-        if plan.existing_frame_files and not force:
-            lines.append(f"Preserved existing: {', '.join(plan.existing_frame_files)}")
-        lines.append(
-            "Next: fill in scaffold unknowns with real project facts, "
-            "then call haxaml_validate"
-        )
-        return _ok(
-            "haxaml_adopt",
-            {
-                "message": "\n".join(lines),
-                "written": [str(path.relative_to(plan.project_dir)) for path in written],
-                "dry_run": False,
-                "adoption_plan": plan_payload,
-            },
-            warnings=[
-                "Use haxaml_reconcile after edits to detect map-canonical derivation conflicts.",
-                *plan_warnings,
-            ],
-            detail=detail_mode,
-        )
-
-    return _ok(
-        "haxaml_adopt",
-        {
-            "message": "No files written. Existing files preserved. Use force=True to overwrite.",
-            "written": [],
-            "dry_run": False,
-            "adoption_plan": plan_payload,
-        },
-        warnings=[
-            "Use haxaml_adopt_plan for non-destructive planning before forceful writes.",
-            *plan_warnings,
-        ],
         detail=detail_mode,
     )
 

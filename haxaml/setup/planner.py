@@ -7,10 +7,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from haxaml.init_templates import ACTS_TEMPLATE, EXPECT_TEMPLATE, FACTS_TEMPLATE, RULES_TEMPLATE
-from haxaml.setup.adoption import build_adoption_inventory
+from haxaml.setup.adoption import build_adoption_inventory, detect_target_files
 from haxaml.setup.registry import Surface, TargetSpec, get_target, list_targets
 from haxaml.setup.renderer import (
     RenderedArtifact,
@@ -21,7 +18,9 @@ from haxaml.setup.renderer import (
     render_sidecar,
     render_skill,
 )
+from haxaml.setup.templates import render_frame_templates
 from haxaml.versioning import get_version
+from haxaml.yaml_utils import dump_yaml
 
 
 FRAME_KINDS = ("frame", "instructions", "skills", "agents", "mcp")
@@ -90,7 +89,6 @@ class SetupPlan:
     manual_actions: list[ManualAction] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     adoption_state: dict[str, object] | None = None
-    needs_adoption_confirmation: bool = False
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -104,7 +102,6 @@ class SetupPlan:
             "manual_actions": [item.to_dict() for item in self.manual_actions],
             "warnings": self.warnings,
             "adoption_state": self.adoption_state,
-            "needs_adoption_confirmation": self.needs_adoption_confirmation,
         }
 
 
@@ -122,17 +119,6 @@ def parse_only_values(values: tuple[str, ...] | list[str] | None) -> set[str]:
                 raise ValueError(f"Unknown setup kind '{chunk}'. Supported values: {supported}")
             selected.add(chunk)
     return selected or set(FRAME_KINDS)
-
-
-def _render_frame_templates(mode: str) -> dict[str, str]:
-    facts = FACTS_TEMPLATE.rstrip() + f"\n\norigin:\n  mode: {mode}\n  managed_by: haxaml-setup\n"
-    rules = RULES_TEMPLATE.replace("__HAXAML_VERSION__", get_version())
-    return {
-        "facts.yaml": facts,
-        "rules.yaml": rules,
-        "acts.yaml": ACTS_TEMPLATE,
-        "expect.yaml": EXPECT_TEMPLATE,
-    }
 
 
 def _artifact_from_text(text: str) -> RenderedArtifact:
@@ -210,25 +196,37 @@ def build_setup_plan(
     project_dir: str | Path,
     scope: str = "project",
     target: str = "auto",
-    adopt: str | None = None,
+    mode: str = "auto",
     only: tuple[str, ...] | list[str] | None = None,
-    assume_fresh: bool = False,
 ) -> SetupPlan:
     root = Path(project_dir).resolve()
     kinds = parse_only_values(only)
     adoption_inventory = build_adoption_inventory(root) if scope == "project" else None
     detected = list(adoption_inventory.detected_targets) if adoption_inventory else []
-    mode = "adopted" if adopt else "fresh"
-    needs_confirmation = bool(scope == "project" and detected and adopt is None and not assume_fresh)
-    if needs_confirmation:
-        mode = "fresh"
-    elif scope == "project" and detected and adopt == "auto":
-        mode = "adopted"
+    normalized_mode = str(mode or "auto").strip().lower()
+    if normalized_mode not in {"auto", "fresh", "adopted"}:
+        raise ValueError("mode must be one of: auto, fresh, adopted")
 
-    selected_targets = _select_targets(target, mode, detected)
-    if adopt and adopt not in {"auto"}:
-        selected_targets = [adopt]
-        mode = "adopted"
+    if scope == "user" and normalized_mode == "adopted":
+        raise ValueError("Adopted mode is only supported for project scope.")
+
+    if normalized_mode == "auto":
+        resolved_mode = "adopted" if scope == "project" and detected else "fresh"
+    else:
+        resolved_mode = normalized_mode
+
+    if resolved_mode == "adopted" and scope == "project":
+        if target == "auto":
+            if not detected:
+                raise ValueError("No native instruction files detected for adopted mode.")
+        else:
+            target_spec = get_target(target)
+            if not detect_target_files(root, target_spec):
+                raise ValueError(
+                    f"Adopted mode requires an existing native {target_spec.display_name} surface in the project."
+                )
+
+    selected_targets = _select_targets(target, resolved_mode, detected)
 
     if target != "auto" and target not in {item.target_id for item in list_targets()}:
         get_target(target)
@@ -238,22 +236,16 @@ def build_setup_plan(
     plan = SetupPlan(
         project_dir=root,
         scope=scope,
-        mode=mode,
+        mode=resolved_mode,
         requested_target=target,
         selected_targets=selected_targets,
         detected_targets=detected,
-        needs_adoption_confirmation=needs_confirmation,
     )
-    if needs_confirmation:
-        plan.warnings.append(
-            "Native instruction files were detected. Choose fresh mode or rerun with --adopt auto or --adopt <provider>."
-        )
-        return plan
 
     files: dict[str, PlannedFile] = {}
 
     if scope == "project" and "frame" in kinds:
-        for filename, content in _render_frame_templates(mode).items():
+        for filename, content in render_frame_templates(mode=resolved_mode, include_origin=True).items():
             path = root / ".haxaml" / filename
             docs = "https://github.com/haxsysgit/haxaml/blob/main/learn/FRAME.md"
             _add_file(
@@ -462,7 +454,7 @@ def build_setup_plan(
             target="haxaml",
             kind="frame",
             path=root / MANIFEST_PATH,
-            artifact=_artifact_from_text(yaml.safe_dump(manifest, sort_keys=False, allow_unicode=False)),
+            artifact=_artifact_from_text(dump_yaml(manifest, sort_keys=False)),
             management="file",
             docs_url="https://github.com/haxsysgit/haxaml/blob/main/0.7.x_Roadmap.md",
             note="Setup manifest for doctor and drift checks.",

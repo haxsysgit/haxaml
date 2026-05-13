@@ -121,7 +121,7 @@ def test_setup_adopt_auto_preserves_native_files_and_writes_adoption_state():
         with open("README.md", "w") as f:
             f.write("# Existing Project\n")
 
-        result = runner.invoke(cli, ["setup", "--adopt", "auto"])
+        result = runner.invoke(cli, ["setup"])
 
         assert result.exit_code == 0, result.output
         assert os.path.exists(".haxaml/adoption/adoption.yaml")
@@ -151,14 +151,14 @@ def test_setup_adopt_auto_preserves_native_files_and_writes_adoption_state():
         assert "Managed Sidecars" in report
 
 
-def test_setup_prompt_can_choose_fresh_without_touching_existing_native_files():
+def test_setup_fresh_mode_preserves_existing_native_files():
     runner = CliRunner()
 
     with runner.isolated_filesystem():
         with open("CLAUDE.md", "w") as f:
             f.write("Existing Claude instructions.\n")
 
-        result = runner.invoke(cli, ["setup"], input="fresh\n")
+        result = runner.invoke(cli, ["setup", "--mode", "fresh"])
 
         assert result.exit_code == 0, result.output
         assert os.path.exists(".haxaml/adoption/adoption.yaml") is False
@@ -201,20 +201,18 @@ def test_setup_doctor_reports_missing_managed_file():
         assert ".agents/skills/haxaml/SKILL.md" in doctor.output
 
 
-def test_init_auto_reexports_agent_files():
+def test_init_does_not_export_agent_files():
     runner = CliRunner()
 
     with runner.isolated_filesystem():
         result = runner.invoke(cli, ["init", "."])
         assert result.exit_code == 0, result.output
-        assert "↻ Auto-exported" in result.output
-        assert os.path.exists("HAXAML.md")
+        assert "Run haxaml_setup for onboarding or adoption" in result.output
+        assert not os.path.exists("HAXAML.md")
         assert not os.path.exists("CLAUDE.md")
         assert not os.path.exists("AGENTS.md")
         assert not os.path.exists("GEMINI.md")
-        assert runner.invoke(cli, ["export", "--quiet"]).exit_code == 0
         assert runner.invoke(cli, ["validate", "--dir", "."]).exit_code == 0
-        assert runner.invoke(cli, ["export", "--all", "--quiet"]).output == ""
 
 
 def test_cli_needs_and_impact_commands():
@@ -402,18 +400,6 @@ def test_upgrade_dry_run_prints_uv_command():
         assert "uv tool upgrade haxaml==1.2.3 haxaml-mcp==1.2.3" in result.output
 
 
-def test_mcp_bootstrap_write_creates_project_config():
-    runner = CliRunner()
-
-    with runner.isolated_filesystem():
-        result = runner.invoke(
-            cli,
-            ["mcp-bootstrap", "--mode", "write", "--editor", "generic"],
-        )
-        assert result.exit_code == 0, result.output
-        assert os.path.exists(".mcp.json")
-
-
 def test_cli_about_and_workflow_benchmark_mode():
     runner = CliRunner()
 
@@ -424,7 +410,7 @@ def test_cli_about_and_workflow_benchmark_mode():
         about = runner.invoke(cli, ["about", "--dir", "."])
         assert about.exit_code == 0, about.output
         assert "Haxaml is the governance layer." in about.output
-        assert "Next: haxaml_guidance." in about.output
+        assert "Run haxaml_setup" in about.output
 
         benchmark = runner.invoke(cli, ["benchmark", "--mode", "workflow", "--dir", "."])
         assert benchmark.exit_code == 0, benchmark.output
@@ -462,3 +448,12 @@ def test_cli_prebuild_command_invokes_mcp_tool(monkeypatch):
         "description": "Tighten token flow",
         "project_dir": ".",
     }
+
+
+def test_legacy_cli_authoring_and_auto_export_commands_are_removed():
+    runner = CliRunner()
+
+    for command in ("build", "derive", "install-hook", "uninstall-hook", "watch"):
+        result = runner.invoke(cli, [command])
+        assert result.exit_code != 0
+        assert "No such command" in result.output

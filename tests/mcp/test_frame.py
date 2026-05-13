@@ -4,6 +4,7 @@ import subprocess
 import yaml
 
 from haxaml.mcp_server import (
+    haxaml_about,
     haxaml_context_pack,
     haxaml_doctor,
     haxaml_guidance,
@@ -12,7 +13,6 @@ from haxaml.mcp_server import (
     haxaml_prebuild,
     haxaml_validate,
 )
-from haxaml.versioning import get_version
 
 from .helpers import msg as _msg
 
@@ -44,19 +44,17 @@ class TestInit:
         assert result["ok"] is True
         assert "already exists" in _msg(result)
 
-    def test_syncs_rules_governance_version_for_existing_project(self, fresh_project):
-        rules_path = fresh_project / ".haxaml" / "rules.yaml"
-        rules = yaml.safe_load(rules_path.read_text())
-        rules["governance"]["version"] = "0.0.1"
-        rules_path.write_text(yaml.dump(rules, default_flow_style=False, sort_keys=False))
-
-        result = haxaml_init(str(fresh_project))
+    def test_does_not_export_agent_files(self, tmp_path):
+        result = haxaml_init(str(tmp_path))
         assert result["ok"] is True
-        assert "already exists" in _msg(result)
-        assert "Synced .haxaml/rules.yaml governance.version" in _msg(result)
+        assert (tmp_path / "HAXAML.md").exists() is False
+        assert (tmp_path / "AGENTS.md").exists() is False
 
-        synced = yaml.safe_load(rules_path.read_text())
-        assert synced["governance"]["version"] == get_version()
+    def test_about_recommends_setup_after_minimal_init(self, fresh_project):
+        result = haxaml_about(str(fresh_project))
+        assert result["ok"] is True
+        assert result["data"]["next_step"] == "haxaml_setup"
+        assert result["data"]["onboarding"]["status"] == "frame_only"
 
     def test_scaffolds_validate(self, fresh_project):
         result = haxaml_validate(str(fresh_project))

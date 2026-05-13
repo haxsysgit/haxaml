@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Compact operator reference for the supported Haxaml MCP surface in `0.6.7`.
+Compact operator reference for the supported Haxaml MCP surface in `0.7.1`.
 
 ## Stable Contracts
 
@@ -14,6 +14,7 @@ Compact operator reference for the supported Haxaml MCP surface in `0.6.7`.
 ### Frame Tools
 
 - `haxaml_init`
+- `haxaml_setup`
 - `haxaml_validate`
 - `haxaml_health`
 - `haxaml_doctor`
@@ -33,9 +34,6 @@ Compact operator reference for the supported Haxaml MCP surface in `0.6.7`.
 
 - `haxaml_export`
 - `haxaml_upgrade`
-- `haxaml_mcp_bootstrap`
-- `haxaml_adopt_plan`
-- `haxaml_adopt`
 - `haxaml_reconcile`
 - `haxaml_needs`
 - `haxaml_impact`
@@ -69,6 +67,8 @@ Use visibility and repair tools such as `haxaml_health`, `haxaml_needs`, and `ha
 
 ## Contract Notes
 
+- `haxaml_setup` is the only MCP onboarding tool. It applies changes; it does not have a separate dry-run/bootstrap surface.
+- `haxaml_init` is a minimal FRAME scaffold helper. It does not export or adopt agent-native files.
 - Out-of-order governed calls fail with `lifecycle_contract_violation`.
 - `haxaml_prebuild` is the only public governed session-entry tool.
 - `session_id` is required for governed `context_pack`, `context_fetch`, `session_verify`, and `session_record`.
@@ -87,4 +87,4 @@ Use visibility and repair tools such as `haxaml_health`, `haxaml_needs`, and `ha
 
 `haxaml_context_fetch` exists so the agent can ask for more governed memory later without rerunning the whole first-pass context step. That keeps the default path lean while still allowing archive-backed follow-up retrieval.
 
-In `0.6.7`, repeated `context_pack` calls also use runtime snapshots keyed by `(project_dir, session_id)` so unchanged governed sections can stay out of the second payload.
+In `0.7.1`, repeated `context_pack` calls also use runtime snapshots keyed by `(project_dir, session_id)` so unchanged governed sections can stay out of the second payload.
