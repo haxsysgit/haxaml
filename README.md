@@ -4,11 +4,21 @@
 
 **Force Agents to Plan. Record the Acts. Build the End from the Beginning.**
 
+## Why Haxaml
+
+### The Problem
+
 I started Haxaml because I noticed a recurring pattern: AI agents are builders who skip the blueprints. They read a few chunks of code, make a guess about the intent, and head straight for implementation. This improvisation is where the real failures begin. Most coding issues do not happen because the model is limited; they happen because the agent is working in a vacuum without understanding the project, the rules, or the criteria for being "done."
 
-This project is my attempt to fix that. Haxaml is essentially an agent diary and a workflow protocol. It is built on a simple rule: no planning, no building.
+### The Rule
+
+This project is my attempt to fix that. Haxaml is essentially an agent diary and a workflow protocol. It is built on a simple rule: **no planning, no building.**
+
+### The Model
 
 It uses a model I call **FRAME** to split project understanding into five parts: Facts, Rules, Acts, Map, and Expect. Instead of letting an agent guess, I give them a notebook that they are required to fill out. If they skip a step or ignore a project rule, the contract breaks.
+
+### The Handoff
 
 The goal is to move the "brain" of the project out of the AI provider's temporary memory and into the repository itself. When you switch between Claude Code, Cursor, Windsurf, or any other tool, the next agent should be able to read the "Diary" (the Acts) and continue exactly where the last one left off without re-reading the whole codebase.
 
