@@ -222,18 +222,84 @@ def test_workflow_check_strict_fails_when_required_file_is_missing():
         assert ".cursor/environment.json" in check.output
 
 
-def test_setup_doctor_reports_missing_workflow_file():
+def test_setup_doctor_reports_claude_hook_labels_for_missing_and_drift():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        setup_result = runner.invoke(cli, ["setup", "--target", "claude", "--with-workflow"])
+        assert setup_result.exit_code == 0, setup_result.output
+
+        os.remove(".haxaml/setup/workflows/claude/check.sh")
+        with open(".claude/settings.json", "w") as f:
+            f.write("{}\n")
+        doctor = runner.invoke(cli, ["setup", "doctor"])
+
+        assert doctor.exit_code == 0, doctor.output
+        assert ".haxaml/setup/workflows/claude/check.sh" in doctor.output
+        assert "Claude hook script" in doctor.output
+        assert ".claude/settings.json" in doctor.output
+        assert "Claude hook config" in doctor.output
+        assert "content drift" in doctor.output
+
+
+def test_setup_doctor_reports_cursor_background_environment_wording():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        setup_result = runner.invoke(cli, ["setup", "--target", "cursor", "--with-workflow"])
+        assert setup_result.exit_code == 0, setup_result.output
+
+        os.remove(".cursor/environment.json")
+        doctor = runner.invoke(cli, ["setup", "doctor"])
+
+        assert doctor.exit_code == 0, doctor.output
+        assert ".cursor/environment.json" in doctor.output
+        assert "Cursor background environment" in doctor.output
+
+
+def test_setup_doctor_reports_copilot_custom_agent_wording():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        setup_result = runner.invoke(cli, ["setup", "--target", "copilot", "--with-workflow"])
+        assert setup_result.exit_code == 0, setup_result.output
+
+        os.remove(".github/agents/haxaml-governor.md")
+        doctor = runner.invoke(cli, ["setup", "doctor"])
+
+        assert doctor.exit_code == 0, doctor.output
+        assert ".github/agents/haxaml-governor.md" in doctor.output
+        assert "Copilot custom agent" in doctor.output
+
+
+def test_setup_doctor_reports_workflow_adapter_file_wording():
     runner = CliRunner()
 
     with runner.isolated_filesystem():
         setup_result = runner.invoke(cli, ["setup", "--target", "gemini", "--with-workflow"])
         assert setup_result.exit_code == 0, setup_result.output
 
-        os.remove(".haxaml/setup/workflows/gemini/run-local.sh")
+        os.remove(".haxaml/setup/workflows/gemini/README.md")
         doctor = runner.invoke(cli, ["setup", "doctor"])
 
         assert doctor.exit_code == 0, doctor.output
-        assert ".haxaml/setup/workflows/gemini/run-local.sh" in doctor.output
+        assert ".haxaml/setup/workflows/gemini/README.md" in doctor.output
+        assert "Gemini adapter file" in doctor.output
+
+
+def test_setup_doctor_keeps_opencode_manual_follow_up_advisory():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        setup_result = runner.invoke(cli, ["setup", "--target", "opencode", "--with-workflow"])
+        assert setup_result.exit_code == 0, setup_result.output
+
+        doctor = runner.invoke(cli, ["setup", "doctor"])
+
+        assert doctor.exit_code == 0, doctor.output
+        assert "Manual Actions:" in doctor.output
+        assert "OpenCode workflow MCP/config entrypoint" in doctor.output
+        assert "enable the workflow agent's MCP/tool access" in doctor.output
 
 
 def test_setup_fresh_mode_preserves_existing_native_files():
@@ -284,6 +350,49 @@ def test_setup_doctor_reports_missing_managed_file():
         assert doctor.exit_code == 0, doctor.output
         assert "Missing:" in doctor.output
         assert ".agents/skills/haxaml/SKILL.md" in doctor.output
+
+
+def test_setup_doctor_plain_install_keeps_non_workflow_behavior_and_exit_zero():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        setup_result = runner.invoke(cli, ["setup"])
+        assert setup_result.exit_code == 0, setup_result.output
+
+        doctor = runner.invoke(cli, ["setup", "doctor"])
+
+        assert doctor.exit_code == 0, doctor.output
+        assert ".agents/skills/haxaml/SKILL.md" in doctor.output
+        assert "workflow" not in doctor.output.lower()
+
+
+def test_setup_doctor_json_preserves_top_level_shape_and_workflow_metadata():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        setup_result = runner.invoke(cli, ["setup", "--target", "claude", "--with-workflow"])
+        assert setup_result.exit_code == 0, setup_result.output
+
+        os.remove(".haxaml/setup/workflows/claude/check.sh")
+        doctor = runner.invoke(cli, ["setup", "doctor", "--format", "json"])
+
+        assert doctor.exit_code == 0, doctor.output
+        report = json.loads(doctor.output)
+        assert set(report) == {"installed", "missing", "drifted", "manual_actions", "message"}
+
+        missing_item = next(item for item in report["missing"] if item["path"] == ".haxaml/setup/workflows/claude/check.sh")
+        assert missing_item["category"] == "workflow"
+        assert missing_item["label"] == "Claude hook script"
+        assert "setup --target claude --with-workflow --force" in missing_item["repair_hint"]
+
+        installed_workflow = next(item for item in report["installed"] if item["path"] == ".claude/settings.json")
+        assert installed_workflow["category"] == "workflow"
+        assert installed_workflow["label"] == "Claude hook config"
+
+        installed_setup = next(item for item in report["installed"] if item["path"] == ".agents/skills/haxaml/SKILL.md")
+        assert installed_setup["category"] == "setup"
+        assert "label" not in installed_setup
+        assert "repair_hint" not in installed_setup
 
 
 def test_init_does_not_export_agent_files():

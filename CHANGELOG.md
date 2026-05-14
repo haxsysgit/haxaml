@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3 - 2026-05-14
+
+- Kept `haxaml setup doctor` as the single advisory audit entrypoint while teaching it provider-aware workflow labels for adapter files, hook scripts, hook config, local runners, CI runners, background environments, custom agents, and workflow MCP/config entrypoints.
+- Enriched doctor JSON records with workflow metadata (`category`, `label`, `repair_hint`) without changing the top-level report keys or exit behavior.
+- Kept workflow doctor scope limited to the workflow-capable targets shipped in `0.7.2`, with OpenCode manual follow-up remaining advisory and `workflow check` remaining the stricter readiness path.
+
 ## 0.7.2 - 2026-05-14
 
 - Added provider workflow depth for Claude, GitHub Copilot, Cursor, OpenCode, and Junie on top of the `0.7.x` workflow accommodation foundation.

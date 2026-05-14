@@ -31,10 +31,20 @@ class WorkflowFileSpec:
     path: str
     docs_url: str
     template: str
+    audit_role: str
     required: bool = True
     is_workflow_entrypoint: bool = False
     context: str = "entry"
     note: str = ""
+
+
+@dataclass(frozen=True)
+class WorkflowManualActionSpec:
+    """One advisory follow-up that setup cannot safely automate."""
+
+    reason: str
+    audit_role: str
+    repair_hint: str = ""
 
 
 @dataclass(frozen=True)
@@ -54,9 +64,10 @@ class WorkflowTargetSpec:
 
     target_id: str
     display_name: str
+    audit_name: str
     docs_urls: tuple[str, ...]
     files: tuple[WorkflowFileSpec, ...]
-    manual_actions: tuple[str, ...] = ()
+    manual_actions: tuple[WorkflowManualActionSpec, ...] = ()
     supported_contexts: tuple[str, ...] = SUPPORTED_WORKFLOW_CONTEXTS
 
 
@@ -80,89 +91,179 @@ WORKFLOW_TARGETS: tuple[WorkflowTargetSpec, ...] = (
     WorkflowTargetSpec(
         target_id="claude",
         display_name="Claude Code",
+        audit_name="Claude",
         docs_urls=(
             "https://code.claude.com/docs/en/hooks",
             "https://code.claude.com/docs/en/settings",
         ),
         files=(
-            WorkflowFileSpec(_workflow_readme("claude"), "https://code.claude.com/docs/en/hooks", "readme"),
-            WorkflowFileSpec(_script_path("claude", "check.sh"), "https://code.claude.com/docs/en/hooks", "hook_script", context="hook"),
-            WorkflowFileSpec(".claude/settings.json", "https://code.claude.com/docs/en/settings", "claude_settings", is_workflow_entrypoint=True),
+            WorkflowFileSpec(_workflow_readme("claude"), "https://code.claude.com/docs/en/hooks", "readme", "adapter file"),
+            WorkflowFileSpec(
+                _script_path("claude", "check.sh"),
+                "https://code.claude.com/docs/en/hooks",
+                "hook_script",
+                "hook script",
+                context="hook",
+            ),
+            WorkflowFileSpec(
+                ".claude/settings.json",
+                "https://code.claude.com/docs/en/settings",
+                "claude_settings",
+                "hook config",
+                is_workflow_entrypoint=True,
+            ),
         ),
     ),
     WorkflowTargetSpec(
         target_id="codex",
         display_name="OpenAI Codex",
+        audit_name="Codex",
         docs_urls=(
             "https://developers.openai.com/codex/noninteractive",
             "https://developers.openai.com/codex/github-action",
         ),
         files=(
-            WorkflowFileSpec(_workflow_readme("codex"), "https://developers.openai.com/codex/noninteractive", "readme"),
-            WorkflowFileSpec(_script_path("codex", "run-local.sh"), "https://developers.openai.com/codex/noninteractive", "runner_script", context="entry"),
-            WorkflowFileSpec(_script_path("codex", "run-ci.sh"), "https://developers.openai.com/codex/github-action", "runner_script", context="ci"),
+            WorkflowFileSpec(_workflow_readme("codex"), "https://developers.openai.com/codex/noninteractive", "readme", "adapter file"),
+            WorkflowFileSpec(
+                _script_path("codex", "run-local.sh"),
+                "https://developers.openai.com/codex/noninteractive",
+                "runner_script",
+                "local runner",
+                context="entry",
+            ),
+            WorkflowFileSpec(
+                _script_path("codex", "run-ci.sh"),
+                "https://developers.openai.com/codex/github-action",
+                "runner_script",
+                "CI runner",
+                context="ci",
+            ),
         ),
     ),
     WorkflowTargetSpec(
         target_id="gemini",
         display_name="Gemini CLI",
+        audit_name="Gemini",
         docs_urls=(
             "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md",
             "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/settings.md",
         ),
         files=(
-            WorkflowFileSpec(_workflow_readme("gemini"), "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md", "readme"),
-            WorkflowFileSpec(_script_path("gemini", "run-local.sh"), "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md", "runner_script", context="entry"),
-            WorkflowFileSpec(_script_path("gemini", "run-ci.sh"), "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md", "runner_script", context="ci"),
+            WorkflowFileSpec(
+                _workflow_readme("gemini"),
+                "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md",
+                "readme",
+                "adapter file",
+            ),
+            WorkflowFileSpec(
+                _script_path("gemini", "run-local.sh"),
+                "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md",
+                "runner_script",
+                "local runner",
+                context="entry",
+            ),
+            WorkflowFileSpec(
+                _script_path("gemini", "run-ci.sh"),
+                "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md",
+                "runner_script",
+                "CI runner",
+                context="ci",
+            ),
         ),
     ),
     WorkflowTargetSpec(
         target_id="cursor",
         display_name="Cursor",
+        audit_name="Cursor",
         docs_urls=("https://docs.cursor.com/en/background-agents",),
         files=(
-            WorkflowFileSpec(_workflow_readme("cursor"), "https://docs.cursor.com/en/background-agents", "readme"),
-            WorkflowFileSpec(".cursor/environment.json", "https://docs.cursor.com/en/background-agents", "cursor_environment", is_workflow_entrypoint=True, context="background"),
+            WorkflowFileSpec(_workflow_readme("cursor"), "https://docs.cursor.com/en/background-agents", "readme", "adapter file"),
+            WorkflowFileSpec(
+                ".cursor/environment.json",
+                "https://docs.cursor.com/en/background-agents",
+                "cursor_environment",
+                "background environment",
+                is_workflow_entrypoint=True,
+                context="background",
+            ),
         ),
     ),
     WorkflowTargetSpec(
         target_id="copilot",
         display_name="GitHub Copilot",
+        audit_name="Copilot",
         docs_urls=(
             "https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli-agents/overview",
             "https://docs.github.com/en/copilot/reference/custom-agents-configuration",
         ),
         files=(
-            WorkflowFileSpec(_workflow_readme("copilot"), "https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli-agents/overview", "readme"),
-            WorkflowFileSpec(".github/agents/haxaml-governor.md", "https://docs.github.com/en/copilot/reference/custom-agents-configuration", "agent_entry", is_workflow_entrypoint=True, context="agent"),
-            WorkflowFileSpec(".mcp.json", "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers", "copilot_mcp", is_workflow_entrypoint=True),
+            WorkflowFileSpec(
+                _workflow_readme("copilot"),
+                "https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli-agents/overview",
+                "readme",
+                "adapter file",
+            ),
+            WorkflowFileSpec(
+                ".github/agents/haxaml-governor.md",
+                "https://docs.github.com/en/copilot/reference/custom-agents-configuration",
+                "agent_entry",
+                "custom agent",
+                is_workflow_entrypoint=True,
+                context="agent",
+            ),
+            WorkflowFileSpec(
+                ".mcp.json",
+                "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers",
+                "copilot_mcp",
+                "workflow MCP/config entrypoint",
+                is_workflow_entrypoint=True,
+            ),
         ),
     ),
     WorkflowTargetSpec(
         target_id="opencode",
         display_name="OpenCode",
+        audit_name="OpenCode",
         docs_urls=(
             "https://dev.opencode.ai/docs/agents/",
             "https://dev.opencode.ai/docs/mcp-servers/",
         ),
         files=(
-            WorkflowFileSpec(_workflow_readme("opencode"), "https://dev.opencode.ai/docs/agents/", "readme"),
-            WorkflowFileSpec(".opencode/agents/haxaml-governor.md", "https://dev.opencode.ai/docs/agents/", "agent_entry", is_workflow_entrypoint=True, context="agent"),
+            WorkflowFileSpec(_workflow_readme("opencode"), "https://dev.opencode.ai/docs/agents/", "readme", "adapter file"),
+            WorkflowFileSpec(
+                ".opencode/agents/haxaml-governor.md",
+                "https://dev.opencode.ai/docs/agents/",
+                "agent_entry",
+                "custom agent",
+                is_workflow_entrypoint=True,
+                context="agent",
+            ),
         ),
         manual_actions=(
-            "Review `opencode.json` or `opencode.jsonc` and enable the workflow agent's MCP/tool access if your project scopes tools per agent.",
+            WorkflowManualActionSpec(
+                reason="Review `opencode.json` or `opencode.jsonc` and enable the workflow agent's MCP/tool access if your project scopes tools per agent.",
+                audit_role="workflow MCP/config entrypoint",
+            ),
         ),
     ),
     WorkflowTargetSpec(
         target_id="junie",
         display_name="Junie",
+        audit_name="Junie",
         docs_urls=(
             "https://junie.jetbrains.com/docs/junie-cli-subagents.html",
             "https://junie.jetbrains.com/docs/agent-skills.html",
         ),
         files=(
-            WorkflowFileSpec(_workflow_readme("junie"), "https://junie.jetbrains.com/docs/junie-cli-subagents.html", "readme"),
-            WorkflowFileSpec(".junie/agents/haxaml-governor.md", "https://junie.jetbrains.com/docs/junie-cli-subagents.html", "agent_entry", is_workflow_entrypoint=True, context="agent"),
+            WorkflowFileSpec(_workflow_readme("junie"), "https://junie.jetbrains.com/docs/junie-cli-subagents.html", "readme", "adapter file"),
+            WorkflowFileSpec(
+                ".junie/agents/haxaml-governor.md",
+                "https://junie.jetbrains.com/docs/junie-cli-subagents.html",
+                "agent_entry",
+                "custom agent",
+                is_workflow_entrypoint=True,
+                context="agent",
+            ),
         ),
     ),
 )
@@ -185,6 +286,61 @@ def get_workflow_target(target_id: str) -> WorkflowTargetSpec:
 
 def supports_workflow(target_id: str) -> bool:
     return target_id in WORKFLOW_TARGET_IDS
+
+
+def _workflow_restore_hint(target_id: str) -> str:
+    return f"Re-run `uv run haxaml setup --target {target_id} --with-workflow --force` to restore this Haxaml-managed workflow file."
+
+
+def _workflow_audit_label(target: WorkflowTargetSpec, audit_role: str) -> str:
+    return f"{target.audit_name} {audit_role}"
+
+
+def workflow_file_audit_metadata(target_id: str, path: str, *, status: str = "installed") -> dict[str, str] | None:
+    """Return provider-aware doctor metadata for one workflow-managed file."""
+
+    if status not in {"installed", "missing", "drifted"}:
+        raise ValueError(f"Unsupported workflow audit status '{status}'.")
+    if not supports_workflow(target_id):
+        return None
+
+    target = get_workflow_target(target_id)
+    for file in target.files:
+        if file.path != path:
+            continue
+        metadata = {
+            "category": "workflow",
+            "label": _workflow_audit_label(target, file.audit_role),
+        }
+        if status != "installed":
+            metadata["repair_hint"] = _workflow_restore_hint(target_id)
+        return metadata
+    return None
+
+
+def workflow_manual_action_audit_metadata(target_id: str, reason: str) -> dict[str, str] | None:
+    """Return provider-aware doctor metadata for one workflow manual action."""
+
+    if not supports_workflow(target_id):
+        return None
+
+    target = get_workflow_target(target_id)
+    for action in target.manual_actions:
+        if action.reason != reason:
+            continue
+        return {
+            "category": "workflow",
+            "label": _workflow_audit_label(target, action.audit_role),
+            "repair_hint": action.repair_hint or action.reason,
+        }
+
+    if reason:
+        return {
+            "category": "workflow",
+            "label": _workflow_audit_label(target, "workflow follow-up"),
+            "repair_hint": reason,
+        }
+    return None
 
 
 def workflow_adapter_file_path(target_id: str) -> str:
@@ -260,7 +416,7 @@ def _render_workflow_readme(target: WorkflowTargetSpec) -> RenderedArtifact:
     if entrypoint_paths:
         body_parts.append(section("Workflow Entrypoints", bullets([f"`{path}`" for path in entrypoint_paths])))
     if target.manual_actions:
-        body_parts.append(section("Manual Follow-Up", bullets(list(target.manual_actions))))
+        body_parts.append(section("Manual Follow-Up", bullets([item.reason for item in target.manual_actions])))
     return _render_markdown(metadata, "\n\n".join(body_parts))
 
 
@@ -389,9 +545,12 @@ def workflow_manual_actions(target_id: str) -> tuple[dict[str, str | None], ...]
             "scope": "project",
             "path": None,
             "docs_url": docs_url,
-            "reason": reason,
+            "reason": action.reason,
+            "category": "workflow",
+            "label": _workflow_audit_label(target, action.audit_role),
+            "repair_hint": action.repair_hint or action.reason,
         }
-        for reason in target.manual_actions
+        for action in target.manual_actions
     )
 
 

@@ -31,6 +31,46 @@ def _err(tool: str, code: str, message: str, details: dict[str, Any] | None = No
     }
 
 
+def _format_doctor_item(item: dict[str, Any]) -> str:
+    path = str(item.get("path") or "(no path)")
+    target = str(item.get("target") or "unknown")
+    category = str(item.get("category") or item.get("kind") or "setup")
+    label = str(item.get("label") or "")
+    reason = str(item.get("reason") or "")
+    repair_hint = str(item.get("repair_hint") or "")
+
+    metadata = [f"target={target}", category]
+    if label:
+        metadata.append(label)
+
+    line = f"- {path} ({', '.join(metadata)})"
+    if reason:
+        line += f" - {reason}"
+    if repair_hint:
+        line += f" | hint: {repair_hint}"
+    return line
+
+
+def _format_doctor_manual_action(item: dict[str, Any]) -> str:
+    target = str(item.get("target") or "unknown")
+    path = str(item.get("path") or target)
+    category = str(item.get("category") or item.get("kind") or "setup")
+    label = str(item.get("label") or "")
+    reason = str(item.get("reason") or "")
+    repair_hint = str(item.get("repair_hint") or "")
+
+    metadata = [f"target={target}", category]
+    if label:
+        metadata.append(label)
+
+    line = f"- {path} ({', '.join(metadata)})"
+    if reason:
+        line += f": {reason}"
+    if repair_hint and repair_hint != reason:
+        line += f" | hint: {repair_hint}"
+    return line
+
+
 def setup_plan(
     *,
     project_dir: str | Path,
@@ -141,13 +181,13 @@ def doctor_plan(*, project_dir: str | Path, output_format: str = "text") -> dict
             entries = report.get(label, [])
             lines.append(f"{label.title()}:")
             if entries:
-                lines.extend([f"- {item['path']} ({item['target']} {item['kind']})" for item in entries])
+                lines.extend([_format_doctor_item(item) for item in entries if isinstance(item, dict)])
             else:
                 lines.append("- none")
         manual = report.get("manual_actions", [])
         lines.append("Manual Actions:")
         if manual:
-            lines.extend([f"- {item.get('target')} {item.get('kind')}: {item.get('reason')}" for item in manual])
+            lines.extend([_format_doctor_manual_action(item) for item in manual if isinstance(item, dict)])
         else:
             lines.append("- none")
         report["message"] = "\n".join(lines)

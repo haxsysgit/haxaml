@@ -6,6 +6,7 @@ import hashlib
 from pathlib import Path
 
 from haxaml.setup.planner import MANIFEST_PATH
+from haxaml.setup.workflow import workflow_file_audit_metadata, workflow_manual_action_audit_metadata
 from haxaml.setup.writer import extract_managed_block
 from haxaml.yaml_utils import load_yaml
 
@@ -19,6 +20,44 @@ def _load_manifest(project_dir: Path) -> dict[str, object] | None:
     if not path.exists():
         return None
     return load_yaml(path)
+
+
+def _item_category(kind: str) -> str:
+    return "workflow" if kind == "workflow" else "setup"
+
+
+def _doctor_file_record(*, path: str, target: str, kind: str, status: str, reason: str | None = None) -> dict[str, str]:
+    record: dict[str, str] = {
+        "path": path,
+        "target": target,
+        "kind": kind,
+        "category": _item_category(kind),
+    }
+    if reason:
+        record["reason"] = reason
+    if kind == "workflow":
+        metadata = workflow_file_audit_metadata(target, path, status=status)
+        if metadata:
+            record.update(metadata)
+    return record
+
+
+def _doctor_manual_action_record(item: dict[str, object]) -> dict[str, str | None]:
+    kind = str(item.get("kind", ""))
+    record: dict[str, str | None] = {
+        "target": str(item.get("target", "")),
+        "kind": kind,
+        "scope": str(item.get("scope", "")),
+        "path": item.get("path") if item.get("path") is None else str(item.get("path")),
+        "docs_url": str(item.get("docs_url", "")),
+        "reason": str(item.get("reason", "")),
+        "category": _item_category(kind),
+    }
+    if kind == "workflow":
+        metadata = workflow_manual_action_audit_metadata(record["target"] or "", record["reason"] or "")
+        if metadata:
+            record.update(metadata)
+    return record
 
 
 def run_setup_doctor(project_dir: str | Path) -> dict[str, object]:
@@ -46,12 +85,13 @@ def run_setup_doctor(project_dir: str | Path) -> dict[str, object]:
         resolved = Path(path) if str(item.get("scope")) == "user" else root / path
         if not resolved.exists():
             missing.append(
-                {
-                    "path": path,
-                    "target": str(item.get("target", "")),
-                    "kind": str(item.get("kind", "")),
-                    "reason": "missing",
-                }
+                _doctor_file_record(
+                    path=path,
+                    target=str(item.get("target", "")),
+                    kind=str(item.get("kind", "")),
+                    status="missing",
+                    reason="missing",
+                )
             )
             continue
 
@@ -60,12 +100,13 @@ def run_setup_doctor(project_dir: str | Path) -> dict[str, object]:
             block = extract_managed_block(content)
             if block is None:
                 drifted.append(
-                    {
-                        "path": path,
-                        "target": str(item.get("target", "")),
-                        "kind": str(item.get("kind", "")),
-                        "reason": "managed block missing",
-                    }
+                    _doctor_file_record(
+                        path=path,
+                        target=str(item.get("target", "")),
+                        kind=str(item.get("kind", "")),
+                        status="drifted",
+                        reason="managed block missing",
+                    )
                 )
                 continue
             actual_hash = _hash(block)
@@ -75,31 +116,36 @@ def run_setup_doctor(project_dir: str | Path) -> dict[str, object]:
         expected_hash = str(item.get("recipe_hash", ""))
         if expected_hash and actual_hash != expected_hash:
             drifted.append(
-                {
-                    "path": path,
-                    "target": str(item.get("target", "")),
-                    "kind": str(item.get("kind", "")),
-                    "reason": "content drift",
-                }
+                _doctor_file_record(
+                    path=path,
+                    target=str(item.get("target", "")),
+                    kind=str(item.get("kind", "")),
+                    status="drifted",
+                    reason="content drift",
+                )
             )
             continue
 
         installed.append(
-            {
-                "path": path,
-                "target": str(item.get("target", "")),
-                "kind": str(item.get("kind", "")),
-            }
+            _doctor_file_record(
+                path=path,
+                target=str(item.get("target", "")),
+                kind=str(item.get("kind", "")),
+                status="installed",
+            )
         )
 
-    manual_actions = manifest.get("manual_actions", [])
+    raw_manual_actions = manifest.get("manual_actions", [])
+    manual_actions = []
+    if isinstance(raw_manual_actions, list):
+        manual_actions = [_doctor_manual_action_record(item) for item in raw_manual_actions if isinstance(item, dict)]
     return {
         "installed": installed,
         "missing": missing,
         "drifted": drifted,
-        "manual_actions": manual_actions if isinstance(manual_actions, list) else [],
+        "manual_actions": manual_actions,
         "message": (
             f"Installed: {len(installed)} | Missing: {len(missing)} | "
-            f"Drifted: {len(drifted)} | Manual: {len(manual_actions) if isinstance(manual_actions, list) else 0}"
+            f"Drifted: {len(drifted)} | Manual: {len(manual_actions)}"
         ),
     }
