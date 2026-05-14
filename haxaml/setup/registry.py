@@ -12,8 +12,8 @@ GENERIC_SUPPORT = "shared"
 
 
 @dataclass(frozen=True)
-class Surface:
-    """A documented target-native surface Haxaml can manage or report on."""
+class IntegrationPoint:
+    """A documented tool-specific integration point Haxaml can manage or report on."""
 
     kind: str
     scope: str
@@ -41,16 +41,28 @@ class TargetSpec:
     support_tier: str
     docs_urls: tuple[str, ...]
     detect_patterns: tuple[str, ...] = ()
-    surfaces: tuple[Surface, ...] = ()
+    integration_points: tuple[IntegrationPoint, ...] = ()
     manual_notes: tuple[str, ...] = ()
     project_capabilities: dict[str, bool] = field(default_factory=dict)
     user_capabilities: dict[str, bool] = field(default_factory=dict)
 
-    def surfaces_for(self, scope: str, kinds: set[str] | None = None) -> tuple[Surface, ...]:
-        selected = [surface for surface in self.surfaces if surface.scope == scope]
+    def integration_points_for(
+        self, scope: str, kinds: set[str] | None = None
+    ) -> tuple[IntegrationPoint, ...]:
+        selected = [item for item in self.integration_points if item.scope == scope]
         if kinds is not None:
-            selected = [surface for surface in selected if surface.kind in kinds]
+            selected = [item for item in selected if item.kind in kinds]
         return tuple(selected)
+
+    @property
+    def surfaces(self) -> tuple[IntegrationPoint, ...]:
+        return self.integration_points
+
+    def surfaces_for(self, scope: str, kinds: set[str] | None = None) -> tuple[IntegrationPoint, ...]:
+        return self.integration_points_for(scope, kinds)
+
+
+Surface = IntegrationPoint
 
 
 def _caps(*enabled: str) -> dict[str, bool]:
@@ -66,14 +78,14 @@ TARGETS: tuple[TargetSpec, ...] = (
         display_name="Generic AGENTS",
         support_tier=GENERIC_SUPPORT,
         docs_urls=(),
-        surfaces=(
-            Surface(
+        integration_points=(
+            IntegrationPoint(
                 kind="instructions",
                 scope="project",
                 path="AGENTS.md",
                 docs_url="https://developers.openai.com/codex/guides/agents-md",
             ),
-            Surface(
+            IntegrationPoint(
                 kind="skills",
                 scope="project",
                 path=".agents/skills/haxaml/SKILL.md",
@@ -94,15 +106,15 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://code.claude.com/docs/en/settings",
         ),
         detect_patterns=("CLAUDE.md", ".claude/skills/*/SKILL.md", ".claude/agents/*.md", ".mcp.json"),
-        surfaces=(
-            Surface("instructions", "project", "CLAUDE.md", "https://code.claude.com/docs/en/memory"),
-            Surface("skills", "project", ".claude/skills/haxaml/SKILL.md", "https://code.claude.com/docs/en/skills"),
-            Surface("agents", "project", ".claude/agents/haxaml-governor.md", "https://code.claude.com/docs/en/subagents"),
-            Surface("mcp", "project", ".mcp.json", "https://code.claude.com/docs/en/settings", format="json"),
-            Surface("instructions", "user", "~/.claude/CLAUDE.md", "https://code.claude.com/docs/en/memory"),
-            Surface("skills", "user", "~/.claude/skills/haxaml/SKILL.md", "https://code.claude.com/docs/en/skills"),
-            Surface("agents", "user", "~/.claude/agents/haxaml-governor.md", "https://code.claude.com/docs/en/subagents"),
-            Surface("mcp", "user", "~/.claude.json", "https://code.claude.com/docs/en/settings", format="json"),
+        integration_points=(
+            IntegrationPoint("instructions", "project", "CLAUDE.md", "https://code.claude.com/docs/en/memory"),
+            IntegrationPoint("skills", "project", ".claude/skills/haxaml/SKILL.md", "https://code.claude.com/docs/en/skills"),
+            IntegrationPoint("agents", "project", ".claude/agents/haxaml-governor.md", "https://code.claude.com/docs/en/subagents"),
+            IntegrationPoint("mcp", "project", ".mcp.json", "https://code.claude.com/docs/en/settings", format="json"),
+            IntegrationPoint("instructions", "user", "~/.claude/CLAUDE.md", "https://code.claude.com/docs/en/memory"),
+            IntegrationPoint("skills", "user", "~/.claude/skills/haxaml/SKILL.md", "https://code.claude.com/docs/en/skills"),
+            IntegrationPoint("agents", "user", "~/.claude/agents/haxaml-governor.md", "https://code.claude.com/docs/en/subagents"),
+            IntegrationPoint("mcp", "user", "~/.claude.json", "https://code.claude.com/docs/en/settings", format="json"),
         ),
         project_capabilities=_caps("instructions", "skills", "agents", "mcp", "workflow"),
         user_capabilities=_caps("instructions", "skills", "agents", "mcp"),
@@ -117,13 +129,13 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://developers.openai.com/codex/config-reference",
         ),
         detect_patterns=("AGENTS.md", "AGENTS.override.md", ".agents/skills/*/SKILL.md", ".codex/config.toml"),
-        surfaces=(
-            Surface("instructions", "project", "AGENTS.md", "https://developers.openai.com/codex/guides/agents-md"),
-            Surface("skills", "project", ".agents/skills/haxaml/SKILL.md", "https://developers.openai.com/codex/skills"),
-            Surface("mcp", "project", ".codex/config.toml", "https://developers.openai.com/codex/config-reference", format="toml"),
-            Surface("instructions", "user", "~/.codex/AGENTS.md", "https://developers.openai.com/codex/guides/agents-md"),
-            Surface("skills", "user", "~/.agents/skills/haxaml/SKILL.md", "https://developers.openai.com/codex/skills"),
-            Surface("mcp", "user", "~/.codex/config.toml", "https://developers.openai.com/codex/config-reference", format="toml"),
+        integration_points=(
+            IntegrationPoint("instructions", "project", "AGENTS.md", "https://developers.openai.com/codex/guides/agents-md"),
+            IntegrationPoint("skills", "project", ".agents/skills/haxaml/SKILL.md", "https://developers.openai.com/codex/skills"),
+            IntegrationPoint("mcp", "project", ".codex/config.toml", "https://developers.openai.com/codex/config-reference", format="toml"),
+            IntegrationPoint("instructions", "user", "~/.codex/AGENTS.md", "https://developers.openai.com/codex/guides/agents-md"),
+            IntegrationPoint("skills", "user", "~/.agents/skills/haxaml/SKILL.md", "https://developers.openai.com/codex/skills"),
+            IntegrationPoint("mcp", "user", "~/.codex/config.toml", "https://developers.openai.com/codex/config-reference", format="toml"),
         ),
         project_capabilities=_caps("instructions", "skills", "mcp", "workflow"),
         user_capabilities=_caps("instructions", "skills", "mcp"),
@@ -137,10 +149,10 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://docs.cursor.com/advanced/model-context-protocol",
         ),
         detect_patterns=(".cursor/rules/*.mdc", ".cursorrules", ".cursor/mcp.json"),
-        surfaces=(
-            Surface("instructions", "project", ".cursor/rules/haxaml.mdc", "https://docs.cursor.com/context/rules"),
-            Surface("mcp", "project", ".cursor/mcp.json", "https://docs.cursor.com/advanced/model-context-protocol", format="json"),
-            Surface(
+        integration_points=(
+            IntegrationPoint("instructions", "project", ".cursor/rules/haxaml.mdc", "https://docs.cursor.com/context/rules"),
+            IntegrationPoint("mcp", "project", ".cursor/mcp.json", "https://docs.cursor.com/advanced/model-context-protocol", format="json"),
+            IntegrationPoint(
                 "instructions",
                 "user",
                 None,
@@ -149,7 +161,7 @@ TARGETS: tuple[TargetSpec, ...] = (
                 manual_only=True,
                 note="User rules are configured in Cursor Settings, not a stable file path.",
             ),
-            Surface("mcp", "user", "~/.cursor/mcp.json", "https://docs.cursor.com/advanced/model-context-protocol", format="json"),
+            IntegrationPoint("mcp", "user", "~/.cursor/mcp.json", "https://docs.cursor.com/advanced/model-context-protocol", format="json"),
         ),
         manual_notes=("User rules are settings-backed; setup prints guidance instead of guessing a file.",),
         project_capabilities=_caps("instructions", "mcp", "workflow"),
@@ -165,10 +177,10 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://docs.windsurf.com/windsurf/cascade/mcp",
         ),
         detect_patterns=("AGENTS.md", ".windsurf/skills/*/SKILL.md", ".windsurfrules"),
-        surfaces=(
-            Surface("instructions", "project", "AGENTS.md", "https://docs.windsurf.com/windsurf/cascade/agents-md"),
-            Surface("skills", "project", ".agents/skills/haxaml/SKILL.md", "https://docs.windsurf.com/windsurf/cascade/skills"),
-            Surface(
+        integration_points=(
+            IntegrationPoint("instructions", "project", "AGENTS.md", "https://docs.windsurf.com/windsurf/cascade/agents-md"),
+            IntegrationPoint("skills", "project", ".agents/skills/haxaml/SKILL.md", "https://docs.windsurf.com/windsurf/cascade/skills"),
+            IntegrationPoint(
                 "mcp",
                 "project",
                 None,
@@ -177,8 +189,8 @@ TARGETS: tuple[TargetSpec, ...] = (
                 manual_only=True,
                 note="Official docs document user-level mcp_config.json; project-local MCP remains guidance-only.",
             ),
-            Surface("skills", "user", "~/.agents/skills/haxaml/SKILL.md", "https://docs.windsurf.com/windsurf/cascade/skills"),
-            Surface("mcp", "user", "~/.codeium/windsurf/mcp_config.json", "https://docs.windsurf.com/windsurf/cascade/mcp", format="json"),
+            IntegrationPoint("skills", "user", "~/.agents/skills/haxaml/SKILL.md", "https://docs.windsurf.com/windsurf/cascade/skills"),
+            IntegrationPoint("mcp", "user", "~/.codeium/windsurf/mcp_config.json", "https://docs.windsurf.com/windsurf/cascade/mcp", format="json"),
         ),
         manual_notes=("Project-local Windsurf MCP is not written automatically in 0.7.0.",),
         project_capabilities=_caps("instructions", "skills", "mcp"),
@@ -194,10 +206,10 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/add-skills",
         ),
         detect_patterns=(".github/copilot-instructions.md", ".github/skills/*/SKILL.md", "~/.copilot/mcp-config.json"),
-        surfaces=(
-            Surface("instructions", "project", ".github/copilot-instructions.md", "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-custom-instructions"),
-            Surface("skills", "project", ".github/skills/haxaml/SKILL.md", "https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/add-skills"),
-            Surface(
+        integration_points=(
+            IntegrationPoint("instructions", "project", ".github/copilot-instructions.md", "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-custom-instructions"),
+            IntegrationPoint("skills", "project", ".github/skills/haxaml/SKILL.md", "https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/add-skills"),
+            IntegrationPoint(
                 "mcp",
                 "project",
                 None,
@@ -206,11 +218,11 @@ TARGETS: tuple[TargetSpec, ...] = (
                 manual_only=True,
                 note="Official Copilot CLI docs document the user MCP config path.",
             ),
-            Surface("instructions", "user", "~/.copilot/copilot-instructions.md", "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-custom-instructions"),
-            Surface("skills", "user", "~/.copilot/skills/haxaml/SKILL.md", "https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/add-skills"),
-            Surface("mcp", "user", "~/.copilot/mcp-config.json", "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers", format="json"),
+            IntegrationPoint("instructions", "user", "~/.copilot/copilot-instructions.md", "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-custom-instructions"),
+            IntegrationPoint("skills", "user", "~/.copilot/skills/haxaml/SKILL.md", "https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/add-skills"),
+            IntegrationPoint("mcp", "user", "~/.copilot/mcp-config.json", "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers", format="json"),
         ),
-        manual_notes=("Project-level Copilot MCP stays manual until a stable file-backed surface is documented.",),
+        manual_notes=("Project-level Copilot MCP stays manual until a stable file-backed integration point is documented.",),
         project_capabilities=_caps("instructions", "skills", "mcp", "workflow"),
         user_capabilities=_caps("instructions", "skills", "mcp"),
     ),
@@ -224,12 +236,12 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md",
         ),
         detect_patterns=("GEMINI.md", ".gemini/settings.json", ".gemini/skills/*/SKILL.md"),
-        surfaces=(
-            Surface("instructions", "project", "GEMINI.md", "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md"),
-            Surface("skills", "project", ".gemini/skills/haxaml/SKILL.md", "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md"),
-            Surface("mcp", "project", ".gemini/settings.json", "https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md", format="json"),
-            Surface("mcp", "user", "~/.gemini/settings.json", "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/settings.md", format="json"),
-            Surface("skills", "user", "~/.gemini/skills/haxaml/SKILL.md", "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md"),
+        integration_points=(
+            IntegrationPoint("instructions", "project", "GEMINI.md", "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md"),
+            IntegrationPoint("skills", "project", ".gemini/skills/haxaml/SKILL.md", "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md"),
+            IntegrationPoint("mcp", "project", ".gemini/settings.json", "https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md", format="json"),
+            IntegrationPoint("mcp", "user", "~/.gemini/settings.json", "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/settings.md", format="json"),
+            IntegrationPoint("skills", "user", "~/.gemini/skills/haxaml/SKILL.md", "https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md"),
         ),
         project_capabilities=_caps("instructions", "skills", "mcp", "workflow"),
         user_capabilities=_caps("skills", "mcp"),
@@ -244,9 +256,9 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://docs.continue.dev/customize/rules",
         ),
         detect_patterns=(".continue/rules/*", ".continue/config.yaml"),
-        surfaces=(
-            Surface("instructions", "project", ".continue/rules/haxaml.md", "https://docs.continue.dev/customize/rules"),
-            Surface(
+        integration_points=(
+            IntegrationPoint("instructions", "project", ".continue/rules/haxaml.md", "https://docs.continue.dev/customize/rules"),
+            IntegrationPoint(
                 "mcp",
                 "project",
                 ".continue/config.yaml",
@@ -256,8 +268,8 @@ TARGETS: tuple[TargetSpec, ...] = (
                 writable=False,
                 format="yaml",
             ),
-            Surface("instructions", "user", "~/.continue/rules/haxaml.md", "https://docs.continue.dev/customize/rules"),
-            Surface("mcp", "user", "~/.continue/config.yaml", "https://docs.continue.dev/reference/config", format="yaml"),
+            IntegrationPoint("instructions", "user", "~/.continue/rules/haxaml.md", "https://docs.continue.dev/customize/rules"),
+            IntegrationPoint("mcp", "user", "~/.continue/config.yaml", "https://docs.continue.dev/reference/config", format="yaml"),
         ),
         manual_notes=("Continue project config merges are manual in 0.7.0.",),
         project_capabilities=_caps("instructions", "mcp"),
@@ -272,11 +284,11 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://docs.cline.bot/mcp/mcp-overview",
         ),
         detect_patterns=(".clinerules", ".cline/skills/*/SKILL.md"),
-        surfaces=(
-            Surface("instructions", "project", ".clinerules/haxaml.md", "https://docs.cline.bot/customization/skills"),
-            Surface("skills", "project", ".cline/skills/haxaml/SKILL.md", "https://docs.cline.bot/customization/skills"),
-            Surface("skills", "user", "~/.cline/skills/haxaml/SKILL.md", "https://docs.cline.bot/customization/skills"),
-            Surface(
+        integration_points=(
+            IntegrationPoint("instructions", "project", ".clinerules/haxaml.md", "https://docs.cline.bot/customization/skills"),
+            IntegrationPoint("skills", "project", ".cline/skills/haxaml/SKILL.md", "https://docs.cline.bot/customization/skills"),
+            IntegrationPoint("skills", "user", "~/.cline/skills/haxaml/SKILL.md", "https://docs.cline.bot/customization/skills"),
+            IntegrationPoint(
                 "mcp",
                 "user",
                 "~/.cline/data/settings/cline_mcp_settings.json",
@@ -300,12 +312,12 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://opencode.ai/docs/skills",
         ),
         detect_patterns=("AGENTS.md", ".opencode/skills/*/SKILL.md", "opencode.json", "opencode.jsonc"),
-        surfaces=(
-            Surface("instructions", "project", "AGENTS.md", "https://opencode.ai/docs/config"),
-            Surface("skills", "project", ".opencode/skills/haxaml/SKILL.md", "https://opencode.ai/docs/skills"),
-            Surface("instructions", "user", "~/.config/opencode/AGENTS.md", "https://opencode.ai/docs/config"),
-            Surface("skills", "user", "~/.config/opencode/skills/haxaml/SKILL.md", "https://opencode.ai/docs/skills"),
-            Surface(
+        integration_points=(
+            IntegrationPoint("instructions", "project", "AGENTS.md", "https://opencode.ai/docs/config"),
+            IntegrationPoint("skills", "project", ".opencode/skills/haxaml/SKILL.md", "https://opencode.ai/docs/skills"),
+            IntegrationPoint("instructions", "user", "~/.config/opencode/AGENTS.md", "https://opencode.ai/docs/config"),
+            IntegrationPoint("skills", "user", "~/.config/opencode/skills/haxaml/SKILL.md", "https://opencode.ai/docs/skills"),
+            IntegrationPoint(
                 "mcp",
                 "user",
                 "~/.config/opencode/opencode.json",
@@ -330,14 +342,14 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html",
         ),
         detect_patterns=(".junie/AGENTS.md", ".junie/skills/*/SKILL.md", ".junie/agents/*.md", ".junie/mcp/mcp.json"),
-        surfaces=(
-            Surface("instructions", "project", ".junie/AGENTS.md", "https://junie.jetbrains.com/docs/junie-cli-configuration.html"),
-            Surface("skills", "project", ".junie/skills/haxaml/SKILL.md", "https://junie.jetbrains.com/docs/agent-skills.html"),
-            Surface("agents", "project", ".junie/agents/haxaml-governor.md", "https://junie.jetbrains.com/docs/junie-cli-subagents.html"),
-            Surface("mcp", "project", ".junie/mcp/mcp.json", "https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html", format="json"),
-            Surface("skills", "user", "~/.junie/skills/haxaml/SKILL.md", "https://junie.jetbrains.com/docs/agent-skills.html"),
-            Surface("agents", "user", "~/.junie/agents/haxaml-governor.md", "https://junie.jetbrains.com/docs/junie-cli-subagents.html"),
-            Surface("mcp", "user", "~/.junie/mcp/mcp.json", "https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html", format="json"),
+        integration_points=(
+            IntegrationPoint("instructions", "project", ".junie/AGENTS.md", "https://junie.jetbrains.com/docs/junie-cli-configuration.html"),
+            IntegrationPoint("skills", "project", ".junie/skills/haxaml/SKILL.md", "https://junie.jetbrains.com/docs/agent-skills.html"),
+            IntegrationPoint("agents", "project", ".junie/agents/haxaml-governor.md", "https://junie.jetbrains.com/docs/junie-cli-subagents.html"),
+            IntegrationPoint("mcp", "project", ".junie/mcp/mcp.json", "https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html", format="json"),
+            IntegrationPoint("skills", "user", "~/.junie/skills/haxaml/SKILL.md", "https://junie.jetbrains.com/docs/agent-skills.html"),
+            IntegrationPoint("agents", "user", "~/.junie/agents/haxaml-governor.md", "https://junie.jetbrains.com/docs/junie-cli-subagents.html"),
+            IntegrationPoint("mcp", "user", "~/.junie/mcp/mcp.json", "https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html", format="json"),
         ),
         manual_notes=("Junie registry coverage is partial until official path docs are hardened.",),
         project_capabilities=_caps("instructions", "skills", "agents", "mcp", "workflow"),

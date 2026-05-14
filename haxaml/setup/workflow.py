@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 
 from haxaml.setup.markdown import bullets, metadata_comment, metadata_json_document, metadata_line_comment, section
-from haxaml.setup.registry import Surface, get_target
+from haxaml.setup.registry import IntegrationPoint, get_target
 from haxaml.setup.renderer import LIFECYCLE, RenderedArtifact, render_mcp_config
 from haxaml.versioning import get_version
 from haxaml.yaml_utils import load_yaml
@@ -32,7 +32,7 @@ class WorkflowFileSpec:
     docs_url: str
     template: str
     required: bool = True
-    is_native_entrypoint: bool = False
+    is_workflow_entrypoint: bool = False
     context: str = "entry"
     note: str = ""
 
@@ -87,7 +87,7 @@ WORKFLOW_TARGETS: tuple[WorkflowTargetSpec, ...] = (
         files=(
             WorkflowFileSpec(_workflow_readme("claude"), "https://code.claude.com/docs/en/hooks", "readme"),
             WorkflowFileSpec(_script_path("claude", "check.sh"), "https://code.claude.com/docs/en/hooks", "hook_script", context="hook"),
-            WorkflowFileSpec(".claude/settings.json", "https://code.claude.com/docs/en/settings", "claude_settings", is_native_entrypoint=True),
+            WorkflowFileSpec(".claude/settings.json", "https://code.claude.com/docs/en/settings", "claude_settings", is_workflow_entrypoint=True),
         ),
     ),
     WorkflowTargetSpec(
@@ -122,7 +122,7 @@ WORKFLOW_TARGETS: tuple[WorkflowTargetSpec, ...] = (
         docs_urls=("https://docs.cursor.com/en/background-agents",),
         files=(
             WorkflowFileSpec(_workflow_readme("cursor"), "https://docs.cursor.com/en/background-agents", "readme"),
-            WorkflowFileSpec(".cursor/environment.json", "https://docs.cursor.com/en/background-agents", "cursor_environment", is_native_entrypoint=True, context="background"),
+            WorkflowFileSpec(".cursor/environment.json", "https://docs.cursor.com/en/background-agents", "cursor_environment", is_workflow_entrypoint=True, context="background"),
         ),
     ),
     WorkflowTargetSpec(
@@ -134,8 +134,8 @@ WORKFLOW_TARGETS: tuple[WorkflowTargetSpec, ...] = (
         ),
         files=(
             WorkflowFileSpec(_workflow_readme("copilot"), "https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli-agents/overview", "readme"),
-            WorkflowFileSpec(".github/agents/haxaml-governor.md", "https://docs.github.com/en/copilot/reference/custom-agents-configuration", "agent_entry", is_native_entrypoint=True, context="agent"),
-            WorkflowFileSpec(".mcp.json", "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers", "copilot_mcp", is_native_entrypoint=True),
+            WorkflowFileSpec(".github/agents/haxaml-governor.md", "https://docs.github.com/en/copilot/reference/custom-agents-configuration", "agent_entry", is_workflow_entrypoint=True, context="agent"),
+            WorkflowFileSpec(".mcp.json", "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers", "copilot_mcp", is_workflow_entrypoint=True),
         ),
     ),
     WorkflowTargetSpec(
@@ -147,7 +147,7 @@ WORKFLOW_TARGETS: tuple[WorkflowTargetSpec, ...] = (
         ),
         files=(
             WorkflowFileSpec(_workflow_readme("opencode"), "https://dev.opencode.ai/docs/agents/", "readme"),
-            WorkflowFileSpec(".opencode/agents/haxaml-governor.md", "https://dev.opencode.ai/docs/agents/", "agent_entry", is_native_entrypoint=True, context="agent"),
+            WorkflowFileSpec(".opencode/agents/haxaml-governor.md", "https://dev.opencode.ai/docs/agents/", "agent_entry", is_workflow_entrypoint=True, context="agent"),
         ),
         manual_actions=(
             "Review `opencode.json` or `opencode.jsonc` and enable the workflow agent's MCP/tool access if your project scopes tools per agent.",
@@ -162,7 +162,7 @@ WORKFLOW_TARGETS: tuple[WorkflowTargetSpec, ...] = (
         ),
         files=(
             WorkflowFileSpec(_workflow_readme("junie"), "https://junie.jetbrains.com/docs/junie-cli-subagents.html", "readme"),
-            WorkflowFileSpec(".junie/agents/haxaml-governor.md", "https://junie.jetbrains.com/docs/junie-cli-subagents.html", "agent_entry", is_native_entrypoint=True, context="agent"),
+            WorkflowFileSpec(".junie/agents/haxaml-governor.md", "https://junie.jetbrains.com/docs/junie-cli-subagents.html", "agent_entry", is_workflow_entrypoint=True, context="agent"),
         ),
     ),
 )
@@ -191,17 +191,17 @@ def workflow_adapter_file_path(target_id: str) -> str:
     return _workflow_readme(target_id)
 
 
-def workflow_native_entrypoints(target_id: str) -> tuple[str, ...]:
+def workflow_entrypoints(target_id: str) -> tuple[str, ...]:
     if not supports_workflow(target_id):
         return ()
     target = get_workflow_target(target_id)
-    return tuple(item.path for item in target.files if item.is_native_entrypoint)
+    return tuple(item.path for item in target.files if item.is_workflow_entrypoint)
 
 
-def workflow_absorbs_surface(target_id: str, surface: Surface, *, scope: str) -> bool:
+def workflow_absorbs_integration_point(target_id: str, integration_point: IntegrationPoint, *, scope: str) -> bool:
     if scope != "project":
         return False
-    return target_id == "copilot" and surface.kind == "mcp"
+    return target_id == "copilot" and integration_point.kind == "mcp"
 
 
 def _render_markdown(metadata: dict[str, object], body: str) -> RenderedArtifact:
@@ -222,12 +222,12 @@ def _workflow_metadata(target: WorkflowTargetSpec, path: str, template: str) -> 
 
 def _render_workflow_readme(target: WorkflowTargetSpec) -> RenderedArtifact:
     metadata = _workflow_metadata(target, _workflow_readme(target.target_id), "readme")
-    native_paths = workflow_native_entrypoints(target.target_id)
+    entrypoint_paths = workflow_entrypoints(target.target_id)
     body_parts = [
         f"# {target.display_name} Workflow Adaptation",
         (
-            "Workflow adaptation is separate from base setup. Base setup installs the normal project surfaces. "
-            "This pack adapts a target's native runtime entrypoints back into the governed Haxaml lifecycle."
+            "Workflow adaptation is separate from base setup. Base setup installs the normal project integration points. "
+            "This pack adapts a target's tool-specific workflow entrypoints back into the governed Haxaml lifecycle."
         ),
         section(
             "Use It For",
@@ -257,20 +257,20 @@ def _render_workflow_readme(target: WorkflowTargetSpec) -> RenderedArtifact:
             " -> ".join(step.strip("`") for step in LIFECYCLE),
         ),
     ]
-    if native_paths:
-        body_parts.append(section("Native Entry Points", bullets([f"`{path}`" for path in native_paths])))
+    if entrypoint_paths:
+        body_parts.append(section("Workflow Entrypoints", bullets([f"`{path}`" for path in entrypoint_paths])))
     if target.manual_actions:
         body_parts.append(section("Manual Follow-Up", bullets(list(target.manual_actions))))
     return _render_markdown(metadata, "\n\n".join(body_parts))
 
 
 def _render_agent_entry(target: WorkflowTargetSpec) -> RenderedArtifact:
-    metadata = _workflow_metadata(target, workflow_native_entrypoints(target.target_id)[0], "agent_entry")
+    metadata = _workflow_metadata(target, workflow_entrypoints(target.target_id)[0], "agent_entry")
     body = "\n\n".join(
         [
             f"# Haxaml Workflow Governor for {target.display_name}",
             (
-                "This native workflow entrypoint is intentionally small. "
+                "This workflow entrypoint is intentionally small. "
                 f"Use the adapter file at `{workflow_adapter_file_path(target.target_id)}` for the full runtime adaptation details."
             ),
             bullets(
@@ -359,8 +359,8 @@ def _render_workflow_file(target: WorkflowTargetSpec, file: WorkflowFileSpec, pr
     if file.template == "claude_settings":
         return _render_claude_settings(target)
     if file.template == "copilot_mcp":
-        surface = Surface("mcp", "project", ".mcp.json", file.docs_url, format="json")
-        return render_mcp_config(get_target("copilot"), surface, project_dir)
+        integration_point = IntegrationPoint("mcp", "project", ".mcp.json", file.docs_url, format="json")
+        return render_mcp_config(get_target("copilot"), integration_point, project_dir)
     raise ValueError(f"Unknown workflow template '{file.template}'")
 
 

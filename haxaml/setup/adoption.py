@@ -62,7 +62,7 @@ class InstructionDirective:
 
 @dataclass(frozen=True)
 class AdoptionInventory:
-    """Detected native setup surfaces and adoption analysis."""
+    """Detected tool-specific setup integration points and adoption analysis."""
 
     project_dir: Path
     detected_targets: tuple[str, ...]
@@ -316,7 +316,7 @@ def analyze_adoption_instructions(plan: AdoptionPlan) -> dict[str, object]:
 
 
 def scan_native_sources(project_dir: str | Path) -> AdoptionPlan:
-    """Scan a project for native setup surfaces and lightweight repo context."""
+    """Scan a project for tool-specific setup integration points and lightweight repo context."""
     project = Path(project_dir).resolve()
     native: list[FoundFile] = []
     context: list[FoundFile] = []

@@ -115,7 +115,7 @@ def init(directory):
 @click.option("--force", is_flag=True, help="Overwrite Haxaml-managed files and replace existing files when explicitly requested.")
 @click.option("--dry-run", is_flag=True, help="Plan writes without mutating files.")
 def setup(ctx, project_dir, scope, target_id, mode, only, with_workflow, output_format, force, dry_run):
-    """Install Haxaml into fresh or existing agent-native surfaces."""
+    """Install Haxaml into fresh or existing agent-specific integration points."""
     from haxaml.setup import cli as setup_commands
 
     if ctx.invoked_subcommand is not None:

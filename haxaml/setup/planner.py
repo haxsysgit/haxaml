@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from haxaml.setup.adoption import build_adoption_inventory, detect_target_files
-from haxaml.setup.registry import Surface, TargetSpec, get_target, list_targets
+from haxaml.setup.registry import IntegrationPoint, TargetSpec, get_target, list_targets
 from haxaml.setup.renderer import (
     RenderedArtifact,
     render_adapter_file,
@@ -22,10 +22,10 @@ from haxaml.setup.templates import render_frame_templates
 from haxaml.setup.workflow import (
     build_workflow_artifacts,
     supports_workflow,
-    workflow_absorbs_surface,
+    workflow_absorbs_integration_point,
     workflow_adapter_file_path,
     workflow_manual_actions,
-    workflow_native_entrypoints,
+    workflow_entrypoints,
 )
 from haxaml.versioning import get_version
 from haxaml.yaml_utils import dump_yaml
@@ -194,10 +194,10 @@ def _select_targets(target: str, mode: str, detected: list[str]) -> list[str]:
     return ["generic"]
 
 
-def _target_single_instruction_surface(target: TargetSpec, scope: str) -> Surface | None:
-    for surface in target.surfaces_for(scope, {"instructions"}):
-        if surface.path is not None and "*" not in surface.path and "?" not in surface.path:
-            return surface
+def _target_single_instruction_integration_point(target: TargetSpec, scope: str) -> IntegrationPoint | None:
+    for integration_point in target.integration_points_for(scope, {"instructions"}):
+        if integration_point.path is not None and "*" not in integration_point.path and "?" not in integration_point.path:
+            return integration_point
     return None
 
 
@@ -236,7 +236,7 @@ def build_setup_plan(
             target_spec = get_target(target)
             if not detect_target_files(root, target_spec):
                 raise ValueError(
-                    f"Adopted mode requires an existing native {target_spec.display_name} surface in the project."
+                    f"Adopted mode requires an existing {target_spec.display_name} integration point in the project."
                 )
 
     selected_targets = _select_targets(target, resolved_mode, detected)
@@ -286,17 +286,17 @@ def build_setup_plan(
 
     if scope == "project" and "skills" in kinds:
         generic_skill_target = get_target("generic")
-        generic_skill_surface = generic_skill_target.surfaces_for("project", {"skills"})[0]
+        generic_skill_integration_point = generic_skill_target.integration_points_for("project", {"skills"})[0]
         _add_file(
             files,
             project_dir=root,
             scope=scope,
             target="generic",
             kind="skills",
-            path=generic_skill_surface.resolve(root),
+            path=generic_skill_integration_point.resolve(root),
             artifact=render_skill(generic_skill_target, scope),
             management="file",
-            docs_url=generic_skill_surface.docs_url,
+            docs_url=generic_skill_integration_point.docs_url,
         )
 
     adapter_files: list[str] = []
@@ -305,31 +305,33 @@ def build_setup_plan(
     for target_id in selected_targets:
         target_spec = get_target(target_id)
         workflow_adapter_path = workflow_adapter_file_path(target_id) if plan.workflow_enabled and supports_workflow(target_id) else None
-        workflow_native_paths = workflow_native_entrypoints(target_id) if workflow_adapter_path else ()
+        workflow_entrypoint_paths = workflow_entrypoints(target_id) if workflow_adapter_path else ()
         if target_spec.target_id == "generic" and scope == "project":
             pass
-        for surface in target_spec.surfaces_for(scope):
-            if surface.kind not in kinds:
+        for integration_point in target_spec.integration_points_for(scope):
+            if integration_point.kind not in kinds:
                 continue
-            if surface.manual_only or not surface.writable or surface.path is None:
-                if plan.workflow_enabled and workflow_absorbs_surface(target_spec.target_id, surface, scope=scope):
+            if integration_point.manual_only or not integration_point.writable or integration_point.path is None:
+                if plan.workflow_enabled and workflow_absorbs_integration_point(
+                    target_spec.target_id, integration_point, scope=scope
+                ):
                     continue
                 plan.manual_actions.append(
                     ManualAction(
                         target=target_spec.target_id,
-                        kind=surface.kind,
-                        scope=surface.scope,
-                        path=surface.path,
-                        docs_url=surface.docs_url,
-                        reason=surface.note or "Manual-only surface.",
+                        kind=integration_point.kind,
+                        scope=integration_point.scope,
+                        path=integration_point.path,
+                        docs_url=integration_point.docs_url,
+                        reason=integration_point.note or "Manual-only integration point.",
                     )
                 )
                 continue
 
-            path = surface.resolve(root)
+            path = integration_point.resolve(root)
             assert path is not None
 
-            if surface.kind == "instructions":
+            if integration_point.kind == "instructions":
                 if plan.mode == "adopted" and scope == "project" and path.exists() and target_spec.target_id != "cursor":
                     adapter_file_path = root / ".haxaml" / "setup" / "targets" / f"{target_spec.target_id}.md"
                     adapter_files.append(adapter_file_path.relative_to(root).as_posix())
@@ -342,7 +344,7 @@ def build_setup_plan(
                         path=adapter_file_path,
                         artifact=render_adapter_file(target_spec, root),
                         management="file",
-                        docs_url=surface.docs_url,
+                        docs_url=integration_point.docs_url,
                         note="Managed adapter file for adopted native instructions.",
                     )
                     _add_file(
@@ -354,7 +356,7 @@ def build_setup_plan(
                         path=path,
                         artifact=render_pointer_block(target_spec, adapter_file_path.relative_to(root).as_posix()),
                         management="pointer",
-                        docs_url=surface.docs_url,
+                        docs_url=integration_point.docs_url,
                         note="Managed pointer block appended to an adopted native instruction file.",
                     )
                     continue
@@ -372,14 +374,14 @@ def build_setup_plan(
                         scope,
                         root,
                         workflow_adapter_path=workflow_adapter_path,
-                        workflow_native_paths=workflow_native_paths,
+                        workflow_entrypoint_paths=workflow_entrypoint_paths,
                     ),
                     management="file",
-                    docs_url=surface.docs_url,
+                    docs_url=integration_point.docs_url,
                 )
                 continue
 
-            if surface.kind == "skills":
+            if integration_point.kind == "skills":
                 _add_file(
                     files,
                     project_dir=root,
@@ -391,14 +393,14 @@ def build_setup_plan(
                         target_spec,
                         scope,
                         workflow_adapter_path=workflow_adapter_path,
-                        workflow_native_paths=workflow_native_paths,
+                        workflow_entrypoint_paths=workflow_entrypoint_paths,
                     ),
                     management="file",
-                    docs_url=surface.docs_url,
+                    docs_url=integration_point.docs_url,
                 )
                 continue
 
-            if surface.kind == "agents":
+            if integration_point.kind == "agents":
                 _add_file(
                     files,
                     project_dir=root,
@@ -410,14 +412,14 @@ def build_setup_plan(
                         target_spec,
                         scope,
                         workflow_adapter_path=workflow_adapter_path,
-                        workflow_native_paths=workflow_native_paths,
+                        workflow_entrypoint_paths=workflow_entrypoint_paths,
                     ),
                     management="file",
-                    docs_url=surface.docs_url,
+                    docs_url=integration_point.docs_url,
                 )
                 continue
 
-            if surface.kind == "mcp":
+            if integration_point.kind == "mcp":
                 _add_file(
                     files,
                     project_dir=root,
@@ -425,9 +427,9 @@ def build_setup_plan(
                     target=target_spec.target_id,
                     kind="mcp",
                     path=path,
-                    artifact=render_mcp_config(target_spec, surface, root),
+                    artifact=render_mcp_config(target_spec, integration_point, root),
                     management="file",
-                    docs_url=surface.docs_url,
+                    docs_url=integration_point.docs_url,
                 )
 
         if plan.workflow_enabled and supports_workflow(target_id):

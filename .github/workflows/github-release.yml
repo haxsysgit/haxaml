@@ -10,6 +10,14 @@ on:
         description: "Existing tag to publish as a GitHub Release (example: v0.4.5 or v0.6.7)"
         required: false
         type: string
+      title:
+        description: "Optional release title override"
+        required: false
+        type: string
+      body:
+        description: "Optional release body override"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -19,6 +27,11 @@ jobs:
     name: Create or update release entry
     runs-on: ubuntu-latest
     steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
       - name: Classify release tag
         id: classify
         run: |
@@ -29,10 +42,74 @@ jobs:
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Build release title and notes
+        id: notes
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          TITLE_OVERRIDE: ${{ github.event.inputs.title }}
+          BODY_OVERRIDE: ${{ github.event.inputs.body }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          tag = os.environ["RELEASE_TAG"]
+          version = tag[1:] if tag.startswith("v") else tag
+          title_override = os.environ.get("TITLE_OVERRIDE", "").strip()
+          body_override = os.environ.get("BODY_OVERRIDE", "").strip()
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+
+          def changelog_section() -> str:
+              pattern = rf"^##\s+{re.escape(version)}\b.*$"
+              match = re.search(pattern, changelog, flags=re.MULTILINE)
+              if not match:
+                  return ""
+              start = match.end()
+              next_match = re.search(r"^##\s+", changelog[start:], flags=re.MULTILINE)
+              end = start + next_match.start() if next_match else len(changelog)
+              return changelog[start:end].strip()
+
+          section = changelog_section()
+          section_lower = section.lower()
+          if "setup" in section_lower and "adoption" in section_lower:
+              summary = "setup-owned onboarding and adoption"
+          elif "dashboard" in section_lower and "cache" in section_lower:
+              summary = "dashboard visibility and faster governed reads"
+          elif "archive" in section_lower and "context" in section_lower:
+              summary = "durable Acts memory and guided context retrieval"
+          elif "prebuild" in section_lower:
+              summary = "a tighter governed prebuild workflow"
+          else:
+              first_bullet = next(
+                  (line.lstrip("- ").strip() for line in section.splitlines() if line.strip().startswith("- ")),
+                  "governed agent workflow improvements",
+              )
+              first_bullet = re.sub(r"[`*_]", "", first_bullet)
+              summary = first_bullet.rstrip(".")
+              if len(summary) > 72:
+                  summary = summary[:69].rstrip() + "..."
+
+          title = title_override or f"Introducing Haxaml {tag}: {summary}"
+          body = body_override or (
+              f"Introducing Haxaml {tag}: {summary}.\n\n"
+              f"{section or 'See the repository history for the full change set.'}\n\n"
+              "_Release notes generated from CHANGELOG.md._"
+          )
+
+          output = Path(os.environ["GITHUB_OUTPUT"])
+          with output.open("a", encoding="utf-8") as f:
+              f.write(f"title={title}\n")
+              f.write("body<<EOF\n")
+              f.write(body)
+              f.write("\nEOF\n")
+          PY
+
       - name: Create GitHub release from tag
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: ${{ steps.notes.outputs.title }}
+          body: ${{ steps.notes.outputs.body }}
           prerelease: ${{ steps.classify.outputs.prerelease }}
-          generate_release_notes: true
+          generate_release_notes: false

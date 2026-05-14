@@ -64,7 +64,7 @@ uvx haxaml-mcp
 
 ## Setup and Adoption
 
-I want Haxaml to be hard to use badly, so setup is now the single onboarding surface.
+I want Haxaml to be hard to use badly, so setup is now the single onboarding integration point.
 
 - `haxaml setup` auto-detects whether the repo is fresh or already has native agent files.
 - In a fresh repo it creates `.haxaml/`, a generic `AGENTS.md`, and the matching skill/config adapters for the selected target.

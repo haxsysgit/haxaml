@@ -99,8 +99,11 @@ def bump(new_version: str) -> None:
         f"{MCP_PYPROJECT.relative_to(REPO_ROOT)} {UI_PYPROJECT.relative_to(REPO_ROOT)}"
     )
     print(f"  git commit -m 'Release {new_version} package versions'")
+    print("\nPublish to PyPI when ready with:")
+    print("  scripts/publish_pypi.sh --target all")
+    print("\nCreate a GitHub Release only when you intentionally want a release tag:")
     print(f"  git tag -a v{new_version} -m 'Release {new_version}'")
-    print(f"  git push origin main --tags")
+    print(f"  git push origin main v{new_version}")
 
 
 if __name__ == "__main__":

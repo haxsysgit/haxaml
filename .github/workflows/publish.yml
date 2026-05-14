@@ -1,17 +1,14 @@
-name: Publish to PyPI
+name: Build Python Distributions
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing release tag to publish, for example v0.6.8"
-        required: true
+        description: "Existing tag, branch, or commit to build from"
+        required: false
         type: string
       package_target:
-        description: "Which package(s) to publish"
+        description: "Which package(s) to build"
         required: true
         default: "all"
         type: choice
@@ -23,11 +20,10 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  publish:
-    name: Build, check, and publish
+  build:
+    name: Build and check distributions
     runs-on: ubuntu-latest
 
     steps:
@@ -42,6 +38,7 @@ jobs:
           python-version: "3.12"
 
       - name: Validate tag and package versions
+        if: github.event.inputs.tag != ''
         run: |
           python - <<'PY'
           import os
@@ -93,15 +90,3 @@ jobs:
       - name: Check Haxaml UI package metadata
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'ui'
         run: uv run twine check packages/haxaml-ui/dist/*
-
-      - name: Publish Haxaml to PyPI
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'core'
-        run: uv publish --trusted-publishing always dist/*
-
-      - name: Publish Haxaml MCP launcher to PyPI
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'mcp'
-        run: uv publish --trusted-publishing always packages/haxaml-mcp/dist/*
-
-      - name: Publish Haxaml UI to PyPI
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'ui'
-        run: uv publish --trusted-publishing always packages/haxaml-ui/dist/*

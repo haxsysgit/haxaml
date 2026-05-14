@@ -233,6 +233,17 @@ That keeps:
 
 in sync.
 
+Publishing to PyPI is local and explicit. Put your token in `.env` as
+`PYPI_TOKEN=...`, then run:
+
+```bash
+scripts/publish_pypi.sh --target all
+```
+
+Use `--target core`, `--target mcp`, or `--target ui` when only one package
+needs publishing. This path does not require creating a Git tag. Tags are for
+GitHub Releases, not for every PyPI upload.
+
 ## Pull request checklist
 
 Before opening the PR, make sure you can say yes to these:

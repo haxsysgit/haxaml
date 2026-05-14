@@ -1,9 +1,23 @@
 # Changelog
 
+## 0.7.2 - 2026-05-14
+
+- Added provider workflow depth for Claude, GitHub Copilot, Cursor, OpenCode, and Junie on top of the `0.7.x` workflow accommodation foundation.
+- Renamed the setup registry vocabulary from `surface` to `integration point` where it now describes `0.7.x` setup and workflow behavior.
+- Refreshed the `0.7.x` and `v1.0` roadmaps so setup is treated as shipped, workflow accommodation is treated as the remaining `0.7.x` gap, and semantic retrieval stays research-first.
+- Added local-first release tooling for build-only GitHub workflows and PyPI publishing through `scripts/publish_pypi.sh`.
+
+## 0.7.1 - 2026-05-14
+
+- Added the `workflow` setup kind, `--with-workflow`, and `haxaml workflow check` for project-scoped workflow accommodation.
+- Added manifest-backed workflow planning, managed-file tracking, and workflow-aware doctor coverage.
+- Added setup-owned workflow bundles for Claude, Codex, Gemini, Cursor, GitHub Copilot, OpenCode, and Junie.
+- Replaced user-facing `sidecar` wording with `adapter file` in setup and adoption output.
+
 ## 0.7.0 - 2026-05-12
 
 - Added a new `haxaml/setup/` package with a shared target registry, deterministic planning, target renderers, managed writes, adoption state, and drift-aware doctor output.
-- Added `haxaml setup`, `haxaml setup print`, and `haxaml setup doctor` as the setup-owned onboarding surface for fresh repositories and established-codebase adoption.
+- Added `haxaml setup`, `haxaml setup print`, and `haxaml setup doctor` as the setup-owned onboarding integration point for fresh repositories and established-codebase adoption.
 - Replaced the old standalone adoption CLI path with setup-driven adoption that preserves native instruction files, writes managed sidecars and pointer blocks, and keeps detailed adoption inventory under `.haxaml/adoption/`.
 - Refreshed the `0.7.x` roadmap, README onboarding story, and CLI coverage around setup, adoption, project vs user scope, and setup doctor behavior.
 

@@ -1,4 +1,4 @@
-"""Tests for the Haxaml CLI surface."""
+"""Tests for the Haxaml CLI integration point."""
 
 import builtins
 import json
@@ -63,13 +63,13 @@ def test_setup_registry_covers_documented_targets_and_capabilities():
         assert set(target.user_capabilities) == {"instructions", "skills", "agents", "mcp", "workflow"}
 
     claude = get_target("claude")
-    assert any(surface.path == ".claude/skills/haxaml/SKILL.md" for surface in claude.surfaces_for("project"))
+    assert any(item.path == ".claude/skills/haxaml/SKILL.md" for item in claude.integration_points_for("project"))
     assert claude.project_capabilities["workflow"] is True
 
     gemini = get_target("gemini")
-    project_surfaces = gemini.surfaces_for("project")
-    assert any(surface.path == ".gemini/skills/haxaml/SKILL.md" for surface in project_surfaces)
-    assert any(surface.path == ".gemini/settings.json" for surface in project_surfaces)
+    project_integration_points = gemini.integration_points_for("project")
+    assert any(item.path == ".gemini/skills/haxaml/SKILL.md" for item in project_integration_points)
+    assert any(item.path == ".gemini/settings.json" for item in project_integration_points)
     assert set(WORKFLOW_TARGET_IDS) == {"claude", "codex", "gemini", "cursor", "copilot", "opencode", "junie"}
 
 

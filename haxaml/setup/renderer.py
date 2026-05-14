@@ -17,7 +17,7 @@ from haxaml.setup.markdown import (
     numbered,
     section,
 )
-from haxaml.setup.registry import Surface, TargetSpec
+from haxaml.setup.registry import IntegrationPoint, TargetSpec
 from haxaml.versioning import get_version
 
 
@@ -53,8 +53,8 @@ def _hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _workflow_section(workflow_adapter_path: str | None, workflow_native_paths: tuple[str, ...]) -> str | None:
-    if workflow_adapter_path is None and not workflow_native_paths:
+def _workflow_section(workflow_adapter_path: str | None, workflow_entrypoint_paths: tuple[str, ...]) -> str | None:
+    if workflow_adapter_path is None and not workflow_entrypoint_paths:
         return None
 
     bullets_list = []
@@ -63,10 +63,10 @@ def _workflow_section(workflow_adapter_path: str | None, workflow_native_paths: 
             "Workflow adaptation lives separately from the base setup. "
             f"Start with the adapter file at `{workflow_adapter_path}` when you need hook, agent, CI, or background-entry behavior."
         )
-    if workflow_native_paths:
-        joined = ", ".join(f"`{path}`" for path in workflow_native_paths)
-        bullets_list.append(f"Target-native workflow entrypoints are installed at {joined}.")
-    bullets_list.append("Use workflow assets to adapt native runtime behavior back into the Haxaml lifecycle.")
+    if workflow_entrypoint_paths:
+        joined = ", ".join(f"`{path}`" for path in workflow_entrypoint_paths)
+        bullets_list.append(f"Tool-specific workflow entrypoints are installed at {joined}.")
+    bullets_list.append("Use workflow assets to adapt tool-specific runtime behavior back into the Haxaml lifecycle.")
     return section("Workflow Adaptation", bullets(bullets_list))
 
 
@@ -76,18 +76,18 @@ def _base_instruction_body(
     project_dir: Path,
     *,
     workflow_adapter_path: str | None = None,
-    workflow_native_paths: tuple[str, ...] = (),
+    workflow_entrypoint_paths: tuple[str, ...] = (),
 ) -> str:
     repo_name = project_dir.resolve().name
     scope_label = "repository" if scope == "project" else "user environment"
     docs = bullets([f"[{url}]({url})" for url in target.docs_urls]) if target.docs_urls else "- Shared Haxaml setup policy"
-    workflow_section = _workflow_section(workflow_adapter_path, workflow_native_paths)
+    workflow_section = _workflow_section(workflow_adapter_path, workflow_entrypoint_paths)
     sections = [
-        f"# Haxaml Setup for {target.display_name}",
-        (
-            f"Haxaml governs this {scope_label}. Treat `.haxaml/` as the source of workflow state and "
-            "use target-native instructions only as adapters into that governed flow."
-        ),
+            f"# Haxaml Setup for {target.display_name}",
+            (
+                f"Haxaml governs this {scope_label}. Treat `.haxaml/` as the source of workflow state and "
+                "use tool-specific instructions only as adapters into that governed flow."
+            ),
         section(
             "Persona",
             bullets(
@@ -178,14 +178,14 @@ def render_instruction(
     project_dir: Path,
     *,
     workflow_adapter_path: str | None = None,
-    workflow_native_paths: tuple[str, ...] = (),
+    workflow_entrypoint_paths: tuple[str, ...] = (),
 ) -> RenderedArtifact:
     body = _base_instruction_body(
         target,
         scope,
         project_dir,
         workflow_adapter_path=workflow_adapter_path,
-        workflow_native_paths=workflow_native_paths,
+        workflow_entrypoint_paths=workflow_entrypoint_paths,
     )
     body_hash = _hash(body)
     metadata = {
@@ -230,7 +230,7 @@ def render_skill(
     scope: str,
     *,
     workflow_adapter_path: str | None = None,
-    workflow_native_paths: tuple[str, ...] = (),
+    workflow_entrypoint_paths: tuple[str, ...] = (),
 ) -> RenderedArtifact:
     lines = [
         "---",
@@ -241,7 +241,7 @@ def render_skill(
         f"This skill is installed for `{target.display_name}` in `{scope}` scope.",
         "",
     ]
-    if workflow_adapter_path is not None or workflow_native_paths:
+    if workflow_adapter_path is not None or workflow_entrypoint_paths:
         lines.extend(
             [
                 "Workflow adaptation:",
@@ -255,10 +255,10 @@ def render_skill(
                                 else None
                             ),
                             (
-                                "Native workflow entrypoints are installed at "
-                                + ", ".join(f"`{path}`" for path in workflow_native_paths)
+                                "Workflow entrypoints are installed at "
+                                + ", ".join(f"`{path}`" for path in workflow_entrypoint_paths)
                                 + "."
-                                if workflow_native_paths
+                                if workflow_entrypoint_paths
                                 else None
                             ),
                         )
@@ -303,7 +303,7 @@ def render_agent(
     scope: str,
     *,
     workflow_adapter_path: str | None = None,
-    workflow_native_paths: tuple[str, ...] = (),
+    workflow_entrypoint_paths: tuple[str, ...] = (),
 ) -> RenderedArtifact:
     bullets_list = [
         "Take delegated implementation tasks that fit inside the current repo boundaries.",
@@ -311,9 +311,9 @@ def render_agent(
         "Return concrete changes, verification evidence, and remaining risks.",
     ]
     if workflow_adapter_path is not None:
-        bullets_list.insert(2, f"Use `{workflow_adapter_path}` for target-specific runtime adaptation before changing repo code.")
-    if workflow_native_paths:
-        bullets_list.append("Native workflow entrypoints installed for this target: " + ", ".join(f"`{path}`" for path in workflow_native_paths))
+        bullets_list.insert(2, f"Use `{workflow_adapter_path}` for tool-specific runtime adaptation before changing repo code.")
+    if workflow_entrypoint_paths:
+        bullets_list.append("Workflow entrypoints installed for this target: " + ", ".join(f"`{path}`" for path in workflow_entrypoint_paths))
     body = "\n\n".join([f"# Haxaml Governor for {target.display_name}", bullets(bullets_list)])
     body_hash = _hash(body)
     metadata = {
@@ -336,16 +336,16 @@ def _mcp_payload(project_dir: Path) -> dict[str, object]:
     }
 
 
-def render_mcp_config(target: TargetSpec, surface: Surface, project_dir: Path) -> RenderedArtifact:
+def render_mcp_config(target: TargetSpec, integration_point: IntegrationPoint, project_dir: Path) -> RenderedArtifact:
     metadata = {
         "generator": "haxaml-setup",
         "target": target.target_id,
         "kind": "mcp",
-        "scope": surface.scope,
+        "scope": integration_point.scope,
         "version": get_version(),
     }
     payload = _mcp_payload(project_dir)
-    if surface.format == "toml":
+    if integration_point.format == "toml":
         body = "\n".join(
             [
                 metadata_line_comment(metadata),
