@@ -28,7 +28,10 @@ from haxaml.validator import (
     detect_missing_facts_fields,
     load_yaml,
     validate_acts,
+    validate_expect,
     validate_facts,
+    validate_map,
+    validate_rules,
 )
 
 
@@ -39,6 +42,9 @@ class ExecutionPaths:
     project_dir: Path
     facts_path: Path
     acts_path: Path
+    rules_path: Path
+    expect_path: Path
+    map_path: Path
 
 
 def resolve_execution_paths(project_dir: str) -> ExecutionPaths:
@@ -52,11 +58,21 @@ def resolve_execution_paths(project_dir: str) -> ExecutionPaths:
     root = Path(project_dir).resolve()
     facts_path = resolve_frame_file(root, "facts.yaml") or (root / ".haxaml" / "facts.yaml")
     acts_path = resolve_frame_file(root, "acts.yaml") or (root / ".haxaml" / "acts.yaml")
+    rules_path = resolve_frame_file(root, "rules.yaml") or (root / ".haxaml" / "rules.yaml")
+    expect_path = resolve_frame_file(root, "expect.yaml") or (root / ".haxaml" / "expect.yaml")
+    map_path = resolve_frame_file(root, "map.yaml") or (root / ".haxaml" / "map.yaml")
 
     if not facts_path.exists():
         raise FileNotFoundError(f"facts.yaml not found at {root}")
 
-    return ExecutionPaths(project_dir=root, facts_path=facts_path, acts_path=acts_path)
+    return ExecutionPaths(
+        project_dir=root,
+        facts_path=facts_path,
+        acts_path=acts_path,
+        rules_path=rules_path,
+        expect_path=expect_path,
+        map_path=map_path,
+    )
 
 
 def state_manager_for(paths: ExecutionPaths) -> Optional[StateManager]:
@@ -87,6 +103,24 @@ def run_preflight(paths: ExecutionPaths) -> PreflightResult:
     else:
         result.facts_valid = True
 
+    if not paths.rules_path.exists():
+        result.ready = False
+        result.errors.append("rules: rules.yaml not found")
+    else:
+        rules_errors = validate_rules(str(paths.rules_path))
+        if rules_errors:
+            result.ready = False
+            result.errors.extend([f"rules: {error}" for error in rules_errors])
+
+    if not paths.expect_path.exists():
+        result.ready = False
+        result.errors.append("expect: expect.yaml not found")
+    else:
+        expect_errors = validate_expect(str(paths.expect_path))
+        if expect_errors:
+            result.ready = False
+            result.errors.extend([f"expect: {error}" for error in expect_errors])
+
     if paths.acts_path.exists():
         acts_errors = validate_acts(str(paths.acts_path))
         if acts_errors:
@@ -114,6 +148,11 @@ def run_preflight(paths: ExecutionPaths) -> PreflightResult:
         result.warnings.extend(advisory)
 
     map_assessment = evaluate_map_complexity(paths.project_dir)
+    if paths.map_path.exists():
+        map_schema_errors = validate_map(str(paths.map_path))
+        if map_schema_errors:
+            result.ready = False
+            result.errors.extend([f"map: {error}" for error in map_schema_errors])
     map_errors, map_warnings = map_complexity_issues(map_assessment)
     if map_errors:
         result.ready = False
@@ -212,4 +251,3 @@ def build_health_report(paths: ExecutionPaths) -> dict:
         )
 
     return health
-

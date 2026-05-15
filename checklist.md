@@ -87,16 +87,16 @@ Haxaml today is still weak at:
 
 ## Setup, Skill, And Adapters
 
-- [ ] `haxaml setup` should become the one-step onboarding path.
-  Reality: not shipped yet.
-- [ ] Haxaml should ship a canonical built-in Skill.
-  Reality: not shipped yet.
-- [ ] Target-specific adapters should be generated from one source recipe.
-  Reality: not shipped yet.
-- [ ] Setup should support project scope, safe user-scope guidance, dry-run mode, and doctor output.
-  Reality: not shipped yet.
-- [ ] Installed Skill/adapters should be version-aware and drift-checkable.
-  Reality: not shipped yet.
+- [x] `haxaml setup` should become the one-step onboarding path.
+  Reality: shipped in `0.7.4` with interactive TTY flow plus non-interactive and JSON-safe modes.
+- [x] Haxaml should ship a canonical built-in Skill.
+  Reality: shipped in `0.7.4` with provider-aware `SKILL.md` generation and valid YAML frontmatter.
+- [x] Target-specific adapters should be generated from one source recipe.
+  Reality: setup now renders instructions, skills, agents, config, and workflow assets from one managed planner/renderer stack.
+- [x] Setup should support project scope, safe user-scope guidance, dry-run mode, and doctor output.
+  Reality: shipped, including preview-first dry runs and drift/missing-file audits.
+- [x] Installed Skill/adapters should be version-aware and drift-checkable.
+  Reality: shipped through setup manifest tracking, recipe hashes, pointer blocks, and setup doctor.
 
 ## Outcome Tracking, Drift, And Cross-Project Learning
 

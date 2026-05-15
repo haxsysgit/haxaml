@@ -29,6 +29,9 @@ haxaml/
     adoption.py              # setup-owned native file discovery and adoption analysis
     planner.py               # fresh/adopted planning and manifest generation
     renderer.py              # instructions/skills/adapter-file/config renderers
+    config_merge.py          # narrow JSON/TOML merge helpers for Haxaml-owned config blocks
+    interactive.py           # TTY setup wizard and prompt orchestration
+    cli.py                   # setup-specific CLI transport wrappers
     service.py               # transport-neutral setup engine used by CLI and MCP
     writer.py                # safe managed writes and pointer insertion
     doctor.py                # setup drift and missing-file audit
@@ -48,25 +51,18 @@ haxaml/
     execution_records.py     # run start/finish state mutation services
   paths.py                   # canonical FRAME path resolution
 
-haxaml_ui/
-  dashboard.py               # local read-only dashboard package
-
 packages/
   haxaml-mcp/               # MCP launcher package
-  haxaml-ui/                # dashboard package manifest
+  haxaml-ui/
+    haxaml_ui/
+      dashboard.py          # local read-only dashboard package
 
 docs/
   architecture.md
-  contributing.md
   mcp-tool-reference.md
 
 examples/
   minimal-governed-flow/
-    .haxaml/
-      facts.yaml
-      rules.yaml
-      acts.yaml
-      expect.yaml
     README.md
 
 tests/
@@ -135,7 +131,7 @@ tests/
 
 ## Incremental Read Path
 
-The `0.6.7` line adds a shared in-process snapshot layer so long-lived runtimes stop reparsing all FRAME files on every governed read.
+The `0.7.x` line uses a shared in-process snapshot layer so long-lived runtimes stop reparsing all FRAME files on every governed read.
 
 The cache tracks:
 

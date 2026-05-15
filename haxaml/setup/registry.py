@@ -41,6 +41,8 @@ class TargetSpec:
     support_tier: str
     docs_urls: tuple[str, ...]
     detect_patterns: tuple[str, ...] = ()
+    strong_detect_patterns: tuple[str, ...] = ()
+    weak_detect_patterns: tuple[str, ...] = ()
     integration_points: tuple[IntegrationPoint, ...] = ()
     manual_notes: tuple[str, ...] = ()
     project_capabilities: dict[str, bool] = field(default_factory=dict)
@@ -60,6 +62,16 @@ class TargetSpec:
 
     def surfaces_for(self, scope: str, kinds: set[str] | None = None) -> tuple[IntegrationPoint, ...]:
         return self.integration_points_for(scope, kinds)
+
+    def detection_patterns_for(self, strength: str | None = None) -> tuple[str, ...]:
+        """Return target-detection patterns grouped by evidence strength."""
+        if strength == "strong":
+            return self.strong_detect_patterns or self.detect_patterns
+        if strength == "weak":
+            return self.weak_detect_patterns
+        if self.strong_detect_patterns or self.weak_detect_patterns:
+            return (*self.strong_detect_patterns, *self.weak_detect_patterns)
+        return self.detect_patterns
 
 
 Surface = IntegrationPoint
@@ -105,7 +117,8 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://code.claude.com/docs/en/subagents",
             "https://code.claude.com/docs/en/settings",
         ),
-        detect_patterns=("CLAUDE.md", ".claude/skills/*/SKILL.md", ".claude/agents/*.md", ".mcp.json"),
+        strong_detect_patterns=("CLAUDE.md", ".claude/skills/*/SKILL.md", ".claude/agents/*.md"),
+        weak_detect_patterns=(".mcp.json",),
         integration_points=(
             IntegrationPoint("instructions", "project", "CLAUDE.md", "https://code.claude.com/docs/en/memory"),
             IntegrationPoint("skills", "project", ".claude/skills/haxaml/SKILL.md", "https://code.claude.com/docs/en/skills"),
@@ -128,7 +141,8 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://developers.openai.com/codex/skills",
             "https://developers.openai.com/codex/config-reference",
         ),
-        detect_patterns=("AGENTS.md", "AGENTS.override.md", ".agents/skills/*/SKILL.md", ".codex/config.toml"),
+        strong_detect_patterns=("AGENTS.override.md", ".codex/config.toml"),
+        weak_detect_patterns=("AGENTS.md", ".agents/skills/*/SKILL.md"),
         integration_points=(
             IntegrationPoint("instructions", "project", "AGENTS.md", "https://developers.openai.com/codex/guides/agents-md"),
             IntegrationPoint("skills", "project", ".agents/skills/haxaml/SKILL.md", "https://developers.openai.com/codex/skills"),
@@ -176,10 +190,11 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://docs.windsurf.com/windsurf/cascade/skills",
             "https://docs.windsurf.com/windsurf/cascade/mcp",
         ),
-        detect_patterns=("AGENTS.md", ".windsurf/skills/*/SKILL.md", ".windsurfrules"),
+        strong_detect_patterns=(".windsurf/skills/*/SKILL.md", ".windsurfrules"),
+        weak_detect_patterns=("AGENTS.md",),
         integration_points=(
             IntegrationPoint("instructions", "project", "AGENTS.md", "https://docs.windsurf.com/windsurf/cascade/agents-md"),
-            IntegrationPoint("skills", "project", ".agents/skills/haxaml/SKILL.md", "https://docs.windsurf.com/windsurf/cascade/skills"),
+            IntegrationPoint("skills", "project", ".windsurf/skills/haxaml/SKILL.md", "https://docs.windsurf.com/windsurf/cascade/skills"),
             IntegrationPoint(
                 "mcp",
                 "project",
@@ -189,7 +204,7 @@ TARGETS: tuple[TargetSpec, ...] = (
                 manual_only=True,
                 note="Official docs document user-level mcp_config.json; project-local MCP remains guidance-only.",
             ),
-            IntegrationPoint("skills", "user", "~/.agents/skills/haxaml/SKILL.md", "https://docs.windsurf.com/windsurf/cascade/skills"),
+            IntegrationPoint("skills", "user", "~/.codeium/windsurf/skills/haxaml/SKILL.md", "https://docs.windsurf.com/windsurf/cascade/skills"),
             IntegrationPoint("mcp", "user", "~/.codeium/windsurf/mcp_config.json", "https://docs.windsurf.com/windsurf/cascade/mcp", format="json"),
         ),
         manual_notes=("Project-local Windsurf MCP is not written automatically in 0.7.0.",),
@@ -311,7 +326,8 @@ TARGETS: tuple[TargetSpec, ...] = (
             "https://opencode.ai/docs/config",
             "https://opencode.ai/docs/skills",
         ),
-        detect_patterns=("AGENTS.md", ".opencode/skills/*/SKILL.md", "opencode.json", "opencode.jsonc"),
+        strong_detect_patterns=(".opencode/skills/*/SKILL.md", "opencode.json", "opencode.jsonc"),
+        weak_detect_patterns=("AGENTS.md",),
         integration_points=(
             IntegrationPoint("instructions", "project", "AGENTS.md", "https://opencode.ai/docs/config"),
             IntegrationPoint("skills", "project", ".opencode/skills/haxaml/SKILL.md", "https://opencode.ai/docs/skills"),

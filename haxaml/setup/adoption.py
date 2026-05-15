@@ -66,6 +66,9 @@ class AdoptionInventory:
 
     project_dir: Path
     detected_targets: tuple[str, ...]
+    strong_detected_targets: tuple[str, ...]
+    weak_detected_targets: tuple[str, ...]
+    target_candidates: tuple[dict[str, object], ...]
     native_files: tuple[dict[str, str], ...]
     analysis: dict[str, object]
 
@@ -82,10 +85,44 @@ class AdoptionInventory:
             "mode": "adopted",
             "selected_targets": selected_targets,
             "detected_targets": list(self.detected_targets),
+            "strong_detected_targets": list(self.strong_detected_targets),
+            "weak_detected_targets": list(self.weak_detected_targets),
+            "target_candidates": list(self.target_candidates),
             "native_files": list(self.native_files),
             "analysis": self.analysis,
             "adapter_files": adapter_files,
             "skipped_files": skipped_files,
+        }
+
+
+@dataclass(frozen=True)
+class TargetDetection:
+    """Detection evidence for one target."""
+
+    target_id: str
+    label: str
+    strong_paths: tuple[str, ...] = ()
+    weak_paths: tuple[str, ...] = ()
+
+    @property
+    def all_paths(self) -> tuple[str, ...]:
+        return (*self.strong_paths, *self.weak_paths)
+
+    @property
+    def has_strong(self) -> bool:
+        return bool(self.strong_paths)
+
+    @property
+    def has_weak(self) -> bool:
+        return bool(self.weak_paths)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "target": self.target_id,
+            "label": self.label,
+            "strong_paths": list(self.strong_paths),
+            "weak_paths": list(self.weak_paths),
+            "evidence_paths": list(self.all_paths),
         }
 
 
@@ -324,7 +361,7 @@ def scan_native_sources(project_dir: str | Path) -> AdoptionPlan:
     for target in list_targets():
         if target.target_id == "generic":
             continue
-        for path in _find_patterns(project, target.detect_patterns):
+        for path in _find_patterns(project, target.detection_patterns_for()):
             native.append(FoundFile(target.target_id, target.display_name, _relative(project, path)))
 
     for patterns in CONTEXT_FILE_SPECS:
@@ -346,27 +383,67 @@ def scan_native_sources(project_dir: str | Path) -> AdoptionPlan:
     )
 
 
-def detect_targets(project_dir: str | Path) -> tuple[str, ...]:
+def detect_target_evidence(project_dir: str | Path) -> tuple[TargetDetection, ...]:
     project = Path(project_dir).resolve()
-    detected: list[str] = []
+    detections: list[TargetDetection] = []
     for target in list_targets():
         if target.target_id == "generic":
             continue
-        if _find_patterns(project, target.detect_patterns):
-            detected.append(target.target_id)
+        strong_paths = tuple(
+            sorted(
+                {
+                    _relative(project, path)
+                    for path in _find_patterns(project, target.detection_patterns_for("strong"))
+                }
+            )
+        )
+        weak_paths = tuple(
+            sorted(
+                {
+                    _relative(project, path)
+                    for path in _find_patterns(project, target.detection_patterns_for("weak"))
+                }
+            )
+        )
+        if not strong_paths and not weak_paths:
+            continue
+        detections.append(
+            TargetDetection(
+                target_id=target.target_id,
+                label=target.display_name,
+                strong_paths=strong_paths,
+                weak_paths=weak_paths,
+            )
+        )
+    return tuple(sorted(detections, key=lambda item: item.target_id))
+
+
+def detect_targets(project_dir: str | Path, strength: str | None = None) -> tuple[str, ...]:
+    detected: list[str] = []
+    for item in detect_target_evidence(project_dir):
+        if strength == "strong" and not item.has_strong:
+            continue
+        if strength == "weak" and not item.has_weak:
+            continue
+        if strength == "weak" and item.has_strong:
+            continue
+        detected.append(item.target_id)
     return tuple(sorted(set(detected)))
 
 
-def detect_target_files(project_dir: str | Path, target: TargetSpec) -> tuple[str, ...]:
+def detect_target_files(project_dir: str | Path, target: TargetSpec, strength: str | None = None) -> tuple[str, ...]:
     project = Path(project_dir).resolve()
-    return tuple(sorted({_relative(project, path) for path in _find_patterns(project, target.detect_patterns)}))
+    return tuple(sorted({_relative(project, path) for path in _find_patterns(project, target.detection_patterns_for(strength))}))
 
 
 def build_adoption_inventory(project_dir: str | Path) -> AdoptionInventory:
     project = Path(project_dir).resolve()
     plan = scan_native_sources(project)
     analysis = analyze_adoption_instructions(plan)
-    detected_targets = detect_targets(project)
+    evidence = detect_target_evidence(project)
+    detected_targets = tuple(item.target_id for item in evidence)
+    strong_detected_targets = tuple(item.target_id for item in evidence if item.has_strong)
+    weak_detected_targets = tuple(item.target_id for item in evidence if item.has_weak and not item.has_strong)
 
     native_files = [
         {"kind": found.kind, "label": found.label, "path": found.path}
@@ -385,6 +462,9 @@ def build_adoption_inventory(project_dir: str | Path) -> AdoptionInventory:
     return AdoptionInventory(
         project_dir=project,
         detected_targets=detected_targets,
+        strong_detected_targets=strong_detected_targets,
+        weak_detected_targets=weak_detected_targets,
+        target_candidates=tuple(item.to_dict() for item in evidence),
         native_files=tuple(native_files),
         analysis=analysis,
     )

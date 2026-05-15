@@ -17,7 +17,8 @@ def _make_project(tmp_path, brain=None, state=None, instructions=None):
             "identity": {"name": "test-project", "version": "0.1.0",
                          "description": "Test project"},
             "goal": {"purpose": "Testing the execution runner",
-                     "scope": "Unit tests"},
+                     "scope": "Unit tests",
+                     "out_of_scope": []},
             "stack": {"language": "python"},
             "architecture": {"pattern": "layered",
                              "reasoning": "Test simplicity"},
@@ -25,7 +26,7 @@ def _make_project(tmp_path, brain=None, state=None, instructions=None):
             "constraints": ["No guessing"],
             "success_criteria": ["Tests pass"],
             "tools": {"testing": "pytest"},
-            "services": [],
+            "services": [{"name": "api", "purpose": "Test surface"}],
             "roles": [{"name": "builder", "responsibility": "build"}],
             "features": [{"name": "core", "status": "planned"}],
         }
@@ -50,6 +51,65 @@ def _make_project(tmp_path, brain=None, state=None, instructions=None):
             },
         }
 
+    rules = {
+        "before_task": {"read_first": [".haxaml/facts.yaml", ".haxaml/rules.yaml", ".haxaml/acts.yaml"]},
+        "boundaries": {"rules": ["Keep changes scoped to the active task."]},
+        "after_task": {
+            "report": ["Summarize what changed."],
+            "update": [".haxaml/acts.yaml"],
+            "verify": ["Run relevant tests or validation checks."],
+        },
+        "forbidden": ["Do not claim success without verification evidence."],
+    }
+    expect = {
+        "planning": {
+            "goal": "Complete one scoped task safely.",
+            "strategy": "Small governed runs.",
+            "estimated_runs": 1,
+            "project_size": "small",
+            "map_required": False,
+            "map_reason": "Map is optional for this fixture.",
+        },
+        "map_policy": {
+            "module_threshold": 10,
+            "cross_impact_touch_threshold": 3,
+            "cross_impact_run_threshold": 2,
+            "dependency_fanout_threshold": 3,
+            "impact_check_threshold": 3,
+            "shared_integration_module_threshold": 2,
+            "require_map_when": ["Module count exceeds policy threshold."],
+            "agent_instruction": "Read map.yaml when map_required is true.",
+        },
+        "phases": [
+            {
+                "name": "Phase 1",
+                "status": "active",
+                "run_range": "1-1",
+                "target_runs": 1,
+                "description": "Fixture phase.",
+                "done_when": "One run is recorded.",
+            }
+        ],
+        "runbook": [
+            {
+                "run": 1,
+                "phase": "Phase 1",
+                "status": "active",
+                "goal": "Execute one fixture task.",
+                "outcome": "Fixture task recorded.",
+                "depends_on": [],
+                "touches": ["scoped files only"],
+                "requires": ["Clear task statement"],
+                "uses_map": False,
+                "verify": ["Run relevant validation."],
+                "done_when": "Verification passes and the session is recorded.",
+            }
+        ],
+        "upcoming": [],
+        "milestones": [],
+        "open_questions": [],
+    }
+
     haxaml_dir = tmp_path / ".haxaml"
     haxaml_dir.mkdir(exist_ok=True)
 
@@ -60,6 +120,14 @@ def _make_project(tmp_path, brain=None, state=None, instructions=None):
     acts_path = haxaml_dir / "acts.yaml"
     with open(acts_path, "w") as f:
         yaml.dump(state, f, default_flow_style=False, sort_keys=False)
+
+    rules_path = haxaml_dir / "rules.yaml"
+    with open(rules_path, "w") as f:
+        yaml.dump(rules, f, default_flow_style=False, sort_keys=False)
+
+    expect_path = haxaml_dir / "expect.yaml"
+    with open(expect_path, "w") as f:
+        yaml.dump(expect, f, default_flow_style=False, sort_keys=False)
 
     if instructions is not None:
         inst_path = tmp_path / "instruction.md"
@@ -183,17 +251,17 @@ class TestExecutionLoop:
     def test_full_cycle(self, tmp_path):
         """Test complete FRAME → run → acts → compact cycle."""
         project = _make_project(tmp_path)
-        rules = {
-            "memory_policy": {
-                "archive_mode": "on_record",
-                "max_hot_runs": 5,
-                "max_hot_sessions": 5,
-                "max_hot_verifications": 5,
-                "max_acts_bytes": 16000,
-                "keep_decisions_hot": True,
-            }
+        rules_path = tmp_path / ".haxaml" / "rules.yaml"
+        rules = yaml.safe_load(rules_path.read_text())
+        rules["memory_policy"] = {
+            "archive_mode": "on_record",
+            "max_hot_runs": 5,
+            "max_hot_sessions": 5,
+            "max_hot_verifications": 5,
+            "max_acts_bytes": 16000,
+            "keep_decisions_hot": True,
         }
-        with open(tmp_path / ".haxaml" / "rules.yaml", "w") as f:
+        with open(rules_path, "w") as f:
             yaml.dump(rules, f, default_flow_style=False, sort_keys=False)
         runner = ExecutionRunner(project)
 

@@ -289,7 +289,12 @@ def supports_workflow(target_id: str) -> bool:
 
 
 def _workflow_restore_hint(target_id: str) -> str:
-    return f"Re-run `uv run haxaml setup --target {target_id} --with-workflow --force` to restore this Haxaml-managed workflow file."
+    return f"Re-run `haxaml setup --target {target_id} --with-workflow --force` to restore this Haxaml-managed workflow file."
+
+
+def _workflow_check_command(target_id: str, context: str, *, strict: bool = False) -> str:
+    strict_suffix = " --strict" if strict else ""
+    return f"haxaml workflow check --target {target_id} --context {context}{strict_suffix}"
 
 
 def _workflow_audit_label(target: WorkflowTargetSpec, audit_role: str) -> str:
@@ -403,8 +408,8 @@ def _render_workflow_readme(target: WorkflowTargetSpec) -> RenderedArtifact:
             "Check Command",
             bullets(
                 [
-                    f"`uv run haxaml workflow check --target {target.target_id} --context entry` for local entry checks.",
-                    f"`uv run haxaml workflow check --target {target.target_id} --context ci --strict` for machine-enforced checks.",
+                    f"`{_workflow_check_command(target.target_id, 'entry')}` for local entry checks.",
+                    f"`{_workflow_check_command(target.target_id, 'ci', strict=True)}` for machine-enforced checks.",
                 ]
             ),
         ),
@@ -431,7 +436,7 @@ def _render_agent_entry(target: WorkflowTargetSpec) -> RenderedArtifact:
             ),
             bullets(
                 [
-                    f"Run `uv run haxaml workflow check --target {target.target_id} --context agent` before long-running work.",
+                    f"Run `{_workflow_check_command(target.target_id, 'agent')}` before long-running work.",
                     "Route implementation back into the normal Haxaml lifecycle after the entry check passes.",
                     "Return concrete verification evidence and remaining risks when handing work back.",
                 ]
@@ -451,15 +456,35 @@ def _render_shell_script(target: WorkflowTargetSpec, file: WorkflowFileSpec) -> 
         "# Respect a caller-provided project dir so nested entrypoints and CI jobs stay deterministic.",
         'ROOT="${HAXAML_PROJECT_DIR:-$(pwd)}"',
         "",
+        "run_haxaml() {",
+        '  if command -v haxaml >/dev/null 2>&1; then',
+        '    haxaml "$@"',
+        '  elif command -v uvx >/dev/null 2>&1; then',
+        '    uvx haxaml "$@"',
+        "  else",
+        '    echo "Install `haxaml` or `uvx` before using Haxaml workflow adapters." >&2',
+        "    return 1",
+        "  fi",
+        "}",
+        "",
     ]
     if file.template == "hook_script":
-        lines.append(
-            f'exec uv run haxaml workflow check --dir "$ROOT" --target {target.target_id} --context {file.context} --strict "$@"'
+        lines.extend(
+            [
+                (
+                    f'run_haxaml workflow check --dir "$ROOT" --target {target.target_id} '
+                    f'--context {file.context} --strict "$@"'
+                ),
+                "exit $?",
+            ]
         )
     else:
         lines.extend(
             [
-                f'uv run haxaml workflow check --dir "$ROOT" --target {target.target_id} --context {file.context} --strict "$@"',
+                (
+                    f'run_haxaml workflow check --dir "$ROOT" --target {target.target_id} '
+                    f'--context {file.context} --strict "$@"'
+                ),
                 "",
                 "# Replace the echo below with the actual provider command used by your team.",
                 f'echo "{target.display_name} workflow check passed. Add the provider invocation here."',

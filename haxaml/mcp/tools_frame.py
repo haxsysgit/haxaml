@@ -25,7 +25,7 @@ def haxaml_init(directory: str = ".", detail: str = DETAIL_SHORT) -> dict:
         message = (
             f"⚠ FRAME scaffold already exists at {haxaml_root}\n"
             "  → haxaml_init only creates missing core FRAME files\n"
-            "  → Run haxaml_setup for onboarding or adoption"
+            "  → Run `haxaml setup` or call `haxaml_setup` for onboarding or adoption"
         )
         return _ok(
             "haxaml_init",
@@ -44,7 +44,7 @@ def haxaml_init(directory: str = ".", detail: str = DETAIL_SHORT) -> dict:
         f"  → .haxaml/rules.yaml — define agent rules\n"
         f"  → .haxaml/acts.yaml — diary starts here\n"
         f"  → .haxaml/expect.yaml — plan your runs\n"
-        f"  → Run haxaml_setup for onboarding or adoption\n"
+        f"  → Run `haxaml setup` or call `haxaml_setup` for onboarding or adoption\n"
         f"  → Call haxaml_validate when ready"
     )
     return _ok(

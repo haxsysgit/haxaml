@@ -299,14 +299,14 @@ def _about_payload(project_dir: str) -> dict[str, Any]:
         onboarding = {
             "status": "missing_frame",
             "recommended_tool": "haxaml_setup",
-            "message": "Project is not initialized. Run haxaml_setup to install FRAME and agent-native onboarding.",
+            "message": "Project is not initialized. Run `haxaml setup` or call `haxaml_setup` to install FRAME and agent-native onboarding.",
         }
         next_step = "haxaml_setup"
     elif not manifest_path.exists():
         onboarding = {
             "status": "frame_only",
             "recommended_tool": "haxaml_setup",
-            "message": "FRAME exists, but setup-managed onboarding is missing. Run haxaml_setup to adopt or install native instructions.",
+            "message": "FRAME exists, but setup-managed onboarding is missing. Run `haxaml setup` or call `haxaml_setup` to adopt or install native instructions.",
         }
         next_step = "haxaml_setup"
     else:

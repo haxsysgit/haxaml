@@ -9,13 +9,14 @@ import sys
 from pathlib import Path
 
 import click
+from click.core import ParameterSource
 
 from haxaml.setup import WORKFLOW_TARGET_IDS
 from haxaml.setup.registry import SUPPORTED_TARGET_IDS
 from haxaml.state_manager import StateManager
 from haxaml.benchmarks import format_benchmark_report
 from haxaml.paths import detect_project_root, frame_path, resolve_frame_file
-from haxaml.versioning import MCP_LAUNCHER_PACKAGE, PACKAGE_NAME, get_version, version_spec
+from haxaml.versioning import get_version, upgrade_specs
 
 
 @click.group()
@@ -112,9 +113,10 @@ def init(directory):
 @cli.group(invoke_without_command=True)
 @click.pass_context
 @_setup_common_options
+@click.option("--non-interactive", is_flag=True, help="Disable the TTY wizard and use the direct flag-driven setup flow.")
 @click.option("--force", is_flag=True, help="Overwrite Haxaml-managed files and replace existing files when explicitly requested.")
 @click.option("--dry-run", is_flag=True, help="Plan writes without mutating files.")
-def setup(ctx, project_dir, scope, target_id, mode, only, with_workflow, output_format, force, dry_run):
+def setup(ctx, project_dir, scope, target_id, mode, only, with_workflow, output_format, non_interactive, force, dry_run):
     """Install Haxaml into fresh or existing agent-specific integration points."""
     from haxaml.setup import cli as setup_commands
 
@@ -127,21 +129,65 @@ def setup(ctx, project_dir, scope, target_id, mode, only, with_workflow, output_
             "only": only,
             "with_workflow": with_workflow,
             "output_format": output_format,
+            "non_interactive": non_interactive,
             "force": force,
             "dry_run": dry_run,
         }
         return
 
+    targets = None
+    if (
+        not non_interactive
+        and output_format == "text"
+        and sys.stdin.isatty()
+        and sys.stdout.isatty()
+    ):
+        from haxaml.setup.interactive import run_setup_wizard
+
+        prefilled = set()
+        if ctx.get_parameter_source("scope") != ParameterSource.DEFAULT:
+            prefilled.add("scope")
+        if ctx.get_parameter_source("mode") != ParameterSource.DEFAULT and mode != "auto":
+            prefilled.add("mode")
+        if ctx.get_parameter_source("target_id") != ParameterSource.DEFAULT and target_id != "auto":
+            prefilled.add("target")
+        if ctx.get_parameter_source("only") != ParameterSource.DEFAULT and only:
+            prefilled.add("only")
+        if ctx.get_parameter_source("with_workflow") != ParameterSource.DEFAULT and with_workflow:
+            prefilled.add("with_workflow")
+
+        resolved = run_setup_wizard(
+            project_dir=project_dir,
+            scope=scope,
+            target=target_id,
+            mode=mode,
+            only=only,
+            with_workflow=with_workflow,
+            prefilled=prefilled,
+            dry_run=dry_run,
+        )
+        if resolved is None:
+            click.echo("Setup cancelled.")
+            return
+        scope = resolved.scope
+        mode = resolved.mode
+        target_id = "auto"
+        targets = resolved.targets
+        only = tuple(resolved.only)
+        with_workflow = resolved.with_workflow
+
     result = setup_commands.execute_setup(
         project_dir=project_dir,
         scope=scope,
         target=target_id,
+        targets=targets,
         mode=mode,
         only=only,
         with_workflow=with_workflow,
         force=force,
         dry_run=dry_run,
         output_format=output_format,
+        color=sys.stdout.isatty(),
     )
     _echo_tool_result(result)
 
@@ -225,16 +271,19 @@ def doctor(project_dir):
 @cli.command()
 @click.option("--to", "target_version", default=None, help="Target version (default: latest).")
 @click.option("--include-mcp/--no-include-mcp", default=True, help="Upgrade haxaml-mcp too.")
+@click.option("--include-ui/--no-include-ui", default=False, help="Upgrade haxaml-ui too.")
 @click.option("--dry-run", is_flag=True, help="Print the upgrade command without executing it.")
-def upgrade(target_version, include_mcp, dry_run):
+def upgrade(target_version, include_mcp, include_ui, dry_run):
     """Upgrade Haxaml with uv tool management."""
     if not shutil.which("uv"):
         click.echo("✗ `uv` is required for upgrade. Install uv first: https://docs.astral.sh/uv/")
         sys.exit(1)
 
-    specs = [version_spec(PACKAGE_NAME, target_version)]
-    if include_mcp:
-        specs.append(version_spec(MCP_LAUNCHER_PACKAGE, target_version))
+    specs = upgrade_specs(
+        target_version=target_version,
+        include_mcp=include_mcp,
+        include_ui=include_ui,
+    )
 
     upgrade_cmd = ["uv", "tool", "upgrade", *specs]
     if dry_run:

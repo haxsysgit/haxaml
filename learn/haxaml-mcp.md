@@ -21,7 +21,7 @@ Prompt files still matter, but they are adapters. The hard governance logic live
 - MCP server: `haxaml-mcp` via `haxaml.mcp_server:main`
 - Project state: repository plus `.haxaml/*.yaml`
 
-Package split in `0.7.1`:
+Current package split:
 
 - `haxaml` - core governance engine and CLI
 - `haxaml-mcp` - MCP runtime/launcher package
@@ -42,6 +42,7 @@ Canonical FRAME files:
 - `haxaml_setup(project_dir='.')` auto-detects fresh vs adopted mode.
 - `mode='fresh'` installs FRAME/native adapters without touching existing native instruction files.
 - `mode='adopted'` preserves detected native files and appends managed pointer blocks instead of replacing them.
+- `with_workflow=True` adds workflow adaptation files for workflow-capable targets.
 - `scope='user'` installs only user-home surfaces and leaves the repo untouched.
 
 `haxaml_init` still exists, but it is now intentionally small: it only creates missing core FRAME files. Use it when you want a scaffold and nothing else.
@@ -180,7 +181,9 @@ Project-local config is preferred. When `haxaml_setup` manages a writable target
 
 ```toml
 [mcp_servers.haxaml]
-command = "haxaml-mcp"
+command = "uvx"
+args = ["haxaml-mcp"]
+env = { HAXAML_PROJECT_DIR = "/path/to/your/project" }
 ```
 
 ### Generic JSON

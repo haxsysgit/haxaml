@@ -76,16 +76,19 @@ def setup_plan(
     project_dir: str | Path,
     scope: str = "project",
     target: str = "auto",
+    targets: tuple[str, ...] | list[str] | None = None,
     mode: str = "auto",
     only: tuple[str, ...] | list[str] | None = None,
     with_workflow: bool = False,
     output_format: str = "text",
+    color: bool = False,
 ) -> dict[str, Any]:
     try:
         plan = plan_setup(
             project_dir=project_dir,
             scope=scope,
             target=target,
+            targets=targets,
             mode=mode,
             only=only,
             with_workflow=with_workflow,
@@ -94,6 +97,8 @@ def setup_plan(
         return _err("haxaml_setup", "invalid_setup_args", str(exc))
 
     data = setup_data(plan)
+    if output_format == "text":
+        data["message"] = setup_message(plan, color=color)
     if output_format == "json":
         data["message"] = json.dumps(data, indent=2, sort_keys=True)
     return _ok("haxaml_setup", data, warnings=plan.warnings)
@@ -104,12 +109,14 @@ def execute_setup(
     project_dir: str | Path,
     scope: str = "project",
     target: str = "auto",
+    targets: tuple[str, ...] | list[str] | None = None,
     mode: str = "auto",
     only: tuple[str, ...] | list[str] | None = None,
     with_workflow: bool = False,
     force: bool = False,
     dry_run: bool = False,
     output_format: str = "text",
+    color: bool = False,
 ) -> dict[str, Any]:
     try:
         if dry_run:
@@ -117,6 +124,7 @@ def execute_setup(
                 project_dir=project_dir,
                 scope=scope,
                 target=target,
+                targets=targets,
                 mode=mode,
                 only=only,
                 with_workflow=with_workflow,
@@ -127,6 +135,7 @@ def execute_setup(
                 project_dir=project_dir,
                 scope=scope,
                 target=target,
+                targets=targets,
                 mode=mode,
                 only=only,
                 with_workflow=with_workflow,
@@ -136,8 +145,8 @@ def execute_setup(
         return _err("haxaml_setup", "invalid_setup_args", str(exc))
 
     data = setup_data(plan, apply_result=apply_result)
-    if dry_run:
-        data["message"] = setup_message(plan)
+    if output_format == "text":
+        data["message"] = setup_message(plan, apply_result=apply_result, color=color)
     if output_format == "json":
         data["message"] = json.dumps(data, indent=2, sort_keys=True)
     return _ok("haxaml_setup", data, warnings=plan.warnings)
@@ -148,6 +157,7 @@ def print_plan(
     project_dir: str | Path,
     scope: str = "project",
     target: str = "auto",
+    targets: tuple[str, ...] | list[str] | None = None,
     mode: str = "auto",
     only: tuple[str, ...] | list[str] | None = None,
     with_workflow: bool = False,
@@ -158,6 +168,7 @@ def print_plan(
             project_dir=project_dir,
             scope=scope,
             target=target,
+            targets=targets,
             mode=mode,
             only=only,
             with_workflow=with_workflow,

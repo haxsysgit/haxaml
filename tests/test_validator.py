@@ -272,6 +272,28 @@ class TestConsistencyReport:
         assert any("Phase 'phase 1' is marked done" in warning or "phase 'phase 1'" in warning.lower() for warning in result.warnings)
         assert any("verification discipline" in warning.lower() for warning in result.warnings)
 
+    def test_semantic_validate_does_not_use_removed_expect_runs_key(self):
+        frame = self._frame(
+            acts={"runs": [{"id": "run-1", "task": "task", "result": "success"}]},
+            expect={
+                "phases": [{"name": "Phase 1", "status": "active"}],
+                "runbook": [
+                    {
+                        "run": 1,
+                        "phase": "Phase 1",
+                        "status": "active",
+                        "goal": "Ship auth",
+                        "outcome": "Auth shipped",
+                        "depends_on": [],
+                        "verify": ["tests"],
+                    }
+                ],
+            },
+        )
+
+        result = semantic_validate(frame)
+        assert not any("has no matching acts record" in item for item in result.blocking)
+
     def test_rules_agent_profile_invalid_fields_report_paths(self, tmp_path):
         rules = {
             "before_task": {"read_first": [".haxaml/facts.yaml"]},

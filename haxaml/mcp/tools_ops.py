@@ -2,6 +2,7 @@
 
 from haxaml.mcp.base import *
 from haxaml.setup.service import apply_setup, setup_data
+from haxaml.versioning import upgrade_specs
 
 
 @mcp_app.tool()
@@ -135,10 +136,11 @@ def haxaml_export(
 def haxaml_upgrade(
     target_version: Optional[str] = None,
     include_mcp: bool = True,
+    include_ui: bool = False,
     dry_run: bool = False,
     detail: str = DETAIL_SHORT,
 ) -> dict:
-    """Upgrade haxaml (and optionally haxaml-mcp) using uv tool management."""
+    """Upgrade haxaml and optional companion packages using uv tool management."""
     detail_mode, detail_err = _normalize_detail("haxaml_upgrade", detail)
     if detail_err:
         return detail_err
@@ -150,9 +152,11 @@ def haxaml_upgrade(
             "uv is required for upgrade. Install uv first: https://docs.astral.sh/uv/",
         )
 
-    specs = [version_spec(PACKAGE_NAME, target_version)]
-    if include_mcp:
-        specs.append(version_spec(MCP_LAUNCHER_PACKAGE, target_version))
+    specs = upgrade_specs(
+        target_version=target_version,
+        include_mcp=include_mcp,
+        include_ui=include_ui,
+    )
 
     upgrade_cmd = ["uv", "tool", "upgrade", *specs]
     if dry_run:
@@ -163,6 +167,7 @@ def haxaml_upgrade(
                 "command": upgrade_cmd,
                 "target_version": target_version or "latest",
                 "include_mcp": include_mcp,
+                "include_ui": include_ui,
             },
             detail=detail_mode,
         )
@@ -177,6 +182,7 @@ def haxaml_upgrade(
                 "stdout": (primary.stdout or "").strip(),
                 "stderr": (primary.stderr or "").strip(),
                 "include_mcp": include_mcp,
+                "include_ui": include_ui,
                 "target_version": target_version or "latest",
             },
             detail=detail_mode,
@@ -220,6 +226,7 @@ def haxaml_upgrade(
             "message": "✓ Upgrade complete via fallback install flow.",
             "command": upgrade_cmd,
             "include_mcp": include_mcp,
+            "include_ui": include_ui,
             "target_version": target_version or "latest",
             "executed": executed,
         },
@@ -234,6 +241,7 @@ def haxaml_setup(
     target: str = "auto",
     mode: str = "auto",
     only: Optional[list[str]] = None,
+    with_workflow: bool = False,
     force: bool = False,
     detail: str = DETAIL_SHORT,
 ) -> dict:
@@ -249,6 +257,7 @@ def haxaml_setup(
             target=target,
             mode=mode,
             only=only,
+            with_workflow=with_workflow,
             force=force,
         )
     except (KeyError, ValueError) as exc:

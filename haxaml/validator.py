@@ -589,20 +589,6 @@ def semantic_validate(frame: "FrameModel") -> SemanticValidationResult:
                 "lifecycle state is stale and may block verify/record"
             )
 
-    if isinstance(expect, dict):
-        expect_runs = expect.get("runs") or []
-        acts_run_ids = {
-            r.get("id") for r in (acts.get("runs") or [])
-            if isinstance(r, dict) and r.get("id")
-        }
-        for run in expect_runs:
-            if not isinstance(run, dict):
-                continue
-            if run.get("status") == "active" and run.get("id") and run["id"] not in acts_run_ids:
-                blocking.append(
-                    f"expect.yaml run '{run.get('id')}' is active but has no matching acts record"
-                )
-
     # --- advisory: description and scope quality ---
     if not _identity.get("description"):
         warnings.append("facts.identity.description is missing — helps agents understand the project")

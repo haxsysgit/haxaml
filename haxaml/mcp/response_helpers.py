@@ -212,7 +212,7 @@ def _compact_success(tool: str, payload: dict) -> dict:
         if onboarding.get("recommended_tool") == "haxaml_setup":
             message = (
                 "Haxaml is the governance layer. FRAME is present, but setup-managed onboarding is missing. "
-                "Run haxaml_setup, then continue with haxaml_guidance."
+                "Run `haxaml setup` or call `haxaml_setup`, then continue with `haxaml_guidance`."
             )
         else:
             message = (

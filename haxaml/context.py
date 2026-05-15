@@ -329,6 +329,7 @@ def context_pack_section_markers(
         "map": file_fp("map"),
     }
     affected_modules = _detect_affected_modules(task, frame.get("facts") or {}, frame.get("rules") or {}, frame.get("map") or {})
+    retrieval_hints = build_context_hints(project_dir, task=task, frame_data=frame)
     return {
         "essential_facts": stable_fingerprint({"pack": pack, "facts": file_fp("facts")}),
         "relevant_rules": stable_fingerprint({"pack": pack, "rules": file_fp("rules")}),
@@ -362,6 +363,7 @@ def context_pack_section_markers(
                 "sources": ["facts", "rules", "acts", "archived_acts", "expect", "map"],
                 "archive_available": archive_index.exists,
                 "archive_signature": archive_index.signature,
+                "hints": retrieval_hints,
             }
         ),
     }

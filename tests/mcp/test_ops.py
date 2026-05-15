@@ -124,6 +124,14 @@ class TestSetup:
         assert (tmp_path / ".haxaml" / "setup" / "targets" / "claude.md").exists()
         assert "HAXAML:MANAGED START" in (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
 
+    def test_auto_mode_with_weak_shared_signal_stays_fresh(self, tmp_path):
+        (tmp_path / "AGENTS.md").write_text("Existing shared instructions.\n", encoding="utf-8")
+        result = haxaml_setup(project_dir=str(tmp_path))
+        assert result["ok"] is True
+        assert (tmp_path / ".haxaml" / "adoption" / "adoption.yaml").exists() is False
+        assert result["data"]["mode"] == "fresh"
+        assert any("weak shared signals" in warning for warning in result["warnings"])
+
     def test_fresh_mode_preserves_existing_native_files(self, tmp_path):
         native = tmp_path / "CLAUDE.md"
         native.write_text("Existing Claude instructions.\n", encoding="utf-8")
@@ -143,6 +151,12 @@ class TestSetup:
         assert (home / ".codex" / "AGENTS.md").exists()
         assert (home / ".codex" / "config.toml").exists()
 
+    def test_setup_tool_supports_workflow_assets(self, tmp_path):
+        result = haxaml_setup(project_dir=str(tmp_path), target="claude", with_workflow=True)
+        assert result["ok"] is True
+        assert (tmp_path / ".haxaml" / "setup" / "workflows" / "claude" / "README.md").exists()
+        assert (tmp_path / ".claude" / "settings.json").exists()
+
 
 class TestUpgrade:
     def test_upgrade_dry_run(self):
@@ -150,6 +164,13 @@ class TestUpgrade:
         assert result["ok"] is True
         assert result["data"]["command"][:3] == ["uv", "tool", "upgrade"]
         assert "haxaml==9.9.9" in result["data"]["command"]
+        assert result["data"]["include_ui"] is False
+
+    def test_upgrade_dry_run_can_include_ui(self):
+        result = haxaml_upgrade(target_version="9.9.9", dry_run=True, include_ui=True)
+        assert result["ok"] is True
+        assert "haxaml-ui==9.9.9" in result["data"]["command"]
+        assert result["data"]["include_ui"] is True
 
     @patch("haxaml.mcp_server.shutil.which", return_value=None)
     def test_upgrade_requires_uv(self, _which):

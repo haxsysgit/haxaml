@@ -66,6 +66,8 @@ def _readiness_from_health(
     task_type: str,
     risk: str,
     required_questions: list[str],
+    guidance_status: str,
+    missing_context: list[str],
 ) -> tuple[str, str]:
     """Determine (readiness_status, next_step) from frame health + task context."""
 
@@ -77,6 +79,12 @@ def _readiness_from_health(
         if is_policy_issue:
             return "blocked_by_policy", "fix_frame_health"
         return "blocked_by_missing_context", "fix_frame_health"
+
+    if missing_context:
+        return "blocked_by_missing_context", "fix_frame_health"
+
+    if guidance_status == "action_required" and required_questions:
+        return "needs_user_input", "ask_user"
 
     if required_questions and risk == "high":
         return "needs_user_input", "ask_user"
@@ -160,6 +168,14 @@ def haxaml_prebuild(
     # --- semantic validation ---
     sem = semantic_validate(frame)
     consistency = frame_consistency_report(frame)
+    frame_dict = {
+        "facts": frame.facts,
+        "rules": frame.rules,
+        "acts": frame.acts,
+        "map": frame.map,
+        "expect": frame.expect,
+    }
+    guidance = _guidance_eval(task, frame_dict)
     progress_summary = {
         "status": consistency["status"],
         "reason": consistency["reason"],
@@ -175,13 +191,21 @@ def haxaml_prebuild(
     risk = tmpl.get("risk", "medium")
 
     # --- build readiness status ---
-    required_questions = list(tmpl.get("required_questions") or [])
+    required_questions = list(dict.fromkeys(
+        [*guidance.get("required_questions", []), *(tmpl.get("required_questions") or [])]
+    ))
+    materials_needed = list(tmpl.get("materials_needed") or [])
+    done_criteria = list(tmpl.get("done_criteria") or [])
+    likely_impact = list(tmpl.get("likely_impact") or [])
+    risks = list(tmpl.get("risks") or [])
     readiness_status, next_step = _readiness_from_health(
         sem.blocking,
         sem.warnings,
         task_type,
         risk,
         required_questions,
+        str(guidance.get("status", "")),
+        list(guidance.get("missing_context") or []),
     )
     if readiness_status == "ready_to_build" and consistency["status"] != "on_track":
         readiness_status = "ready_to_build_with_warnings"
@@ -248,14 +272,6 @@ def haxaml_prebuild(
                 warnings.append(f"Runner start skipped: {exc}")
 
             now = _now_iso()
-            frame_dict = {
-                "facts": frame.facts,
-                "rules": frame.rules,
-                "acts": frame.acts,
-                "map": frame.map,
-                "expect": frame.expect,
-            }
-            guidance = _guidance_eval(task, frame_dict)
             hints = build_context_hints(project_dir, task=task, frame_data=frame_dict)
             session_file_refs = [
                 ".haxaml/facts.yaml",
@@ -303,6 +319,12 @@ def haxaml_prebuild(
                     "started": now,
                     "updated": now,
                     "plan": plan,
+                    "required_questions": required_questions,
+                    "materials_needed": materials_needed,
+                    "done_criteria": done_criteria,
+                    "likely_impact": likely_impact,
+                    "risks": risks,
+                    "missing_context": list(guidance.get("missing_context") or []),
                     "file_refs": session_file_refs,
                     "module_refs": session_module_refs,
                     "keywords": session_keywords,
@@ -356,10 +378,10 @@ def haxaml_prebuild(
         "guidance_type": guidance_type,
         "classification_reason": classification_reason,
         "required_questions": required_questions,
-        "materials_needed": list(tmpl.get("materials_needed") or []),
-        "done_criteria": list(tmpl.get("done_criteria") or []),
-        "likely_impact": list(tmpl.get("likely_impact") or []),
-        "risks": list(tmpl.get("risks") or []),
+        "materials_needed": materials_needed,
+        "done_criteria": done_criteria,
+        "likely_impact": likely_impact,
+        "risks": risks,
         "context_policy": ctx_policy,
         "frame_health": frame_health,
         "progress_summary": progress_summary,

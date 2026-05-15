@@ -107,6 +107,23 @@ class TestRunRecording:
         with pytest.raises(StateError, match="Invalid run result"):
             sm.record_run(task="test", result="invalid")
 
+    def test_record_completed_run_is_atomic_for_run_and_task_close(self, tmp_path):
+        path = _make_state(tmp_path)
+        sm = StateManager(path)
+
+        run_id = sm.record_completed_run(
+            task="build feature",
+            result="success",
+            changes="added module",
+            summary="done",
+        )
+
+        assert run_id.startswith("run-")
+        state = sm.read()
+        assert len(state["runs"]) == 1
+        assert len(state["completed_tasks"]) == 1
+        assert state["active_task"]["name"] == "none"
+
 
 class TestTaskManagement:
 

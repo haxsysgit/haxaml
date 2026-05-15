@@ -11,6 +11,7 @@ import yaml
 from haxaml.cli import cli
 from haxaml.export_engine import AGENT_CONFIGS
 from haxaml.setup import WORKFLOW_TARGET_IDS
+from haxaml.setup.interactive import run_setup_wizard
 from haxaml.setup.registry import get_target, list_targets
 
 COMMIT_STYLE_DISCIPLINE = "Do not use commit prefixes like fix:, feat:, refactor:, chore:, or docs:."
@@ -70,6 +71,10 @@ def test_setup_registry_covers_documented_targets_and_capabilities():
     project_integration_points = gemini.integration_points_for("project")
     assert any(item.path == ".gemini/skills/haxaml/SKILL.md" for item in project_integration_points)
     assert any(item.path == ".gemini/settings.json" for item in project_integration_points)
+
+    windsurf = get_target("windsurf")
+    windsurf_points = windsurf.integration_points_for("project")
+    assert any(item.path == ".windsurf/skills/haxaml/SKILL.md" for item in windsurf_points)
     assert set(WORKFLOW_TARGET_IDS) == {"claude", "codex", "gemini", "cursor", "copilot", "opencode", "junie"}
 
 
@@ -96,6 +101,15 @@ def test_setup_clean_repo_creates_frame_generic_agents_and_skill():
         assert "Lifecycle Checklist" in agents
         assert "Fallback Path" in agents
 
+        with open(".agents/skills/haxaml/SKILL.md", "r") as f:
+            skill = f.read()
+        assert skill.startswith("---\n")
+        assert "<!-- HAXAML:FILE" not in skill
+        assert "metadata:" in skill
+        assert "Use When" in skill
+        assert "Success Criteria" in skill
+        assert "Fallback Path" in skill
+
 
 def test_setup_dry_run_and_print_match_json_without_writing():
     runner = CliRunner()
@@ -111,9 +125,10 @@ def test_setup_dry_run_and_print_match_json_without_writing():
         print_plan = json.loads(printed.output)
         assert dry_plan["planned_files"] == print_plan["planned_files"]
         assert os.path.exists(".haxaml") is False
+        assert any(item["preview"] for item in dry_plan["planned_files"])
 
 
-def test_setup_adopt_auto_preserves_native_files_and_writes_adoption_state():
+def test_setup_auto_with_multiple_strong_candidates_does_not_guess():
     runner = CliRunner()
 
     with runner.isolated_filesystem():
@@ -127,31 +142,57 @@ def test_setup_adopt_auto_preserves_native_files_and_writes_adoption_state():
         result = runner.invoke(cli, ["setup"])
 
         assert result.exit_code == 0, result.output
-        assert os.path.exists(".haxaml/adoption/adoption.yaml")
-        assert os.path.exists(".haxaml/adoption/ADOPTION.md")
-        assert os.path.exists(".haxaml/setup/targets/claude.md")
-        assert os.path.exists(".haxaml/setup/targets/gemini.md")
+        assert os.path.exists(".haxaml/adoption/adoption.yaml") is False
+        assert os.path.exists(".haxaml/adoption/ADOPTION.md") is False
+        assert os.path.exists(".haxaml/setup/targets/claude.md") is False
+        assert os.path.exists(".haxaml/setup/targets/gemini.md") is False
 
         with open(".haxaml/facts.yaml", "r") as f:
             facts = yaml.safe_load(f)
-        assert facts["origin"]["mode"] == "adopted"
+        assert facts["origin"]["mode"] == "fresh"
         assert facts["origin"]["managed_by"] == "haxaml-setup"
 
         with open("CLAUDE.md", "r") as f:
             claude = f.read()
         assert "Existing Claude instructions." in claude
-        assert "HAXAML:MANAGED START" in claude
+        assert "HAXAML:MANAGED START" not in claude
+        assert "multiple strong provider candidates" in result.output
 
+
+def test_setup_auto_with_shared_agents_signal_stays_generic_and_fresh():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        with open("AGENTS.md", "w") as f:
+            f.write("Existing shared agent file.\n")
+
+        result = runner.invoke(cli, ["setup"])
+
+        assert result.exit_code == 0, result.output
+        assert os.path.exists(".haxaml/adoption/adoption.yaml") is False
+        with open(".haxaml/facts.yaml", "r") as f:
+            facts = yaml.safe_load(f)
+        assert facts["origin"]["mode"] == "fresh"
+        assert "only weak shared signals" in result.output
+        assert "Codex" in result.output or "OpenAI Codex" in result.output
+
+
+def test_setup_auto_with_single_strong_candidate_adopts_that_target():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        os.makedirs(".codex", exist_ok=True)
+        with open(".codex/config.toml", "w") as f:
+            f.write('model = "gpt-5"\n')
+
+        result = runner.invoke(cli, ["setup"])
+
+        assert result.exit_code == 0, result.output
+        assert os.path.exists(".haxaml/adoption/adoption.yaml")
         with open(".haxaml/adoption/adoption.yaml", "r") as f:
             adoption = yaml.safe_load(f)
-        assert "claude" in adoption["detected_targets"]
-        assert "gemini" in adoption["detected_targets"]
         assert adoption["mode"] == "adopted"
-
-        with open(".haxaml/adoption/ADOPTION.md", "r") as f:
-            report = f.read()
-        assert "Detected Targets" in report
-        assert "Managed Adapter Files" in report
+        assert adoption["selected_targets"] == ["codex"]
 
 
 def test_setup_with_workflow_adds_workflow_assets_and_manifest_entries():
@@ -337,6 +378,134 @@ def test_setup_user_scope_writes_only_home_surfaces(monkeypatch):
         assert os.path.exists(os.path.join(home, ".agents", "skills", "haxaml", "SKILL.md"))
 
 
+def test_setup_merges_existing_toml_config_without_dropping_other_keys(monkeypatch):
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        home = os.path.abspath("home")
+        os.makedirs(os.path.join(home, ".codex"), exist_ok=True)
+        monkeypatch.setenv("HOME", home)
+        config_path = os.path.join(home, ".codex", "config.toml")
+        with open(config_path, "w") as f:
+            f.write('# keep me\nmodel = "gpt-5"\n[profiles.default]\nname = "main"\n')
+
+        result = runner.invoke(cli, ["setup", "--scope", "user", "--target", "codex"])
+
+        assert result.exit_code == 0, result.output
+        content = open(config_path).read()
+        assert '# keep me' in content
+        assert 'model = "gpt-5"' in content
+        assert "[profiles.default]" in content
+        assert "[mcp_servers.haxaml]" in content
+        assert "Merged" in result.output
+        assert "mcp_servers.haxaml" in result.output
+
+
+def test_setup_merges_existing_json_config_without_dropping_other_keys():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        os.makedirs(".gemini", exist_ok=True)
+        with open(".gemini/settings.json", "w") as f:
+            json.dump({"theme": "light", "mcpServers": {"existing": {"command": "node"}}}, f, indent=2)
+            f.write("\n")
+
+        result = runner.invoke(cli, ["setup", "--target", "gemini"])
+
+        assert result.exit_code == 0, result.output
+        with open(".gemini/settings.json", "r") as f:
+            payload = json.load(f)
+        assert payload["theme"] == "light"
+        assert "existing" in payload["mcpServers"]
+        assert "haxaml" in payload["mcpServers"]
+        assert "Merged" in result.output
+        assert "mcpServers.haxaml" in result.output
+
+
+def test_setup_conflicting_json_merge_becomes_manual_action():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        os.makedirs(".gemini", exist_ok=True)
+        with open(".gemini/settings.json", "w") as f:
+            json.dump({"mcpServers": []}, f)
+            f.write("\n")
+
+        result = runner.invoke(cli, ["setup", "--target", "gemini", "--dry-run", "--format", "json"])
+
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.output)
+        manual = next(item for item in payload["manual_actions"] if item["path"] == ".gemini/settings.json")
+        assert "unsafe to edit automatically" in manual["action_reason"]
+        assert "mcpServers.haxaml" in manual["reason"]
+        assert '"mcpServers"' in manual["preview"]
+
+
+def test_setup_dry_run_text_shows_paths_and_previews():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        result = runner.invoke(cli, ["setup", "--dry-run"])
+
+        assert result.exit_code == 0, result.output
+        assert "Planned Creates" in result.output
+        assert ".haxaml/facts.yaml" in result.output
+        assert "preview:" in result.output
+
+
+def test_setup_wizard_preselects_strong_targets_and_respects_prefilled_flags():
+    class FakeBackend:
+        def __init__(self):
+            self.select_calls = []
+            self.checkbox_calls = []
+            self.confirm_calls = []
+            self._select_results = ["adopted"]
+            self._checkbox_results = [["codex"], ["frame", "instructions", "skills", "mcp"]]
+
+        def select(self, *, message, choices, default=None):
+            self.select_calls.append({"message": message, "choices": choices, "default": default})
+            return self._select_results.pop(0)
+
+        def checkbox(self, *, message, choices, defaults=None):
+            self.checkbox_calls.append({"message": message, "choices": choices, "defaults": defaults})
+            return self._checkbox_results.pop(0)
+
+        def confirm(self, *, message, default=True):
+            self.confirm_calls.append({"message": message, "default": default})
+            return True
+
+    runner = CliRunner()
+    backend = FakeBackend()
+
+    with runner.isolated_filesystem():
+        os.makedirs(".codex", exist_ok=True)
+        with open(".codex/config.toml", "w") as f:
+            f.write('model = "gpt-5"\n')
+
+        result = run_setup_wizard(
+            project_dir=".",
+            scope="project",
+            target="auto",
+            mode="auto",
+            only=None,
+            with_workflow=True,
+            prefilled={"scope", "with_workflow"},
+            dry_run=True,
+            backend=backend,
+        )
+
+        assert result is not None
+        assert result.scope == "project"
+        assert result.mode == "adopted"
+        assert result.targets == ["codex"]
+        assert len(backend.select_calls) == 1
+        target_call = backend.checkbox_calls[0]
+        codex_choice = next(choice for choice in target_call["choices"] if choice["value"] == "codex")
+        assert ".codex/config.toml" in codex_choice["name"]
+        assert codex_choice["enabled"] is True
+        assert len(backend.confirm_calls) == 1
+
+
 def test_setup_doctor_reports_missing_managed_file():
     runner = CliRunner()
 
@@ -401,7 +570,7 @@ def test_init_does_not_export_agent_files():
     with runner.isolated_filesystem():
         result = runner.invoke(cli, ["init", "."])
         assert result.exit_code == 0, result.output
-        assert "Run haxaml_setup for onboarding or adoption" in result.output
+        assert "Run `haxaml setup` or call `haxaml_setup` for onboarding or adoption" in result.output
         assert not os.path.exists("HAXAML.md")
         assert not os.path.exists("CLAUDE.md")
         assert not os.path.exists("AGENTS.md")
@@ -593,6 +762,10 @@ def test_upgrade_dry_run_prints_uv_command():
         assert result.exit_code == 0, result.output
         assert "uv tool upgrade haxaml==1.2.3 haxaml-mcp==1.2.3" in result.output
 
+        include_ui = runner.invoke(cli, ["upgrade", "--dry-run", "--to", "1.2.3", "--include-ui"])
+        assert include_ui.exit_code == 0, include_ui.output
+        assert "haxaml-ui==1.2.3" in include_ui.output
+
 
 def test_cli_about_and_workflow_benchmark_mode():
     runner = CliRunner()
@@ -604,7 +777,7 @@ def test_cli_about_and_workflow_benchmark_mode():
         about = runner.invoke(cli, ["about", "--dir", "."])
         assert about.exit_code == 0, about.output
         assert "Haxaml is the governance layer." in about.output
-        assert "Run haxaml_setup" in about.output
+        assert "Run `haxaml setup` or call `haxaml_setup`" in about.output
 
         benchmark = runner.invoke(cli, ["benchmark", "--mode", "workflow", "--dir", "."])
         assert benchmark.exit_code == 0, benchmark.output

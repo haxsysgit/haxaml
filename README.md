@@ -76,11 +76,16 @@ uvx haxaml-mcp
 
 I want Haxaml to be hard to use badly, so setup is now the single onboarding integration point.
 
-- `haxaml setup` auto-detects whether the repo is fresh or already has native agent files.
-- In a fresh repo it creates `.haxaml/`, a generic `AGENTS.md`, and the matching skill/config adapters for the selected target.
-- In an existing repo it adopts the native files instead of replacing them. Haxaml appends a managed pointer block, keeps the full governed adapter in `.haxaml/setup/targets/`, and records adoption state in `.haxaml/adoption/`.
-- `haxaml setup print` shows the planned files before writing.
+- `haxaml setup` is interactive by default in a real TTY, but stays machine-friendly in non-interactive or `--format json` flows.
+- The setup wizard is provider-aware: it treats strong target evidence as advisory input, shows evidence paths, pre-fills from explicit CLI flags, and avoids guessing from shared weak signals like `AGENTS.md`.
+- In a fresh repo it creates `.haxaml/` and then writes the selected target's native instructions plus any matching skill, agent, config, or workflow adapters you asked for. Shared files like `AGENTS.md` are only written for targets that actually use them.
+- In an existing repo it adopts native files instead of replacing them. Haxaml appends managed pointer blocks where safe, keeps the full governed adapter in `.haxaml/setup/targets/`, and records adoption state in `.haxaml/adoption/`.
+- Known MCP config shapes merge only the Haxaml-owned entry or table (`mcpServers.haxaml` or `[mcp_servers.haxaml]`) and preserve unrelated config.
+- `haxaml setup --dry-run` now shows exact paths plus concise previews instead of only file counts.
+- `haxaml setup print` still shows the full rendered contents before writing.
 - `haxaml setup doctor` checks for missing managed files, drift, and manual follow-up.
+
+Managed upgrades use the installed `haxaml` CLI. `haxaml upgrade` refreshes core plus MCP by default, and `haxaml upgrade --include-ui` adds the dashboard package when you use the full suite.
 
 If you want only the bare FRAME scaffold without onboarding, use `haxaml init`. That command now creates missing core FRAME files and stops there.
 

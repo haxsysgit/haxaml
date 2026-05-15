@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.4 - 2026-05-15
+
+- Made `haxaml setup` interactive by default in a real TTY while keeping `--non-interactive` and `--format json` machine-friendly.
+- Reworked generated `SKILL.md` files so they start with valid YAML frontmatter, keep Haxaml metadata in a nested block, and include real lifecycle triggers, success criteria, fallback behavior, escalation rules, and provider-aware examples.
+- Split target detection into strong and weak evidence so shared files like `AGENTS.md` no longer silently resolve multiple providers during auto setup.
+- Added narrow safe merges for known MCP config shapes, updating only `mcpServers.haxaml` or `[mcp_servers.haxaml]` while preserving unrelated config and surfacing manual follow-up on conflicts.
+- Replaced count-only setup output with exact paths, concise previews, merge/manual-action reasons, and preview-first dry-run text.
+- Repositioned the `0.7.x` and `v1.0` roadmaps so `0.7.4` is the setup UX release and `0.7.5` carries the materials/context/handoff work.
+
 ## 0.7.3 - 2026-05-14
 
 - Kept `haxaml setup doctor` as the single advisory audit entrypoint while teaching it provider-aware workflow labels for adapter files, hook scripts, hook config, local runners, CI runners, background environments, custom agents, and workflow MCP/config entrypoints.

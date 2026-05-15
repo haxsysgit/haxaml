@@ -64,6 +64,21 @@ def version_spec(package: str, target_version: str | None = None) -> str:
     return package
 
 
+def upgrade_specs(
+    *,
+    target_version: str | None = None,
+    include_mcp: bool = True,
+    include_ui: bool = False,
+) -> list[str]:
+    """Return the package specs that participate in a managed upgrade."""
+    specs = [version_spec(PACKAGE_NAME, target_version)]
+    if include_mcp:
+        specs.append(version_spec(MCP_LAUNCHER_PACKAGE, target_version))
+    if include_ui:
+        specs.append(version_spec(UI_PACKAGE_NAME, target_version))
+    return specs
+
+
 def release_version_snapshot(tag_ref: str | None = None) -> dict[str, object]:
     """Return deterministic version alignment details for release checks."""
     core = project_version()

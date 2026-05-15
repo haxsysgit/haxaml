@@ -151,7 +151,7 @@ class FrameModel:
     def expect_summary(self) -> dict[str, Any]:
         """Return a compact summary of expect.yaml for prebuild signals."""
         expect = self.expect or {}
-        runs = expect.get("runs") or []
+        runs = expect.get("runbook") or []
         active = [r for r in runs if isinstance(r, dict) and r.get("status") == "active"]
         blocked = [r for r in runs if isinstance(r, dict) and r.get("status") == "blocked"]
         return {

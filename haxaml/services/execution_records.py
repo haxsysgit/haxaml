@@ -93,20 +93,19 @@ def finish_execution_run(
         return run_result
 
     try:
-        run_id = state_manager.record_run(
+        run_id = state_manager.record_completed_run(
             task=task,
             result=result,
             changes=changes,
             decisions=decisions,
             risks=risks,
+            summary=summary or changes,
             file_refs=file_refs,
             module_refs=module_refs,
             verification_id=verification_id,
             keywords=keywords,
         )
         run_result.run_id = run_id
-
-        state_manager.complete_task(result=result, summary=summary or changes)
 
         if auto_compact:
             archive_result = state_manager.archive_on_record()
@@ -130,4 +129,3 @@ def finish_execution_run(
             run_result.result = "partial"
 
     return run_result
-

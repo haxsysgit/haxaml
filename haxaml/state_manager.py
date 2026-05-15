@@ -96,6 +96,70 @@ class StateManager:
 
         return run_id
 
+    def record_completed_run(
+        self,
+        task: str,
+        result: str,
+        changes: str = "",
+        decisions: str = "",
+        risks: str = "",
+        summary: str = "",
+        *,
+        file_refs: list[str] | None = None,
+        module_refs: list[str] | None = None,
+        verification_id: str = "",
+        keywords: list[str] | None = None,
+    ) -> str:
+        """Record a run and close the active task in one atomic state write."""
+        if result not in ("success", "partial", "failed"):
+            raise StateError(f"Invalid run result: {result}")
+
+        run_id = f"run-{uuid.uuid4().hex[:8]}"
+        now = now_iso()
+        run_entry = {
+            "id": run_id,
+            "task": task,
+            "result": result,
+            "changes": changes,
+            "decisions": decisions,
+            "risks": risks,
+            "timestamp": now,
+            "file_refs": clean_str_list(file_refs or []),
+            "module_refs": clean_str_list(module_refs or []),
+            "verification_id": str(verification_id or "").strip(),
+            "keywords": clean_str_list(keywords or []) or keywords_from_text(task, changes, decisions, risks),
+        }
+
+        with self._lock(shared=False):
+            state = load_yaml(str(self.path))
+            active = state.get("active_task", {})
+            if not active or not active.get("name") or active.get("name") == "none":
+                raise StateError("No active task to complete")
+
+            runs = state.get("runs", [])
+            if not isinstance(runs, list):
+                runs = []
+            runs.append(run_entry)
+            state["runs"] = runs
+
+            completed = state.get("completed_tasks", [])
+            if not isinstance(completed, list):
+                completed = []
+            completed.append(
+                {
+                    "name": active["name"],
+                    "result": result,
+                    "summary": summary or changes or active.get("description", ""),
+                    "completed": now,
+                }
+            )
+            state["completed_tasks"] = completed
+            state["active_task"] = {"name": "none"}
+            self._ensure_archive_state(state)
+            self._atomic_write(state)
+
+        return run_id
+
     def complete_task(self, result: str = "success", summary: str = "") -> None:
         """Move active_task to completed_tasks and clear active."""
         if result not in ("success", "partial", "failed"):

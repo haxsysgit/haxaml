@@ -132,6 +132,45 @@ class TestLifecycle:
         assert result["ok"] is True
         assert result["data"]["readiness_status"] == "utility_mode"
 
+    def test_prebuild_blocks_when_frame_has_blocking_missing_context(self, governed_project):
+        facts_path = governed_project / ".haxaml" / "facts.yaml"
+        facts = yaml.safe_load(facts_path.read_text())
+        facts["unresolved"] = [{"item": "API key", "reason": "not provided", "blocking": True}]
+        facts_path.write_text(yaml.dump(facts, default_flow_style=False, sort_keys=False))
+
+        assert haxaml_about(str(governed_project))["ok"] is True
+        guidance = haxaml_guidance(task="update lifecycle docs", project_dir=str(governed_project))
+        assert guidance["ok"] is True
+
+        result = haxaml_prebuild(
+            task="update lifecycle docs",
+            description="document current flow",
+            project_dir=str(governed_project),
+        )
+
+        assert result["ok"] is True
+        assert result["data"]["readiness_status"] == "blocked_by_missing_context"
+        assert result["data"]["session_id"] == ""
+
+    def test_prebuild_persists_architect_inputs_into_session_state(self, governed_project):
+        assert haxaml_about(str(governed_project))["ok"] is True
+        guidance = haxaml_guidance(task="fix docs regression", project_dir=str(governed_project))
+        assert guidance["ok"] is True
+
+        prebuild = haxaml_prebuild(
+            task="fix docs regression",
+            description="repair README wording",
+            project_dir=str(governed_project),
+        )
+
+        assert prebuild["ok"] is True
+        session_id = prebuild["data"]["session_id"]
+        acts = yaml.safe_load((governed_project / ".haxaml" / "acts.yaml").read_text())
+        session = next(item for item in acts["sessions"] if item["id"] == session_id)
+        assert session["materials_needed"]
+        assert session["done_criteria"]
+        assert session["likely_impact"]
+
     def test_governed_flow_prebuild_context_verify_record(self, governed_project):
         session_id = _start_governed_session(
             governed_project,

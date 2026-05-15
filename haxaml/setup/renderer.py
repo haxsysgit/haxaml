@@ -12,13 +12,13 @@ from haxaml.setup.markdown import (
     bullets,
     managed_block_start,
     metadata_comment,
-    metadata_json_document,
     metadata_line_comment,
     numbered,
     section,
 )
 from haxaml.setup.registry import IntegrationPoint, TargetSpec
 from haxaml.versioning import get_version
+from haxaml.yaml_utils import dump_yaml
 
 
 LIFECYCLE = [
@@ -232,69 +232,228 @@ def render_skill(
     workflow_adapter_path: str | None = None,
     workflow_entrypoint_paths: tuple[str, ...] = (),
 ) -> RenderedArtifact:
-    lines = [
-        "---",
-        "name: haxaml-governed-flow",
-        "description: Use when work changes repository code, config, or governed docs and you must follow the Haxaml lifecycle.",
-        "---",
-        "",
-        f"This skill is installed for `{target.display_name}` in `{scope}` scope.",
-        "",
-    ]
-    if workflow_adapter_path is not None or workflow_entrypoint_paths:
-        lines.extend(
-            [
-                "Workflow adaptation:",
-                bullets(
-                    [
-                        item
-                        for item in (
-                            (
-                                f"Start with the adapter file at `{workflow_adapter_path}` when this target enters through hooks, agents, CI, or background runs."
-                                if workflow_adapter_path is not None
-                                else None
-                            ),
-                            (
-                                "Workflow entrypoints are installed at "
-                                + ", ".join(f"`{path}`" for path in workflow_entrypoint_paths)
-                                + "."
-                                if workflow_entrypoint_paths
-                                else None
-                            ),
-                        )
-                        if item is not None
-                    ]
-                ),
-                "",
-            ]
-        )
-    lines.extend(
-        [
-            "Follow this order:",
-            numbered(
+    provider_notes = {
+        "codex": (
+            "Codex expectations",
+            bullets(
                 [
-                    "Read the active instructions and the relevant repository files.",
-                    "Use the Haxaml lifecycle when it is available.",
-                    "If lifecycle tooling is unavailable, fall back to the manual checklist.",
-                    "Keep edits small, verify them, and report evidence plus risks.",
+                    "Use the local workspace, shell tools, and targeted edits instead of describing unexecuted code changes.",
+                    "Keep user-facing progress updates concise and factual while work is in flight.",
+                    "Prefer repo evidence, tests, and command output over assumptions before you patch files.",
                 ]
             ),
-            "",
-            "Manual checklist:",
-            bullets(FALLBACK_STEPS),
-        ]
-    )
-    body = "\n".join(lines)
-    body_hash = _hash(body)
-    metadata = {
-        "generator": "haxaml-setup",
-        "target": target.target_id,
-        "kind": "skills",
-        "scope": scope,
-        "version": get_version(),
-        "recipe_hash": body_hash,
+        ),
+        "claude": (
+            "Claude Code expectations",
+            bullets(
+                [
+                    "Start from the smallest relevant file slice and expand only when the evidence is incomplete.",
+                    "Use the setup-managed adapter or skill as the governing source before following tool-native memory.",
+                    "Return changed files, verification evidence, and remaining risks in compact public language.",
+                ]
+            ),
+        ),
+        "gemini": (
+            "Gemini CLI expectations",
+            bullets(
+                [
+                    "Treat repo-local instructions and settings as authoritative before relying on session memory.",
+                    "When config is involved, show the exact file path and the narrow merged block you intend to touch.",
+                    "Keep lifecycle evidence explicit so later agents can resume without replaying the full repo state.",
+                ]
+            ),
+        ),
+        "opencode": (
+            "OpenCode expectations",
+            bullets(
+                [
+                    "Use the skill as the workflow contract before switching into agent-specific or per-agent config behavior.",
+                    "Keep MCP and tool access scoped to the task and report when manual config follow-up is still required.",
+                    "Prefer small verified patches over large speculative rewrites.",
+                ]
+            ),
+        ),
     }
-    content = f"{metadata_comment(metadata)}\n\n{body}\n"
+    expectation_title, expectation_body = provider_notes.get(
+        target.target_id,
+        (
+            f"{target.display_name} expectations",
+            bullets(
+                [
+                    "Treat this skill as the local workflow contract when work changes repository code, config, or governed docs.",
+                    "Read only the files needed for the current task, then verify with direct evidence before claiming success.",
+                    "Keep changes narrow, reported publicly, and easy for the next agent to continue.",
+                ]
+            ),
+        ),
+    )
+    workflow_section = None
+    if workflow_adapter_path is not None or workflow_entrypoint_paths:
+        workflow_items = []
+        if workflow_adapter_path is not None:
+            workflow_items.append(
+                f"Start with the adapter file at `{workflow_adapter_path}` when this target enters through hooks, agents, CI, or background runs."
+            )
+        if workflow_entrypoint_paths:
+            workflow_items.append(
+                "Workflow entrypoints are installed at " + ", ".join(f"`{path}`" for path in workflow_entrypoint_paths) + "."
+            )
+        workflow_items.append("Use workflow assets to route tool-native entrypoints back into the same Haxaml lifecycle.")
+        workflow_section = section("Workflow Adaptation", bullets(workflow_items))
+
+    examples = {
+        "generic": "\n\n".join(
+            [
+                "### Example 1",
+                bullets(
+                    [
+                        "Task: add a small feature in one module.",
+                        "Behavior: inspect the module and the closest tests, make the narrowest safe edit, verify it directly, and report the concrete evidence plus remaining risk.",
+                    ]
+                ),
+                "### Example 2",
+                bullets(
+                    [
+                        "Task: update an MCP config entry.",
+                        "Behavior: merge only the Haxaml-owned config block, preserve unrelated keys or tables, preview the exact block, and escalate if the file shape is unsafe to edit automatically.",
+                    ]
+                ),
+            ]
+        ),
+        "codex": "\n\n".join(
+            [
+                "### Example 1",
+                bullets(
+                    [
+                        "Task: fix a failing repo test in `tests/test_cli.py`.",
+                        "Behavior: inspect the failing test and the smallest setup module first, patch the narrowest files, run the targeted test, then report what changed and what still needs attention.",
+                    ]
+                ),
+                "### Example 2",
+                bullets(
+                    [
+                        "Task: add a Codex MCP server entry.",
+                        "Behavior: merge only `[mcp_servers.haxaml]` into `.codex/config.toml`, preserve unrelated config, preview the block, and escalate if the existing shape is unsafe to merge.",
+                    ]
+                ),
+            ]
+        ),
+        "gemini": "\n\n".join(
+            [
+                "### Example 1",
+                bullets(
+                    [
+                        "Task: adopt an existing `GEMINI.md` repository into governed flow.",
+                        "Behavior: inspect the native file, keep user-authored guidance intact, add the managed adapter or pointer behavior only where the setup policy allows it, and verify the resulting paths.",
+                    ]
+                ),
+                "### Example 2",
+                bullets(
+                    [
+                        "Task: update `.gemini/settings.json` for MCP access.",
+                        "Behavior: merge only `mcpServers.haxaml`, keep unrelated settings untouched, preview the merged entry, and flag manual follow-up if the file shape conflicts.",
+                    ]
+                ),
+            ]
+        ),
+    }
+    body = "\n\n".join(
+        [
+            "# Haxaml Governed Flow",
+            f"This skill is installed for `{target.display_name}` in `{scope}` scope and governs repository-changing work through the Haxaml lifecycle.",
+            section(
+                "Use When",
+                bullets(
+                    [
+                        "The task changes repository code, configuration, or governed documentation.",
+                        "You need a deterministic flow for materials, planning, verification, and recorded outcomes.",
+                        "The repo has setup-managed instructions, skills, or workflow entrypoints that should stay aligned.",
+                    ]
+                ),
+            ),
+            section(
+                "Do Not Use",
+                bullets(
+                    [
+                        "The request is casual, off-topic, or does not touch governed repo state.",
+                        "A one-off answer can be given safely without entering the repo workflow.",
+                        "The task belongs to a different specialized skill or tool contract that explicitly owns the work.",
+                    ]
+                ),
+            ),
+            section(
+                "Required Inputs",
+                bullets(
+                    [
+                        "A concrete task statement, the relevant repository path, and any known target files or tests.",
+                        "Any owner-provided materials, credentials, schema details, or environment constraints needed before building.",
+                        "Whether workflow adaptation is involved through hooks, agents, background runs, or CI entrypoints.",
+                    ]
+                ),
+            ),
+            section(
+                "Lifecycle Flow",
+                numbered(
+                    [
+                        "Read the active setup-managed instructions and the smallest relevant repository slice.",
+                        "Use the Haxaml lifecycle when it is available: about, guidance, prebuild, context_pack, build, verify, record, expect_sync.",
+                        "If lifecycle tooling is unavailable, follow the manual fallback checklist exactly.",
+                        "Gather missing materials before building, then make the smallest safe change that satisfies the task.",
+                        "Verify with direct evidence and report what changed, what was checked, and what still risks failure.",
+                    ]
+                ),
+            ),
+            workflow_section or "",
+            section(expectation_title, expectation_body),
+            section(
+                "Success Criteria",
+                bullets(
+                    [
+                        "The change follows the lifecycle or documented fallback path instead of skipping straight to edits.",
+                        "Required materials, assumptions, verification evidence, and residual risks are explicit in the final report.",
+                        "Edits stay narrow, reversible, and aligned with setup-managed instructions for this target.",
+                    ]
+                ),
+            ),
+            section(
+                "Output Contract",
+                bullets(
+                    [
+                        "Summarize the task, relevant assumptions, and the concrete files or configs touched.",
+                        "State what was verified and cite the command, test, or direct inspection that produced the evidence.",
+                        "Call out any remaining risks, manual follow-up, or unresolved ambiguity before claiming completion.",
+                    ]
+                ),
+            ),
+            section(
+                "Escalation Rules",
+                bullets(
+                    [
+                        "Ask before destructive operations, broad refactors, policy changes, or replacing user-authored native instructions.",
+                        "Escalate when required materials are missing, the config shape is unsafe to merge, or target ownership is ambiguous.",
+                        "Do not silently drop provider-native files that setup is supposed to preserve or adopt.",
+                    ]
+                ),
+            ),
+            section("Fallback Path", numbered(FALLBACK_STEPS)),
+            section("Examples", examples.get(target.target_id, examples["generic"])),
+        ]
+    ).replace("\n\n\n", "\n\n")
+    body_hash = _hash(body)
+    frontmatter = {
+        "name": "haxaml-governed-flow",
+        "description": "Use when work changes repository code, config, or governed docs and you must follow the Haxaml lifecycle.",
+        "metadata": {
+            "generator": "haxaml-setup",
+            "target": target.target_id,
+            "kind": "skills",
+            "scope": scope,
+            "version": get_version(),
+            "recipe_hash": body_hash,
+        },
+    }
+    frontmatter_text = dump_yaml(frontmatter, sort_keys=False).strip()
+    content = f"---\n{frontmatter_text}\n---\n\n{body}\n"
     return RenderedArtifact(content=content, recipe_hash=_hash(content))
 
 
@@ -337,18 +496,10 @@ def _mcp_payload(project_dir: Path) -> dict[str, object]:
 
 
 def render_mcp_config(target: TargetSpec, integration_point: IntegrationPoint, project_dir: Path) -> RenderedArtifact:
-    metadata = {
-        "generator": "haxaml-setup",
-        "target": target.target_id,
-        "kind": "mcp",
-        "scope": integration_point.scope,
-        "version": get_version(),
-    }
     payload = _mcp_payload(project_dir)
     if integration_point.format == "toml":
         body = "\n".join(
             [
-                metadata_line_comment(metadata),
                 "[mcp_servers.haxaml]",
                 'command = "uvx"',
                 'args = ["haxaml-mcp"]',
@@ -357,18 +508,23 @@ def render_mcp_config(target: TargetSpec, integration_point: IntegrationPoint, p
             ]
         )
     else:
-        body = metadata_json_document(metadata, {"mcpServers": {"haxaml": payload}})
+        body = json.dumps({"mcpServers": {"haxaml": payload}}, indent=2) + "\n"
     return RenderedArtifact(content=body, recipe_hash=_hash(body))
 
 
-def render_pointer_block(target: TargetSpec, adapter_path: str) -> RenderedArtifact:
+def render_pointer_block(target: TargetSpec, adapter_path: str, skill_path: str | None = None) -> RenderedArtifact:
+    skill_note = (
+        f" and the governed skill at `{skill_path}`"
+        if skill_path
+        else ""
+    )
     body = "\n".join(
         [
             "## Haxaml Managed Workflow",
             "",
             (
                 "This repository uses Haxaml as the workflow governor. Keep your existing native instructions, "
-                f"but follow the managed adapter file at `{adapter_path}` and the skill at `.agents/skills/haxaml/SKILL.md`."
+                f"but follow the managed adapter file at `{adapter_path}`{skill_note}."
             ),
             "",
             f"Lifecycle: {' -> '.join(step.strip('`') for step in LIFECYCLE)}",

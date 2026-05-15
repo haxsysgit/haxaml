@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+from haxaml.setup.config_merge import extract_managed_config_fragment
 from haxaml.setup.planner import MANIFEST_PATH
 from haxaml.setup.workflow import workflow_file_audit_metadata, workflow_manual_action_audit_metadata
 from haxaml.setup.writer import extract_managed_block
@@ -96,7 +97,8 @@ def run_setup_doctor(project_dir: str | Path) -> dict[str, object]:
             continue
 
         content = resolved.read_text(encoding="utf-8", errors="ignore")
-        if str(item.get("management")) == "pointer":
+        management = str(item.get("management"))
+        if management == "pointer":
             block = extract_managed_block(content)
             if block is None:
                 drifted.append(
@@ -110,6 +112,20 @@ def run_setup_doctor(project_dir: str | Path) -> dict[str, object]:
                 )
                 continue
             actual_hash = _hash(block)
+        elif management == "merge":
+            fragment = extract_managed_config_fragment(content, str(item.get("format") or ""))
+            if fragment is None:
+                drifted.append(
+                    _doctor_file_record(
+                        path=path,
+                        target=str(item.get("target", "")),
+                        kind=str(item.get("kind", "")),
+                        status="drifted",
+                        reason="managed config fragment missing",
+                    )
+                )
+                continue
+            actual_hash = _hash(fragment)
         else:
             actual_hash = _hash(content)
 

@@ -97,7 +97,7 @@ The repo is split by responsibility. Start in the area closest to your change.
   - MCP tool registration and tool implementations
   - `tools_frame.py`, `tools_lifecycle.py`, `tools_prebuild.py`, `tools_ops.py`, `tools_benchmark.py`
 - `haxaml/setup/`
-  - setup/onboarding registry, planning, rendering, adoption, writing, doctor output
+  - setup/onboarding registry, planning, rendering, config merge, interactive wizard, writing, and doctor output
 - `haxaml/export_engine.py`
   - FRAME to agent-native instruction rendering
 - `haxaml/frame_model.py`, `haxaml/validator.py`, `haxaml/reconcile.py`
