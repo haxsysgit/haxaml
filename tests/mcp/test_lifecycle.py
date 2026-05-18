@@ -152,6 +152,32 @@ class TestLifecycle:
         assert result["data"]["readiness_status"] == "blocked_by_missing_context"
         assert result["data"]["session_id"] == ""
 
+    def test_prebuild_blocks_on_structured_blocking_materials_and_questions(self, governed_project):
+        expect_path = governed_project / ".haxaml" / "expect.yaml"
+        expect = yaml.safe_load(expect_path.read_text())
+        expect["open_questions"] = [{"question": "Which provider is approved?", "blocking": True}]
+        expect_path.write_text(yaml.dump(expect, default_flow_style=False, sort_keys=False))
+
+        facts_path = governed_project / ".haxaml" / "facts.yaml"
+        facts = yaml.safe_load(facts_path.read_text())
+        facts["unresolved"] = [{"item": "API key", "blocking": True, "owner": "owner"}]
+        facts_path.write_text(yaml.dump(facts, default_flow_style=False, sort_keys=False))
+
+        assert haxaml_about(str(governed_project))["ok"] is True
+        assert haxaml_guidance(task="update lifecycle docs", project_dir=str(governed_project))["ok"] is True
+        result = haxaml_prebuild(
+            task="update lifecycle docs",
+            description="document current flow",
+            project_dir=str(governed_project),
+            detail="full",
+        )
+
+        assert result["ok"] is True
+        assert result["data"]["readiness_status"] == "blocked_by_missing_context"
+        assert result["data"]["blocking_questions"] == ["Which provider is approved?"]
+        assert result["data"]["blocking_materials"] == ["API key"]
+        assert "API key" in result["data"]["owner_provided_materials"]
+
     def test_prebuild_persists_architect_inputs_into_session_state(self, governed_project):
         assert haxaml_about(str(governed_project))["ok"] is True
         guidance = haxaml_guidance(task="fix docs regression", project_dir=str(governed_project))
@@ -242,6 +268,28 @@ class TestLifecycle:
         )
         assert third["ok"] is True
         assert third["data"]["refresh_reason_category"] == "stale_context"
+
+    def test_context_pack_rechecks_blocking_inputs_before_generation(self, governed_project):
+        session_id = _start_governed_session(
+            governed_project,
+            task="update lifecycle guidance docs",
+            description="workflow note",
+        )
+        facts_path = governed_project / ".haxaml" / "facts.yaml"
+        facts = yaml.safe_load(facts_path.read_text())
+        facts["unresolved"] = [{"item": "Missing credential", "blocking": True, "owner": "owner"}]
+        facts_path.write_text(yaml.dump(facts, default_flow_style=False, sort_keys=False))
+
+        blocked = haxaml_context_pack(
+            task="update lifecycle guidance docs",
+            project_dir=str(governed_project),
+            pack="balanced",
+            include_state=True,
+            session_id=session_id,
+            refresh_reason="new blocker was added",
+        )
+        assert blocked["ok"] is False
+        assert blocked["error"]["code"] == "blocking_inputs_unresolved"
 
     def test_context_fetch_allows_repeated_query_driven_calls(self, governed_project):
         session_id = _start_governed_session(
@@ -368,6 +416,34 @@ class TestLifecycle:
         assert data["lifecycle"]["preferred_next"] == "haxaml_context_pack"
         assert "frame_health" not in data
         assert "plan" not in data
+        assert "handoff_summary" in data
+
+    def test_guidance_and_prebuild_surface_handoff_summary(self, governed_project):
+        acts_path = governed_project / ".haxaml" / "acts.yaml"
+        acts = yaml.safe_load(acts_path.read_text())
+        acts["continuity"] = {
+            "recent_decisions": [{"decision": "keep flow scoped", "reasoning": "avoid regressions"}],
+            "current_blockers": [{"name": "API key", "reason": "owner missing"}],
+            "recent_failures": [{"task": "prior task", "result": "failed", "summary": "missing setup"}],
+            "context_pressure": {"status": "tight", "hot_bytes": 1000, "max_hot_bytes": 1200},
+        }
+        acts["context_compaction"] = {"last_pack_tokens": 4200, "last_window_usage": {"pct_4000": 105.0, "pct_8000": 52.5}}
+        acts_path.write_text(yaml.dump(acts, default_flow_style=False, sort_keys=False))
+
+        about = haxaml_about(str(governed_project))
+        assert about["ok"] is True
+        guidance = haxaml_guidance(task="update lifecycle guidance docs", project_dir=str(governed_project))
+        assert guidance["ok"] is True
+        assert guidance["data"]["handoff_summary"]["current_blockers"]
+
+        prebuild = haxaml_prebuild(
+            task="update lifecycle guidance docs",
+            description="workflow note",
+            project_dir=str(governed_project),
+            detail="full",
+        )
+        assert prebuild["ok"] is True
+        assert "Recent context pack" in prebuild["data"]["handoff_summary"]["context_pressure_summary"]
 
     def test_lifecycle_tools_point_to_next_step(self, governed_project):
         about = haxaml_about(str(governed_project))
@@ -566,6 +642,156 @@ class TestLifecycle:
         assert sync["data"]["run"] == 1
         assert sync["data"]["applied_status"] == "done"
 
+        updated = yaml.safe_load(expect_path.read_text())
+        runbook = {item["run"]: item for item in updated["runbook"]}
+        assert runbook[1]["status"] == "done"
+        assert runbook[2]["status"] == "active"
+
+    def test_expect_sync_success_auto_appends_next_run_when_runbook_ends(self, governed_project):
+        first_id = _start_governed_session(governed_project, task="task one", description="first slice")
+        verify_first = haxaml_session_verify(
+            task="task one",
+            project_dir=str(governed_project),
+            session_id=first_id,
+            inspected_context=[".haxaml/facts.yaml", ".haxaml/rules.yaml"],
+            changed_files=["src/one.py"],
+            summary="Done first slice.",
+        )
+        assert verify_first["ok"] is True
+        record_first = haxaml_session_record(
+            task="task one",
+            result="success",
+            session_id=first_id,
+            project_dir=str(governed_project),
+            changes="First run done",
+        )
+        assert record_first["ok"] is True
+        assert record_first["data"]["run_id"].startswith("run-")
+        sync_first = haxaml_expect_sync(project_dir=str(governed_project))
+        assert sync_first["ok"] is True
+        assert sync_first["data"]["run"] == 1
+        assert sync_first["data"]["appended_run"] == 2
+
+        expect = yaml.safe_load((governed_project / ".haxaml" / "expect.yaml").read_text())
+        runbook = {item["run"]: item for item in expect["runbook"]}
+        assert runbook[1]["status"] == "done"
+        assert runbook[2]["status"] == "active"
+
+        second_id = _start_governed_session(governed_project, task="task two", description="second slice")
+        verify_second = haxaml_session_verify(
+            task="task two",
+            project_dir=str(governed_project),
+            session_id=second_id,
+            inspected_context=[".haxaml/facts.yaml", ".haxaml/rules.yaml"],
+            changed_files=["src/two.py"],
+            summary="Done second slice.",
+        )
+        assert verify_second["ok"] is True
+        record_second = haxaml_session_record(
+            task="task two",
+            result="success",
+            session_id=second_id,
+            project_dir=str(governed_project),
+            changes="Second run done",
+        )
+        assert record_second["ok"] is True
+        sync_second = haxaml_expect_sync(project_dir=str(governed_project))
+        assert sync_second["ok"] is True
+        assert sync_second["data"]["run"] == 2
+        assert sync_second["data"]["appended_run"] == 3
+
+    def test_expect_sync_partial_keeps_same_run_active(self, governed_project):
+        session_id = _start_governed_session(governed_project, task="task partial", description="partial slice")
+        verify = haxaml_session_verify(
+            task="task partial",
+            project_dir=str(governed_project),
+            session_id=session_id,
+            inspected_context=[".haxaml/facts.yaml", ".haxaml/rules.yaml"],
+            changed_files=["src/partial.py"],
+            summary="Partial progress verified.",
+        )
+        assert verify["ok"] is True
+        record = haxaml_session_record(
+            task="task partial",
+            result="partial",
+            session_id=session_id,
+            project_dir=str(governed_project),
+            changes="Partial progress",
+        )
+        assert record["ok"] is True
+
+        sync = haxaml_expect_sync(project_dir=str(governed_project))
+        assert sync["ok"] is True
+        assert sync["data"]["run"] == 1
+        assert sync["data"]["applied_status"] == "active"
+        assert sync["data"]["appended_run"] == 0
+        expect = yaml.safe_load((governed_project / ".haxaml" / "expect.yaml").read_text())
+        assert len(expect["runbook"]) == 1
+        assert expect["runbook"][0]["status"] == "active"
+
+    def test_expect_sync_failed_blocks_current_run_without_append(self, governed_project):
+        session_id = _start_governed_session(governed_project, task="task blocked", description="blocked slice")
+        record = haxaml_session_record(
+            task="task blocked",
+            result="failed",
+            session_id=session_id,
+            project_dir=str(governed_project),
+            changes="Stopped before implementation",
+            risks="Missing required material",
+        )
+        assert record["ok"] is True
+
+        sync = haxaml_expect_sync(project_dir=str(governed_project))
+        assert sync["ok"] is True
+        assert sync["data"]["run"] == 1
+        assert sync["data"]["applied_status"] == "blocked"
+        assert sync["data"]["appended_run"] == 0
+        expect = yaml.safe_load((governed_project / ".haxaml" / "expect.yaml").read_text())
+        assert len(expect["runbook"]) == 1
+        assert expect["runbook"][0]["status"] == "blocked"
+
+    def test_expect_sync_prefers_stored_run_number_before_active_inference(self, governed_project):
+        session_id = _start_governed_session(governed_project, task="task one", description="first slice")
+        verify = haxaml_session_verify(
+            task="task one",
+            project_dir=str(governed_project),
+            session_id=session_id,
+            inspected_context=[".haxaml/facts.yaml", ".haxaml/rules.yaml"],
+            changed_files=["src/one.py"],
+            summary="Done first slice.",
+        )
+        assert verify["ok"] is True
+        record = haxaml_session_record(
+            task="task one",
+            result="success",
+            session_id=session_id,
+            project_dir=str(governed_project),
+            changes="First run done",
+        )
+        assert record["ok"] is True
+
+        expect_path = governed_project / ".haxaml" / "expect.yaml"
+        expect = yaml.safe_load(expect_path.read_text())
+        expect["runbook"].append(
+            {
+                "run": 2,
+                "phase": "Phase 1",
+                "status": "active",
+                "goal": "Competing active run",
+                "outcome": "N/A",
+                "depends_on": [],
+                "touches": ["api"],
+                "requires": [],
+                "uses_map": False,
+                "verify": ["haxaml validate"],
+                "done_when": "Done",
+            }
+        )
+        expect_path.write_text(yaml.dump(expect, default_flow_style=False, sort_keys=False))
+
+        sync = haxaml_expect_sync(project_dir=str(governed_project))
+        assert sync["ok"] is True
+        assert sync["data"]["run"] == 1
         updated = yaml.safe_load(expect_path.read_text())
         runbook = {item["run"]: item for item in updated["runbook"]}
         assert runbook[1]["status"] == "done"

@@ -172,6 +172,127 @@ def _guidance_eval(task: str, frame: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _structured_item_text(item: Any, *, keys: tuple[str, ...]) -> str:
+    if isinstance(item, str):
+        return item.strip()
+    if not isinstance(item, dict):
+        return ""
+    for key in keys:
+        value = str(item.get(key, "")).strip()
+        if value:
+            return value
+    return ""
+
+
+def split_structured_items(
+    items: list[Any],
+    *,
+    keys: tuple[str, ...],
+) -> dict[str, list[str]]:
+    """Split advisory/blocking/owner-provided entries while keeping string items advisory."""
+    advisory: list[str] = []
+    blocking: list[str] = []
+    owner_provided: list[str] = []
+    for item in items or []:
+        text = _structured_item_text(item, keys=keys)
+        if not text:
+            continue
+        if isinstance(item, str):
+            advisory.append(text)
+            continue
+        is_blocking = bool(item.get("blocking"))
+        owner_value = str(item.get("owner", "")).strip().lower()
+        needs_owner = bool(item.get("owner_provided")) or owner_value in {"owner", "user", "architect", "maintainer"}
+        if is_blocking:
+            blocking.append(text)
+        else:
+            advisory.append(text)
+        if needs_owner:
+            owner_provided.append(text)
+    return {
+        "advisory": list(dict.fromkeys(advisory)),
+        "blocking": list(dict.fromkeys(blocking)),
+        "owner_provided": list(dict.fromkeys(owner_provided)),
+    }
+
+
+def frame_blocking_inputs(frame: dict[str, Any]) -> dict[str, list[str]]:
+    """Return blocking clarification/material inputs from FRAME state."""
+    facts = frame.get("facts") or {}
+    acts = frame.get("acts") or {}
+    expect = frame.get("expect") or {}
+
+    fact_items = split_structured_items(
+        list(facts.get("unresolved", []) or []),
+        keys=("item", "question", "name", "label", "text"),
+    )
+    dependency_items = split_structured_items(
+        list(acts.get("unresolved_dependencies", []) or []),
+        keys=("item", "question", "name", "label", "text"),
+    )
+    question_items = split_structured_items(
+        list(expect.get("open_questions", []) or []),
+        keys=("question", "item", "name", "label", "text"),
+    )
+
+    blocking_materials = list(
+        dict.fromkeys([*fact_items["blocking"], *dependency_items["blocking"]])
+    )
+    owner_provided_materials = list(
+        dict.fromkeys(
+            [
+                *fact_items["owner_provided"],
+                *dependency_items["owner_provided"],
+            ]
+        )
+    )
+    return {
+        "blocking_materials": blocking_materials,
+        "blocking_questions": question_items["blocking"],
+        "owner_provided_materials": owner_provided_materials,
+        "advisory_materials": list(
+            dict.fromkeys([*fact_items["advisory"], *dependency_items["advisory"]])
+        ),
+    }
+
+
+def governed_handoff_summary(state: dict[str, Any]) -> dict[str, Any]:
+    """Return a compact governed handoff summary for the next agent."""
+    continuity = state.get("continuity", {}) if isinstance(state.get("continuity"), dict) else {}
+    compaction = state.get("context_compaction", {}) if isinstance(state.get("context_compaction"), dict) else {}
+    recent_decisions = continuity.get("recent_decisions", [])
+    current_blockers = continuity.get("current_blockers", [])
+    recent_failures = continuity.get("recent_failures", [])
+    pressure = continuity.get("context_pressure", {}) if isinstance(continuity.get("context_pressure"), dict) else {}
+    last_pack_tokens = int(compaction.get("last_pack_tokens", 0) or 0)
+    window_usage = compaction.get("last_window_usage", {}) if isinstance(compaction.get("last_window_usage"), dict) else {}
+    small_window = float(window_usage.get("pct_4000", 0.0) or 0.0)
+    medium_window = float(window_usage.get("pct_8000", 0.0) or 0.0)
+    if last_pack_tokens <= 0:
+        usability = "No recent context-pack evidence yet."
+    elif small_window <= 75:
+        usability = f"Recent context pack is comfortable for small windows ({last_pack_tokens} tokens)."
+    elif small_window <= 100:
+        usability = f"Recent context pack is tight for 4k windows ({last_pack_tokens} tokens) but still workable."
+    elif medium_window <= 100:
+        usability = f"Recent context pack exceeds 4k but fits larger windows ({last_pack_tokens} tokens)."
+    else:
+        usability = f"Recent context pack is heavy even for mid-size windows ({last_pack_tokens} tokens)."
+    hot_pressure = str(pressure.get("status", "")).strip()
+    if hot_pressure == "tight":
+        usability += " Hot acts state is near its byte budget."
+    elif hot_pressure == "over_budget":
+        usability += " Hot acts state is over its byte budget and should be compacted."
+    return {
+        "recent_decisions": recent_decisions[:4] if isinstance(recent_decisions, list) else [],
+        "current_blockers": current_blockers[:6] if isinstance(current_blockers, list) else [],
+        "recent_failures": recent_failures[:4] if isinstance(recent_failures, list) else [],
+        "context_pressure_summary": usability,
+        "last_pack_tokens": last_pack_tokens,
+        "last_window_usage": window_usage,
+    }
+
+
 def _get_state_manager(project_dir: str) -> tuple[Optional[StateManager], Optional[Path]]:
     p = Path(project_dir).resolve()
     acts_path = resolve_frame_file(p, "acts.yaml")

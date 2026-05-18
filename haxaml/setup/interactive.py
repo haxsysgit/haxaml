@@ -178,6 +178,7 @@ def run_setup_wizard(
     project_dir: str | Path,
     scope: str,
     target: str,
+    targets: tuple[str, ...] | list[str] | None = None,
     mode: str,
     only: tuple[str, ...] | list[str] | None,
     with_workflow: bool,
@@ -222,7 +223,9 @@ def run_setup_wizard(
             default=selected_mode,
         )
 
-    selected_targets = [target] if target != "auto" else []
+    selected_targets = [item for item in (targets or []) if str(item).strip()]
+    if not selected_targets and target != "auto":
+        selected_targets = [target]
     if not _is_prefilled(prefilled, "target"):
         if selected_scope == "project":
             target_choices = _target_choices(candidate_targets)

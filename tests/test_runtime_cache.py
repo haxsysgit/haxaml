@@ -172,3 +172,32 @@ def test_archive_overview_is_shallow_and_detail_loads_selected_record(monkeypatc
     assert calls["count"] == 1
     assert list(detail) == [("run", "run-1")]
     assert detail[("run", "run-1")]["changes"] == "full record body"
+
+
+def test_archive_index_uses_legacy_archive_path_when_canonical_missing(tmp_path):
+    _seed_project(tmp_path)
+    legacy_path = tmp_path / ".haxaml" / "acts-history.yaml"
+    legacy_path.write_text(
+        yaml.dump(
+            {
+                "metadata": {
+                    "version": "0.6.7",
+                    "managed_by": "haxaml",
+                    "archive_mode": "manual",
+                    "counts": {"runs": 1, "sessions": 0, "verifications": 0, "completed_tasks": 0, "decisions": 0},
+                },
+                "index": [{"kind": "run", "id": "run-legacy", "task": "legacy", "summary": "legacy"}],
+                "history": {"runs": [{"id": "run-legacy", "task": "legacy"}], "sessions": [], "verifications": [], "completed_tasks": [], "decisions": []},
+            },
+            default_flow_style=False,
+            sort_keys=False,
+        )
+    )
+
+    cache = runtime_cache()
+    cache.reset()
+    snapshot = cache.get_archive_index(str(tmp_path))
+
+    assert snapshot.exists is True
+    assert snapshot.path == legacy_path
+    assert snapshot.index[0]["id"] == "run-legacy"

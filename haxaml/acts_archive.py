@@ -13,12 +13,13 @@ the full project diary remains accessible for long-term memory.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from haxaml.paths import acts_history_path
+from haxaml.paths import acts_history_path, frame_path
 from haxaml.utils import clean_str_list, keywords_from_text, normalized_text, now_iso
 from haxaml.yaml_utils import dump_yaml, load_yaml
 
@@ -29,6 +30,8 @@ DEFAULT_MEMORY_POLICY = {
     "max_hot_runs": 5,
     "max_hot_sessions": 5,
     "max_hot_verifications": 5,
+    "max_hot_completed_tasks": 5,
+    "max_hot_decisions": 8,
     "max_acts_bytes": 16000,
     "keep_decisions_hot": True,
 }
@@ -36,6 +39,8 @@ ARCHIVE_KINDS = {
     "run": "runs",
     "session": "sessions",
     "verification": "verifications",
+    "completed_task": "completed_tasks",
+    "decision": "decisions",
 }
 
 
@@ -58,7 +63,14 @@ def normalize_memory_policy(value: Any) -> dict[str, Any]:
         archive_mode = policy["archive_mode"]
     policy["archive_mode"] = archive_mode
 
-    for key in ("max_hot_runs", "max_hot_sessions", "max_hot_verifications", "max_acts_bytes"):
+    for key in (
+        "max_hot_runs",
+        "max_hot_sessions",
+        "max_hot_verifications",
+        "max_hot_completed_tasks",
+        "max_hot_decisions",
+        "max_acts_bytes",
+    ):
         raw = value.get(key, policy[key])
         if isinstance(raw, int) and raw > 0:
             policy[key] = raw
@@ -75,12 +87,16 @@ def hot_limits_from_policy(policy: dict[str, Any], keep_recent: int | None = Non
             "runs": keep_recent,
             "sessions": keep_recent,
             "verifications": keep_recent,
+            "completed_tasks": keep_recent,
+            "decisions": keep_recent,
         }
     normalized = normalize_memory_policy(policy)
     return {
         "runs": int(normalized["max_hot_runs"]),
         "sessions": int(normalized["max_hot_sessions"]),
         "verifications": int(normalized["max_hot_verifications"]),
+        "completed_tasks": int(normalized["max_hot_completed_tasks"]),
+        "decisions": int(normalized["max_hot_decisions"]),
     }
 
 
@@ -103,12 +119,79 @@ def archive_metadata(state: dict[str, Any]) -> dict[str, Any]:
             "runs": int(counts.get("runs", 0) or 0),
             "sessions": int(counts.get("sessions", 0) or 0),
             "verifications": int(counts.get("verifications", 0) or 0),
+            "completed_tasks": int(counts.get("completed_tasks", 0) or 0),
+            "decisions": int(counts.get("decisions", 0) or 0),
         },
         "hot_limits": {
             "runs": int(hot_limits.get("runs", 0) or 0),
             "sessions": int(hot_limits.get("sessions", 0) or 0),
             "verifications": int(hot_limits.get("verifications", 0) or 0),
+            "completed_tasks": int(hot_limits.get("completed_tasks", 0) or 0),
+            "decisions": int(hot_limits.get("decisions", 0) or 0),
         },
+    }
+
+
+def decision_id(record: dict[str, Any]) -> str:
+    """Return a stable ID for archived decision records."""
+    explicit = normalized_text(record.get("id", ""))
+    if explicit:
+        return explicit
+    seed = "|".join(
+        [
+            normalized_text(record.get("decision", "")),
+            normalized_text(record.get("reasoning", "")),
+            normalized_text(record.get("date", "")),
+        ]
+    )
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:10]
+    return f"decision-{digest}"
+
+
+def decision_stub(record: dict[str, Any], *, reasoning_chars: int = 160) -> dict[str, Any]:
+    """Return a compact hot-state stub for a decision."""
+    reasoning = normalized_text(record.get("reasoning", ""))
+    if len(reasoning) > reasoning_chars:
+        reasoning = reasoning[: reasoning_chars - 3].rstrip() + "..."
+    return {
+        "id": decision_id(record),
+        "decision": normalized_text(record.get("decision", "")),
+        "reasoning": reasoning,
+        "date": normalized_text(record.get("date", "")),
+        "reversible": bool(record.get("reversible", True)),
+        "archived": True,
+    }
+
+
+def completed_task_id(record: dict[str, Any]) -> str:
+    """Return a stable ID for completed task archive records."""
+    explicit = normalized_text(record.get("id", ""))
+    if explicit:
+        return explicit
+    seed = "|".join(
+        [
+            normalized_text(record.get("name", "")),
+            normalized_text(record.get("result", "")),
+            normalized_text(record.get("completed", "")),
+            normalized_text(record.get("summary", "")),
+        ]
+    )
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:10]
+    return f"completed-{digest}"
+
+
+def completed_task_stub(record: dict[str, Any], *, summary_chars: int = 160) -> dict[str, Any]:
+    """Return a compact hot-state stub for a completed task."""
+    summary = normalized_text(record.get("summary", ""))
+    if len(summary) > summary_chars:
+        summary = summary[: summary_chars - 3].rstrip() + "..."
+    return {
+        "id": completed_task_id(record),
+        "name": normalized_text(record.get("name", "")),
+        "result": normalized_text(record.get("result", "")),
+        "summary": summary,
+        "completed": normalized_text(record.get("completed", "")),
+        "archived": True,
     }
 
 
@@ -128,10 +211,22 @@ def build_index_entry(kind: str, record: dict[str, Any]) -> dict[str, Any]:
             or normalized_text(record.get("ended", ""))
             or normalized_text(record.get("started", ""))
         )
-    else:
+    elif kind == "verification":
         status = normalized_text(record.get("verdict", ""))
         summary = normalized_text(record.get("summary", ""))
         timestamp = normalized_text(record.get("timestamp", ""))
+    elif kind == "decision":
+        record_id = record_id or decision_id(record)
+        task = normalized_text(record.get("decision", ""))
+        status = "reversible" if bool(record.get("reversible", True)) else "fixed"
+        summary = normalized_text(record.get("reasoning", ""))
+        timestamp = normalized_text(record.get("date", ""))
+    else:
+        record_id = record_id or completed_task_id(record)
+        task = normalized_text(record.get("name", ""))
+        status = normalized_text(record.get("result", ""))
+        summary = normalized_text(record.get("summary", ""))
+        timestamp = normalized_text(record.get("completed", ""))
 
     file_refs = clean_str_list(record.get("file_refs", []))
     if not file_refs and kind == "verification":
@@ -165,15 +260,24 @@ class ActsArchive:
     def __init__(self, project_dir: str | Path):
         self.project_dir = Path(project_dir).resolve()
         self.path = acts_history_path(self.project_dir)
+        self.legacy_path = frame_path(self.project_dir, "acts-history.yaml")
+
+    def _read_path(self) -> Path:
+        if self.path.exists():
+            return self.path
+        if self.legacy_path.exists():
+            return self.legacy_path
+        return self.path
 
     def exists(self) -> bool:
-        return self.path.exists()
+        return self.path.exists() or self.legacy_path.exists()
 
     def read(self) -> dict[str, Any]:
-        if not self.path.exists():
+        read_path = self._read_path()
+        if not read_path.exists():
             return self._empty_doc()
         try:
-            data = load_yaml(self.path)
+            data = load_yaml(read_path)
         except Exception as exc:  # pragma: no cover - defensive I/O
             raise ArchiveError(f"Could not read archive: {exc}") from exc
         return self._normalize_doc(data)
@@ -201,26 +305,38 @@ class ActsArchive:
         runs: list[dict[str, Any]] | None = None,
         sessions: list[dict[str, Any]] | None = None,
         verifications: list[dict[str, Any]] | None = None,
+        completed_tasks: list[dict[str, Any]] | None = None,
+        decisions: list[dict[str, Any]] | None = None,
         archive_mode: str,
     ) -> dict[str, int]:
         """Append cold history into the archive and update the header index."""
         runs = list(runs or [])
         sessions = list(sessions or [])
         verifications = list(verifications or [])
+        completed_tasks = list(completed_tasks or [])
+        decisions = list(decisions or [])
         doc = self.read()
         history = doc["history"]
         index = doc["index"]
         existing = {(item.get("kind"), item.get("id")) for item in index if isinstance(item, dict)}
-        counts = {"runs": 0, "sessions": 0, "verifications": 0}
+        counts = {"runs": 0, "sessions": 0, "verifications": 0, "completed_tasks": 0, "decisions": 0}
 
         for kind, key, items in (
             ("run", "runs", runs),
             ("session", "sessions", sessions),
             ("verification", "verifications", verifications),
+            ("completed_task", "completed_tasks", completed_tasks),
+            ("decision", "decisions", decisions),
         ):
             for item in items:
                 if not isinstance(item, dict):
                     continue
+                if kind == "completed_task" and not normalized_text(item.get("id", "")):
+                    item = dict(item)
+                    item["id"] = completed_task_id(item)
+                if kind == "decision" and not normalized_text(item.get("id", "")):
+                    item = dict(item)
+                    item["id"] = decision_id(item)
                 entry = build_index_entry(kind, item)
                 marker = (entry["kind"], entry["id"])
                 if marker in existing:
@@ -236,6 +352,8 @@ class ActsArchive:
             "runs": len(history["runs"]),
             "sessions": len(history["sessions"]),
             "verifications": len(history["verifications"]),
+            "completed_tasks": len(history["completed_tasks"]),
+            "decisions": len(history["decisions"]),
         }
         self.write(doc)
         return counts
@@ -249,6 +367,8 @@ class ActsArchive:
             "runs": int(counts.get("runs", 0) or 0),
             "sessions": int(counts.get("sessions", 0) or 0),
             "verifications": int(counts.get("verifications", 0) or 0),
+            "completed_tasks": int(counts.get("completed_tasks", 0) or 0),
+            "decisions": int(counts.get("decisions", 0) or 0),
         }
 
     def has_record(self, record_id: str) -> bool:
@@ -295,13 +415,15 @@ class ActsArchive:
                 "created_at": now_iso(),
                 "last_archived_at": "",
                 "archive_mode": "manual",
-                "counts": {"runs": 0, "sessions": 0, "verifications": 0},
+                "counts": {"runs": 0, "sessions": 0, "verifications": 0, "completed_tasks": 0, "decisions": 0},
             },
             "index": [],
             "history": {
                 "runs": [],
                 "sessions": [],
                 "verifications": [],
+                "completed_tasks": [],
+                "decisions": [],
             },
         }
 
@@ -324,6 +446,8 @@ class ActsArchive:
                 "runs": int(counts.get("runs", 0) or 0),
                 "sessions": int(counts.get("sessions", 0) or 0),
                 "verifications": int(counts.get("verifications", 0) or 0),
+                "completed_tasks": int(counts.get("completed_tasks", 0) or 0),
+                "decisions": int(counts.get("decisions", 0) or 0),
             }
 
         index = data.get("index", [])
@@ -334,22 +458,16 @@ class ActsArchive:
         history = data.get("history", {})
         if not isinstance(history, dict):
             raise ArchiveError("Archive history must be a mapping.")
-        for key in ("runs", "sessions", "verifications"):
+        for key in ("runs", "sessions", "verifications", "completed_tasks", "decisions"):
             items = history.get(key, [])
             if not isinstance(items, list):
                 raise ArchiveError(f"Archive history.{key} must be a list.")
             doc["history"][key] = [item for item in items if isinstance(item, dict)]
-
-        if not doc["metadata"]["counts"]:
-            doc["metadata"]["counts"] = {
-                "runs": len(doc["history"]["runs"]),
-                "sessions": len(doc["history"]["sessions"]),
-                "verifications": len(doc["history"]["verifications"]),
-            }
-        else:
-            doc["metadata"]["counts"] = {
-                "runs": len(doc["history"]["runs"]),
-                "sessions": len(doc["history"]["sessions"]),
-                "verifications": len(doc["history"]["verifications"]),
-            }
+        doc["metadata"]["counts"] = {
+            "runs": len(doc["history"]["runs"]),
+            "sessions": len(doc["history"]["sessions"]),
+            "verifications": len(doc["history"]["verifications"]),
+            "completed_tasks": len(doc["history"]["completed_tasks"]),
+            "decisions": len(doc["history"]["decisions"]),
+        }
         return doc

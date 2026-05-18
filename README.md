@@ -20,7 +20,9 @@ It uses a model I call **FRAME** to split project understanding into five parts:
 
 ### The Handoff
 
-The goal is to move the "brain" of the project out of the AI provider's temporary memory and into the repository itself. When you switch between Claude Code, Cursor, Windsurf, or any other tool, the next agent should be able to read the "Diary" (the Acts) and continue exactly where the last one left off without re-reading the whole codebase.
+The goal is to move the "brain" of the project out of the AI provider's temporary memory and into the repository itself. When you switch between Claude Code, Cursor, Windsurf, or any other tool, the next agent should be able to read the diary, the map, and the expected runbook and continue from real project state without rereading the whole codebase.
+
+The canonical product and feature direction lives in [goals.md](./goals.md). This README stays as the main public entrypoint in the original product voice.
 
 ## The Agent Diary Philosophy
 
@@ -39,11 +41,12 @@ Haxaml operates through an MCP (Model Context Protocol) server that enforces a d
 |---|---|---|
 | **About** | `haxaml_about` | The agent reads the "Laws of the Land" and learns how to operate here. |
 | **Guidance** | `haxaml_guidance` | Haxaml determines if the request is real project work or just a quick off-topic question. |
-| **Prebuild** | `haxaml_prebuild` | **The Architect Phase.** This is where the agent classifies the task, checks risks, and identifies missing materials. |
+| **Prebuild** | `haxaml_prebuild` | **The Architect Phase.** This is where the agent classifies the task, checks risks, identifies missing materials, and turns the requested end state into an expected run path. |
 | **Context** | `haxaml_context_pack` | **The Builder Phase.** The agent pulls a task-scoped context pack. This uses refresh deltas to save tokens. |
 | **Build** | *(External)* | The implementing agent does the work (edits, tests, commands) outside Haxaml tools. |
 | **Verify** | `haxaml_session_verify` | **The Inspection Phase.** The agent must provide evidence of what they checked and what risks still exist. |
 | **Record** | `haxaml_session_record` | The outcome is written into the Acts diary for the next agent to pick up. |
+| **Sync** | `haxaml_expect_sync` | The recorded outcome updates the expected runbook so the next agent sees what was planned, what really happened, and what should happen next. |
 
 ## Install
 
@@ -52,7 +55,7 @@ Haxaml is split into three related packages:
 - `haxaml-mcp`: the stdio launcher for your editor.
 - `haxaml-ui`: a local browser dashboard for humans.
 
-**Note on requirements:** I highly recommend installing [uv](https://docs.astral.sh/uv/) first. Haxaml uses it internally for managed upgrades: bootstrap tasks: and fast tool execution.
+**Note on requirements:** I highly recommend installing [uv](https://docs.astral.sh/uv/) first. Haxaml uses it internally for managed upgrades, bootstrap tasks, and fast tool execution.
 
 ### 1. Recommended: uv tool
 This is the cleanest way to add Haxaml to your global path:
@@ -93,7 +96,7 @@ If you want only the bare FRAME scaffold without onboarding, use `haxaml init`. 
 
 ## Local Dashboard
 
-I built a lightweight dashboard so you can see the "state of the union" for your repo. It is read-only and runs on localhost. It lets you drill down into the Acts history, check your project Facts, and see what the agent is currently Expecting to build next.
+I built a lightweight dashboard so you can see the "state of the union" for your repo. It is read-only and runs on localhost. It lets you drill down into the Acts history, check your project Facts, inspect the Map boundaries, and see what the agent is currently expected to build next.
 
 ```bash
 haxaml dashboard
@@ -101,17 +104,23 @@ haxaml dashboard
 
 ## The FRAME Files
 
-- `.haxaml/facts.yaml`: The project truth (the stack, the goals, and the hard constraints).
+- `.haxaml/facts.yaml`: The project truth: the stack, the goals, and the hard constraints.
 - `.haxaml/rules.yaml`: The operating laws for the agent.
-- `.haxaml/acts.yaml`: The diary of what happened: recent decisions: and recorded runs.
-- `.haxaml/map.yaml`: The module ownership and impact rules (prevents "fix the kitchen: break the bathroom" issues).
-- `.haxaml/expect.yaml`: The forward-looking runbook and milestones.
+- `.haxaml/acts.yaml`: The diary of what happened: recent decisions, verification evidence, recorded runs, and what really happened against the plan.
+- `.haxaml/map.yaml`: The module ownership and impact rules that explain what changes can affect what.
+- `.haxaml/expect.yaml`: The forward-looking plan: the final intended end state, expected runs, checkpoints, milestones, and done criteria the agent is working toward.
+
+The important loop is simple: `expect` defines the planned path and finish line, `acts` records the checks and real outcomes, and `map` explains the scope and impact boundaries between them.
 
 ## Roadmap and Docs
 
+- [goals.md](./goals.md): the canonical product vision, thesis, and feature direction.
 - [learn/FRAME.md](./learn/FRAME.md): the underlying memory model.
-- [0.7.x_Roadmap.md](./0.7.x_Roadmap.md): details on our current focus for onboarding and target support.
+- [learn/haxaml.md](./learn/haxaml.md): how Haxaml turns FRAME into a working governed system.
+- [learn/haxaml-mcp.md](./learn/haxaml-mcp.md): the operator-facing MCP guide.
+- [0.7.x_Roadmap.md](./0.7.x_Roadmap.md): details on current onboarding and workflow accommodation work.
 - [v1.0_Roadmap.md](./v1.0_Roadmap.md): the path to a stable core.
-- [docs/reports/haxaml-critical-bug-audit.md](./docs/reports/haxaml-critical-bug-audit.md): current critical bug audit and hardening plan.
 - [docs/architecture.md](./docs/architecture.md): how the modules are split.
+- [docs/mcp-tool-reference.md](./docs/mcp-tool-reference.md): compact MCP tool contract reference.
+- [docs/reports/](./docs/reports): dated audit evidence and hardening notes.
 - [CONTRIBUTING.md](./CONTRIBUTING.md): how to help build the protocol.

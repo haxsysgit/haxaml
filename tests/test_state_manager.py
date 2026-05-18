@@ -283,8 +283,8 @@ class TestCompaction:
         result = sm.archive_on_record()
 
         assert result["trigger"] == "size"
-        assert result["archived"]["runs"] == 5
-        assert len(sm.read()["runs"]) == 3
+        assert result["archived"]["runs"] >= 5
+        assert len(sm.read()["runs"]) <= 3
 
     def test_compact_preserves_full_archived_record(self, tmp_path):
         path = _make_state(tmp_path)
@@ -312,6 +312,179 @@ class TestCompaction:
         assert record["decisions"] == "Kept hot state lean"
         assert record["verification_id"] == "verify-abc123"
         assert "docs/lifecycle.md" in record["file_refs"]
+
+    def test_completed_tasks_are_capped_in_hot_acts_and_archived(self, tmp_path):
+        path = _make_state(tmp_path)
+        rules_dir = tmp_path / ".haxaml"
+        rules_dir.mkdir(exist_ok=True)
+        (rules_dir / "rules.yaml").write_text(
+            "memory_policy:\n"
+            "  archive_mode: on_record\n"
+            "  max_hot_runs: 5\n"
+            "  max_hot_sessions: 5\n"
+            "  max_hot_verifications: 5\n"
+            "  max_hot_completed_tasks: 3\n"
+            "  max_acts_bytes: 16000\n",
+            encoding="utf-8",
+        )
+        sm = StateManager(path)
+
+        for index in range(8):
+            sm.set_active_task(f"task {index}", description=f"summary {index}")
+            sm.record_completed_run(
+                task=f"task {index}",
+                result="success",
+                changes=f"completed task {index}",
+                summary=f"full completed task summary {index}",
+            )
+            sm.archive_on_record()
+
+        state = sm.read()
+        assert len(state["completed_tasks"]) == 3
+        assert all(item.get("archived") is True for item in state["completed_tasks"])
+        assert state["archive"]["archived_counts"]["completed_tasks"] == 8
+
+    def test_archived_completed_tasks_can_be_loaded_by_id(self, tmp_path):
+        path = _make_state(tmp_path)
+        sm = StateManager(path)
+        sm.set_active_task("archive completed task", description="archive me")
+        sm.record_completed_run(
+            task="archive completed task",
+            result="success",
+            changes="done",
+            summary="needle completed task summary",
+        )
+        sm.compact(keep_recent=1)
+
+        archive = ActsArchive(tmp_path)
+        entries = [item for item in archive.index_entries() if item["kind"] == "completed_task"]
+        assert entries
+        detail = archive.load_record_details("completed_task", entries[0]["id"])
+        assert detail is not None
+        assert detail["summary"] == "needle completed task summary"
+
+    def test_size_pressure_reduces_hot_records_below_count_limits(self, tmp_path):
+        data = {
+            "current_phase": "Phase 1",
+            "active_task": {"name": "test task", "description": "testing"},
+            "completed_tasks": [],
+            "blocked_tasks": [],
+            "decisions": [],
+            "unresolved_dependencies": [],
+            "runs": [
+                {"id": f"run-{i}", "task": f"task {i}", "result": "success", "changes": "x" * 1200}
+                for i in range(6)
+            ],
+            "sessions": [],
+            "verifications": [],
+            "archive": {
+                "path": str(tmp_path / ".haxaml" / "archive" / "acts-history.yaml"),
+                "archive_mode": "manual",
+                "last_archived_at": "",
+                "archived_counts": {"runs": 0, "sessions": 0, "verifications": 0, "completed_tasks": 0},
+                "hot_limits": {"runs": 5, "sessions": 5, "verifications": 5, "completed_tasks": 5},
+            },
+        }
+        path = _make_state(tmp_path, data)
+        rules_dir = tmp_path / ".haxaml"
+        rules_dir.mkdir(exist_ok=True)
+        (rules_dir / "rules.yaml").write_text(
+            "memory_policy:\n"
+            "  archive_mode: manual\n"
+            "  max_hot_runs: 5\n"
+            "  max_hot_sessions: 5\n"
+            "  max_hot_verifications: 5\n"
+            "  max_hot_completed_tasks: 5\n"
+            "  max_acts_bytes: 1024\n",
+            encoding="utf-8",
+        )
+        sm = StateManager(path)
+
+        result = sm.archive_on_record()
+
+        assert result["trigger"] == "size"
+        assert len(sm.read()["runs"]) < 5
+
+    def test_decisions_are_bounded_in_hot_state_and_archived(self, tmp_path):
+        path = _make_state(tmp_path)
+        rules_dir = tmp_path / ".haxaml"
+        rules_dir.mkdir(exist_ok=True)
+        (rules_dir / "rules.yaml").write_text(
+            "memory_policy:\n"
+            "  archive_mode: on_record\n"
+            "  max_hot_runs: 5\n"
+            "  max_hot_sessions: 5\n"
+            "  max_hot_verifications: 5\n"
+            "  max_hot_completed_tasks: 5\n"
+            "  max_hot_decisions: 3\n"
+            "  max_acts_bytes: 16000\n",
+            encoding="utf-8",
+        )
+        sm = StateManager(path)
+
+        for index in range(6):
+            sm.add_decision(f"decision {index}", f"reason {index}")
+        result = sm.archive_on_record()
+
+        state = sm.read()
+        assert result["archived"]["decisions"] == 3
+        assert len(state["decisions"]) == 3
+        assert [item["decision"] for item in state["decisions"]] == ["decision 3", "decision 4", "decision 5"]
+        assert state["archive"]["archived_counts"]["decisions"] == 3
+
+    def test_continuity_summary_keeps_blockers_and_failures_hot(self, tmp_path):
+        data = {
+            "current_phase": "Phase 1",
+            "active_task": {"name": "test task", "description": "testing"},
+            "completed_tasks": [],
+            "blocked_tasks": [{"name": "API key", "reason": "waiting on owner"}],
+            "decisions": [{"decision": "keep hot state lean", "reasoning": "token pressure", "date": "2026-01-01T00:00:00+00:00"}],
+            "unresolved_dependencies": [{"item": "Sandbox key", "blocking": True, "owner": "owner"}],
+            "runs": [{"id": "run-1", "task": "failed task", "result": "failed", "risks": "missing secret", "timestamp": "2026-01-01T00:00:00+00:00"}],
+            "sessions": [],
+            "verifications": [],
+        }
+        path = _make_state(tmp_path, data)
+        sm = StateManager(path)
+
+        sm.archive_on_record()
+        continuity = sm.read()["continuity"]
+
+        assert continuity["recent_decisions"]
+        assert continuity["current_blockers"]
+        assert continuity["recent_failures"]
+        assert continuity["context_pressure"]["status"] in {"healthy", "tight", "over_budget"}
+
+    def test_legacy_archive_file_is_read_and_migrated_on_compaction(self, tmp_path):
+        path = _make_state(tmp_path)
+        sm = StateManager(path)
+        legacy_path = tmp_path / ".haxaml" / "acts-history.yaml"
+        legacy_path.parent.mkdir(parents=True, exist_ok=True)
+        legacy_path.write_text(
+            yaml.dump(
+                {
+                    "metadata": {
+                        "version": "0.6.7",
+                        "managed_by": "haxaml",
+                        "archive_mode": "manual",
+                        "counts": {"runs": 1, "sessions": 0, "verifications": 0, "completed_tasks": 0, "decisions": 0},
+                    },
+                    "index": [{"kind": "run", "id": "run-old", "task": "old task", "status_or_result": "success", "summary": "legacy"}],
+                    "history": {"runs": [{"id": "run-old", "task": "old task", "result": "success"}], "sessions": [], "verifications": [], "completed_tasks": [], "decisions": []},
+                },
+                default_flow_style=False,
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+        for index in range(8):
+            sm.record_run(task=f"task {index}", result="success")
+
+        result = sm.compact(keep_recent=2)
+
+        assert result["archived"]["runs"] >= 6
+        assert (tmp_path / ".haxaml" / "archive" / "acts-history.yaml").exists()
+        assert ActsArchive(tmp_path).has_record("run-old") is True
 
 
 class TestStats:

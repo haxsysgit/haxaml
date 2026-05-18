@@ -1,5 +1,7 @@
 # FRAME: The Main Frame For AI-Governed Projects
 
+For the canonical Haxaml product vision, see [goals.md](../goals.md). This file focuses on FRAME as the memory and protocol model.
+
 Most AI project workflows do not break because the model is "bad".
 
 They break because the project has no shared memory.
@@ -47,6 +49,11 @@ Haxaml is the current implementation of FRAME. In Haxaml, the memory lives in
 `.haxaml/facts.yaml`, `.haxaml/rules.yaml`, `.haxaml/acts.yaml`,
 `.haxaml/map.yaml`, and `.haxaml/expect.yaml`. But FRAME is the bigger idea.
 Haxaml is one way to make it real.
+
+FRAME should be treated as a protocol model today, not a finished standard. It
+may become a candidate for broader standardization after more research, real
+project use, and careful separation between the stable memory model and
+Haxaml-specific implementation details.
 
 ## Why This Matters
 
@@ -493,19 +500,22 @@ another part too.
 
 ## E = Expect
 
-Expect is what should happen next.
+Expect is what should happen next and what "done" is supposed to look like when
+the current slice is complete.
 
-This is the active target. The current phase. The "what are we actually trying
-to finish?" section.
+This is the active target, the planned end, the current phase, the expected
+runbook, and the checkpoints the agent is trying to satisfy. It answers "what
+are we actually trying to finish, in what order, and how will we know we are
+there?"
 
 Examples:
 
 - Current goal: finish release stability work.
 - Active phase: dogfooding.
-- Current task: rewrite `FRAME.md` as a public-friendly guide.
+- Expected run: rewrite `FRAME.md` as a public-friendly guide.
 - Success: explains all five letters, compares old workflows, cites sources,
   avoids long code dumps.
-- Next check: inspect links and run a focused safety test.
+- Next checkpoint: inspect links and run a focused safety test.
 
 Expect matters because agents often need a finish line.
 
@@ -528,9 +538,10 @@ active task: improve docs
 
 What belongs in Expect:
 
-- Active goals.
+- Planned end state.
+- Expected runs and their order.
 - Current phase.
-- Milestones.
+- Milestones and checkpoints.
 - Success criteria.
 - Next actions.
 - Blocking questions.
@@ -546,7 +557,8 @@ What does not belong in Expect:
 
 Expect prevents aimless execution.
 
-It lets the project say, "This is the target right now. Do not wander."
+It lets the project say, "This is the finish line, this is the current run, and
+these are the checkpoints on the way there. Do not wander."
 
 ## How The Five Parts Work Together
 
@@ -723,7 +735,7 @@ FRAME workflow:
 - Rules hold behavior.
 - Acts hold history.
 - Map holds impact.
-- Expect holds the current target.
+- Expect holds the planned end, current run, and checkpoints.
 - Prompt files become adapters to that memory.
 
 The difference is responsibility.

@@ -113,6 +113,7 @@ class SetupPlan:
     selected_targets: list[str]
     detected_targets: list[str]
     requested_targets: list[str] = field(default_factory=list)
+    selection_source: str = "auto_fallback"
     strong_detected_targets: list[str] = field(default_factory=list)
     weak_detected_targets: list[str] = field(default_factory=list)
     target_candidates: list[dict[str, object]] = field(default_factory=list)
@@ -130,6 +131,7 @@ class SetupPlan:
             "requested_target": self.requested_target,
             "requested_targets": self.requested_targets,
             "selected_targets": self.selected_targets,
+            "selection_source": self.selection_source,
             "detected_targets": self.detected_targets,
             "strong_detected_targets": self.strong_detected_targets,
             "weak_detected_targets": self.weak_detected_targets,
@@ -264,6 +266,22 @@ def _select_targets(
     return ["generic"]
 
 
+def _selection_source(
+    *,
+    target: str,
+    explicit_targets: list[str],
+    resolved_mode: str,
+    strong_detected: list[str],
+) -> str:
+    if explicit_targets:
+        return "explicit_targets"
+    if target != "auto":
+        return "explicit_target"
+    if resolved_mode == "adopted" and len(strong_detected) == 1:
+        return "auto_strong_detection"
+    return "generic_fallback"
+
+
 def _target_single_instruction_integration_point(target: TargetSpec, scope: str) -> IntegrationPoint | None:
     for integration_point in target.integration_points_for(scope, {"instructions"}):
         if integration_point.path is not None and "*" not in integration_point.path and "?" not in integration_point.path:
@@ -358,6 +376,12 @@ def build_setup_plan(
         requested_target=target,
         requested_targets=list(explicit_targets),
         selected_targets=selected_targets,
+        selection_source=_selection_source(
+            target=target,
+            explicit_targets=explicit_targets,
+            resolved_mode=resolved_mode,
+            strong_detected=strong_detected,
+        ),
         detected_targets=detected,
         strong_detected_targets=strong_detected,
         weak_detected_targets=weak_detected,
@@ -406,20 +430,28 @@ def build_setup_plan(
                 docs_url=docs,
             )
 
+    selected_skill_paths = {
+        point.resolve(root)
+        for target_id in selected_targets
+        for point in get_target(target_id).integration_points_for(scope, {"skills"})
+        if point.resolve(root) is not None
+    }
     if scope == "project" and "skills" in kinds:
         generic_skill_target = get_target("generic")
         generic_skill_integration_point = generic_skill_target.integration_points_for("project", {"skills"})[0]
-        _add_file(
-            files,
-            project_dir=root,
-            scope=scope,
-            target="generic",
-            kind="skills",
-            path=generic_skill_integration_point.resolve(root),
-            artifact=render_skill(generic_skill_target, scope),
-            management="file",
-            docs_url=generic_skill_integration_point.docs_url,
-        )
+        generic_skill_path = generic_skill_integration_point.resolve(root)
+        if "generic" in selected_targets or generic_skill_path not in selected_skill_paths:
+            _add_file(
+                files,
+                project_dir=root,
+                scope=scope,
+                target="generic",
+                kind="skills",
+                path=generic_skill_path,
+                artifact=render_skill(generic_skill_target, scope),
+                management="file",
+                docs_url=generic_skill_integration_point.docs_url,
+            )
 
     adapter_files: list[str] = []
     skipped_files: list[str] = []
@@ -697,7 +729,9 @@ def build_setup_plan(
         "scope": plan.scope,
         "mode": plan.mode,
         "requested_target": plan.requested_target,
+        "requested_targets": plan.requested_targets,
         "selected_targets": plan.selected_targets,
+        "selection_source": plan.selection_source,
         "detected_targets": plan.detected_targets,
         "workflow_enabled": plan.workflow_enabled,
         "managed_files": managed_files,

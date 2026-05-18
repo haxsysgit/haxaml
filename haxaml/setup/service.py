@@ -96,13 +96,105 @@ def _render_section(title: str, items: list[dict[str, object]], *, color: bool, 
     return lines
 
 
+def _selection_source_text(selection_source: str) -> str:
+    mapping = {
+        "explicit_targets": "explicit --targets selection",
+        "explicit_target": "explicit --target selection",
+        "auto_strong_detection": "single strong native provider detection",
+        "generic_fallback": "generic fallback",
+    }
+    return mapping.get(selection_source, selection_source or "auto")
+
+
+def _review_sections(plan: SetupPlan, *, apply_result: dict[str, object] | None = None) -> list[dict[str, object]]:
+    planned: list[dict[str, object]]
+    if apply_result is None:
+        planned = [item.to_dict() for item in plan.planned_files]
+        creates = [item for item in planned if str(item.get("action")) == "create"]
+        updates = [item for item in planned if str(item.get("action")) in {"update", "append_pointer"}]
+        merges = [item for item in planned if str(item.get("action")) == "merge"]
+        skips = [item for item in planned if str(item.get("action")) == "skip"]
+    else:
+        result_items = list(apply_result.get("items", []))
+        creates = [item for item in result_items if str(item.get("status")) == "created"]
+        updates = [item for item in result_items if str(item.get("status")) == "updated"]
+        merges = [item for item in result_items if str(item.get("status")) == "merged"]
+        skips = [item for item in result_items if str(item.get("status")) == "skipped"]
+
+    workflow_items = [
+        item.to_dict() if hasattr(item, "to_dict") else item
+        for item in (plan.planned_files if apply_result is None else list(apply_result.get("items", [])))
+        if str((item.to_dict() if hasattr(item, "to_dict") else item).get("kind")) == "workflow"
+    ]
+    sections = [
+        {
+            "title": "Selection",
+            "items": [
+                {
+                    "path": f"targets: {', '.join(plan.selected_targets) if plan.selected_targets else '(none)'}",
+                    "reason": f"selection source: {_selection_source_text(plan.selection_source)}",
+                }
+            ],
+        },
+        {"title": "Created" if apply_result is not None else "Planned Creates", "items": creates},
+        {"title": "Updated" if apply_result is not None else "Planned Updates", "items": updates},
+        {"title": "Merged" if apply_result is not None else "Planned Merges", "items": merges},
+        {"title": "Skipped" if apply_result is not None else "Planned Skips", "items": skips},
+        {"title": "Workflow Additions", "items": workflow_items},
+        {"title": "Manual Actions", "items": [item.to_dict() for item in plan.manual_actions]},
+    ]
+    return sections
+
+
+def _setup_command_preview(plan: SetupPlan) -> str:
+    parts = ["haxaml", "setup"]
+    if plan.scope != "project":
+        parts.extend(["--scope", plan.scope])
+    if plan.requested_targets:
+        for item in plan.requested_targets:
+            parts.extend(["--targets", item])
+    elif plan.requested_target != "auto":
+        parts.extend(["--target", plan.requested_target])
+    if plan.mode != "auto":
+        parts.extend(["--mode", plan.mode])
+    if plan.workflow_enabled:
+        parts.append("--with-workflow")
+    return " ".join(parts)
+
+
+def _next_steps(plan: SetupPlan, *, apply_result: dict[str, object] | None = None) -> list[str]:
+    steps: list[str] = []
+    if apply_result is None:
+        steps.append(f"Run `{_setup_command_preview(plan)}` to apply this plan.")
+    else:
+        steps.append("Run `haxaml setup doctor` to inspect managed setup state.")
+    if plan.workflow_enabled:
+        target = plan.selected_targets[0] if plan.selected_targets else "auto"
+        steps.append(f"Run `haxaml workflow check --target {target}` to verify workflow adapters.")
+    if plan.scope == "project":
+        steps.append("Fill in FRAME files as needed, then run `haxaml validate`.")
+    return list(dict.fromkeys(steps))
+
+
+def _write_policy_summary() -> dict[str, object]:
+    return {
+        "mode": "preserve_and_repair",
+        "default_behavior": "Existing populated FRAME files and unmanaged files are preserved by default.",
+        "repairs": "Missing Haxaml-managed files are repaired on rerun.",
+        "force": "Pass --force to replace existing managed outputs intentionally.",
+    }
+
+
 def setup_message(plan: SetupPlan, *, apply_result: dict[str, object] | None = None, color: bool = False) -> str:
     """Render a path-first human summary for a setup plan or apply result."""
     lines = [
         f"Mode: {plan.mode}",
         f"Scope: {plan.scope}",
         f"Targets: {', '.join(plan.selected_targets) if plan.selected_targets else '(none)'}",
+        f"Selection source: {_selection_source_text(plan.selection_source)}",
     ]
+    if plan.requested_targets:
+        lines.append(f"Requested targets: {', '.join(plan.requested_targets)}")
     if plan.workflow_enabled:
         lines.append("Workflow adaptation: enabled")
     if plan.strong_detected_targets:
@@ -113,38 +205,25 @@ def setup_message(plan: SetupPlan, *, apply_result: dict[str, object] | None = N
         lines.extend(plan.warnings)
     lines.append("")
 
-    if apply_result is None:
-        planned: list[dict[str, object]] = [item.to_dict() for item in plan.planned_files]
-        by_action = {
-            "Create": [item for item in planned if str(item.get("action")) == "create"],
-            "Update": [item for item in planned if str(item.get("action")) in {"update", "append_pointer"}],
-            "Merge": [item for item in planned if str(item.get("action")) == "merge"],
-            "Skip": [item for item in planned if str(item.get("action")) == "skip"],
-        }
-        lines.extend(_render_section("Planned Creates", by_action["Create"], color=color, ansi="32"))
+    for section in _review_sections(plan, apply_result=apply_result):
+        title = str(section.get("title") or "")
+        items = [item for item in section.get("items", []) if isinstance(item, dict)]
+        if not title:
+            continue
+        ansi = None
+        if "Create" in title:
+            ansi = "32"
+        elif "Update" in title:
+            ansi = "33"
+        elif "Merge" in title:
+            ansi = "36"
+        elif "Skip" in title:
+            ansi = "90"
+        elif "Manual" in title:
+            ansi = "35"
+        lines.extend(_render_section(title, items, color=color, ansi=ansi))
         lines.append("")
-        lines.extend(_render_section("Planned Updates", by_action["Update"], color=color, ansi="33"))
-        lines.append("")
-        lines.extend(_render_section("Planned Merges", by_action["Merge"], color=color, ansi="36"))
-        if by_action["Skip"]:
-            lines.append("")
-            lines.extend(_render_section("Planned Skips", by_action["Skip"], color=color, ansi="90"))
-    else:
-        result_items = list(apply_result.get("items", []))
-        created = [item for item in result_items if str(item.get("status")) == "created"]
-        updated = [item for item in result_items if str(item.get("status")) == "updated"]
-        merged = [item for item in result_items if str(item.get("status")) == "merged"]
-        skipped = [item for item in result_items if str(item.get("status")) == "skipped"]
-        lines.extend(_render_section("Created", created, color=color, ansi="32"))
-        lines.append("")
-        lines.extend(_render_section("Updated", updated, color=color, ansi="33"))
-        lines.append("")
-        lines.extend(_render_section("Merged", merged, color=color, ansi="36"))
-        lines.append("")
-        lines.extend(_render_section("Skipped", skipped, color=color, ansi="90"))
-    if plan.manual_actions:
-        lines.append("")
-        lines.extend(_render_section("Manual Actions", [item.to_dict() for item in plan.manual_actions], color=color, ansi="35"))
+    lines.extend(_render_section("Next Steps", [{"path": step} for step in _next_steps(plan, apply_result=apply_result)], color=color, ansi="34"))
     return "\n".join(lines)
 
 
@@ -153,6 +232,9 @@ def setup_data(plan: SetupPlan, *, apply_result: dict[str, object] | None = None
     data = plan.to_dict()
     if apply_result is not None:
         data["apply_result"] = apply_result
+    data["review_sections"] = _review_sections(plan, apply_result=apply_result)
+    data["next_steps"] = _next_steps(plan, apply_result=apply_result)
+    data["write_policy"] = _write_policy_summary()
     data["message"] = setup_message(plan, apply_result=apply_result)
     return data
 

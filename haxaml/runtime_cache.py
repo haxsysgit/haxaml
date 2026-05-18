@@ -25,6 +25,8 @@ ARCHIVE_KIND_KEYS = {
     "run": "runs",
     "session": "sessions",
     "verification": "verifications",
+    "completed_task": "completed_tasks",
+    "decision": "decisions",
 }
 
 
@@ -88,6 +90,10 @@ def _read_archive_header(path: Path) -> tuple[dict[str, Any], list[dict[str, Any
         return metadata, index, ""
     except Exception as exc:  # pragma: no cover - defensive I/O
         return {}, [], str(exc)
+
+
+def _legacy_archive_path(project_dir: Path) -> Path:
+    return project_dir / ".haxaml" / "acts-history.yaml"
 
 
 @dataclass
@@ -275,13 +281,15 @@ class RuntimeSnapshotCache:
         project_dir: Path,
         cached: ArchiveIndexSnapshot | None,
     ) -> ArchiveIndexSnapshot:
-        archive_path = acts_history_path(project_dir)
+        canonical_path = acts_history_path(project_dir)
+        legacy_path = _legacy_archive_path(project_dir)
+        archive_path = canonical_path if canonical_path.exists() else legacy_path
         signature = _stat_signature(archive_path)
         if cached and cached.signature == signature:
             return cached
         if not archive_path.exists():
             return ArchiveIndexSnapshot(
-                path=archive_path,
+                path=canonical_path,
                 exists=False,
                 signature=signature,
                 metadata={},

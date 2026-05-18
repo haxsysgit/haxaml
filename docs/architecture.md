@@ -77,14 +77,14 @@ tests/
   test_*.py
 ```
 
-## Canonical Rules
+## Canonical Boundaries
 
-- Public governed path is `about -> guidance -> prebuild -> context_pack -> [context_fetch]* -> verify -> record -> expect_sync`.
 - `.haxaml/*.yaml` is the only supported FRAME location.
 - Canonical file names are `facts.yaml`, `rules.yaml`, `acts.yaml`, `expect.yaml`, and `map.yaml`.
-- Context packs are task-scoped and preferred over whole-project context dumps.
 - Older acts history lives in `.haxaml/archive/acts-history.yaml` and is loaded on demand for guided retrieval.
 - Long-lived runtimes should reuse `runtime_cache` rather than rereading FRAME files ad hoc.
+
+For governed lifecycle order and public MCP contract details, use [mcp-tool-reference.md](./mcp-tool-reference.md).
 
 ## MCP Layering
 

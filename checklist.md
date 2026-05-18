@@ -1,8 +1,8 @@
 # Haxaml 1.0 Readiness Checklist
 
-This checklist is the practical lock-in list before 1.0. The README vision stays the same: **no planning, no building**. The job now is making that mechanically true.
+This checklist is the practical lock-in list before 1.0. It tracks what still needs to become mechanically true in the governed system.
 
-Game analogy: Haxaml should be the lobby, loadout, minimap, objective tracker, and match log. If the agent can skip the lobby, spawn with the wrong loadout, or carry every old replay in active memory, it is not 1.0-ready.
+The product vision lives in [goals.md](./goals.md). This file is only the readiness tracker.
 
 Status legend:
 
@@ -24,7 +24,7 @@ Status legend:
 
 - [~] Hot `acts.yaml` keeps recent runs, sessions, and verifications capped by count.
 - [ ] Hot `acts.yaml` must obey `max_acts_bytes` after compaction, not only warn about it.
-- [ ] `completed_tasks` must be capped, summarized, or archived.
+- [x] `completed_tasks` must be capped, summarized, or archived.
 - [ ] Verbose run/session/verification bodies must move cold while hot state keeps stubs.
 - [ ] Archive index entries must be short enough to stay search-friendly.
 - [ ] Archive storage must avoid full-file rewrite on every append.

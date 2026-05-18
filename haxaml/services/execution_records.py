@@ -110,12 +110,13 @@ def finish_execution_run(
         if auto_compact:
             archive_result = state_manager.archive_on_record()
             archived = archive_result["archived"]
-            if any(int(archived.get(kind, 0) or 0) > 0 for kind in ("runs", "sessions", "verifications")):
+            if any(int(archived.get(kind, 0) or 0) > 0 for kind in ("runs", "sessions", "verifications", "completed_tasks")):
                 run_result.warnings.append(
                     "Auto-archived cold history: "
                     f"{archived['runs']} run(s), "
                     f"{archived['sessions']} session(s), "
-                    f"{archived['verifications']} verification(s)."
+                    f"{archived['verifications']} verification(s), "
+                    f"{archived.get('completed_tasks', 0)} completed task(s)."
                 )
 
         # Token count is recomputed from the full context after the write so

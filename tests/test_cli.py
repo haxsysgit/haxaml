@@ -178,6 +178,75 @@ def test_setup_auto_with_shared_agents_signal_stays_generic_and_fresh():
         assert "Codex" in result.output or "OpenAI Codex" in result.output
 
 
+def test_setup_explicit_codex_keeps_codex_target_and_skill():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        result = runner.invoke(cli, ["setup", "--target", "codex"])
+
+        assert result.exit_code == 0, result.output
+        with open(".haxaml/setup/manifest.yaml", "r") as f:
+            manifest = yaml.safe_load(f)
+        assert manifest["selected_targets"] == ["codex"]
+        assert manifest["selection_source"] == "explicit_target"
+        with open(".agents/skills/haxaml/SKILL.md", "r") as f:
+            skill = f.read()
+        assert "OpenAI Codex" in skill
+        assert "Generic AGENTS" not in skill
+
+
+def test_setup_targets_supports_repeatable_explicit_selection():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        result = runner.invoke(cli, ["setup", "--targets", "codex", "--targets", "claude", "--dry-run", "--format", "json"])
+
+        assert result.exit_code == 0, result.output
+        plan = json.loads(result.output)
+        assert plan["requested_targets"] == ["codex", "claude"]
+        assert plan["selected_targets"] == ["codex", "claude"]
+        assert plan["selection_source"] == "explicit_targets"
+
+
+def test_setup_weak_only_provider_evidence_remains_advisory_in_json_plan():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        with open("AGENTS.md", "w") as f:
+            f.write("Existing shared agent file.\n")
+
+        result = runner.invoke(cli, ["setup", "--dry-run", "--format", "json"])
+
+        assert result.exit_code == 0, result.output
+        plan = json.loads(result.output)
+        assert plan["selected_targets"] == ["generic"]
+        assert plan["strong_detected_targets"] == []
+        assert plan["weak_detected_targets"]
+        assert any("only weak shared signals" in item for item in plan["warnings"])
+
+
+def test_setup_rerun_preserves_populated_frame_files_and_repairs_missing():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        first = runner.invoke(cli, ["setup"])
+        assert first.exit_code == 0, first.output
+        facts_path = ".haxaml/facts.yaml"
+        rules_path = ".haxaml/rules.yaml"
+        facts = yaml.safe_load(open(facts_path).read())
+        facts["identity"]["name"] = "user-populated"
+        with open(facts_path, "w") as f:
+            yaml.dump(facts, f, default_flow_style=False, sort_keys=False)
+        os.remove(rules_path)
+
+        second = runner.invoke(cli, ["setup"])
+
+        assert second.exit_code == 0, second.output
+        preserved = yaml.safe_load(open(facts_path).read())
+        assert preserved["identity"]["name"] == "user-populated"
+        assert os.path.exists(rules_path)
+
+
 def test_setup_auto_with_single_strong_candidate_adopts_that_target():
     runner = CliRunner()
 
@@ -452,6 +521,22 @@ def test_setup_dry_run_text_shows_paths_and_previews():
         assert "Planned Creates" in result.output
         assert ".haxaml/facts.yaml" in result.output
         assert "preview:" in result.output
+        assert "Selection source:" in result.output
+        assert "Next Steps" in result.output
+
+
+def test_setup_json_plan_includes_review_sections_next_steps_and_write_policy():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        result = runner.invoke(cli, ["setup", "--target", "codex", "--dry-run", "--format", "json"])
+
+        assert result.exit_code == 0, result.output
+        plan = json.loads(result.output)
+        assert plan["review_sections"]
+        assert any(section["title"] == "Planned Creates" for section in plan["review_sections"])
+        assert plan["next_steps"]
+        assert plan["write_policy"]["mode"] == "preserve_and_repair"
 
 
 def test_setup_wizard_preselects_strong_targets_and_respects_prefilled_flags():

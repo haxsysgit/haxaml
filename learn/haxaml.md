@@ -1,5 +1,7 @@
 # Haxaml: How FRAME Becomes A Working System
 
+For the canonical product vision and feature direction, see [goals.md](../goals.md). This file focuses on how Haxaml implements the governed lifecycle around FRAME.
+
 If `FRAME.md` is the model, this file is the "okay, but how does Haxaml
 actually make that model useful?" guide.
 
@@ -385,9 +387,9 @@ They also make ownership clearer:
 
 - `facts.yaml` is the project identity.
 - `rules.yaml` is the agent operating policy.
-- `acts.yaml` is the diary and session state.
+- `acts.yaml` is the diary, evidence trail, and recorded results against the plan.
 - `map.yaml` is module ownership and impact.
-- `expect.yaml` is the active plan and future path.
+- `expect.yaml` is the planned end state, expected runs, checkpoints, and future path.
 
 One big file would be simpler to explain in five seconds.
 
@@ -562,7 +564,7 @@ task:
 - Relevant rules.
 - Recent decisions.
 - Affected modules.
-- Current expectations.
+- Current expected runs and checkpoints.
 - Unresolved questions.
 - Task risks.
 

@@ -79,6 +79,10 @@ properties:
         type: integer
         minimum: 1
         maximum: 500
+      max_hot_completed_tasks:
+        type: integer
+        minimum: 1
+        maximum: 500
       max_acts_bytes:
         type: integer
         minimum: 512

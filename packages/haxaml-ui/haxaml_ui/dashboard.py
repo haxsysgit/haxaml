@@ -38,6 +38,9 @@ TEMPLATES = {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ title }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/app.css">
   </head>
   <body>
@@ -76,7 +79,10 @@ CSS = """
   --muted: #6a645c;
   --line: #d8cfc1;
   --accent: #0d6b57;
+  --accent-2: #2557a7;
+  --accent-3: #a24f2a;
   --accent-soft: #d9f0ea;
+  --accent-2-soft: #dfe8fb;
   --warn: #9b4d19;
   --warn-soft: #f7e1cf;
   --mono: "JetBrains Mono", "SFMono-Regular", monospace;
@@ -128,6 +134,10 @@ h1, h2, h3 { margin: 0; }
   border-color: var(--accent);
   background: var(--accent-soft);
 }
+.pill-row .pill:nth-child(3n+2) {
+  border-color: var(--accent-2);
+  background: var(--accent-2-soft);
+}
 .nav {
   display: flex;
   gap: .6rem;
@@ -142,6 +152,20 @@ h1, h2, h3 { margin: 0; }
   background: rgba(255, 255, 255, .68);
   padding: .55rem .8rem;
   border-radius: 999px;
+  transition: transform .16s ease, border-color .16s ease, background .16s ease;
+}
+.nav a:nth-child(3n+1) {
+  border-color: rgba(13, 107, 87, .3);
+}
+.nav a:nth-child(3n+2) {
+  border-color: rgba(37, 87, 167, .28);
+}
+.nav a:nth-child(3n) {
+  border-color: rgba(162, 79, 42, .24);
+}
+.nav a:hover, .button-link:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(245,239,229,.96));
 }
 .page {
   padding-bottom: 2rem;

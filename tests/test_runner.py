@@ -6,6 +6,7 @@ import shutil
 import pytest
 import yaml
 
+from haxaml.acts_archive import ActsArchive
 from haxaml.runner import ExecutionRunner, RunResult, PreflightResult
 from haxaml.state_manager import StateManager
 
@@ -275,8 +276,11 @@ class TestExecutionLoop:
 
         sm = StateManager(str(tmp_path / ".haxaml" / "acts.yaml"))
         state = sm.read()
-        assert len(state["completed_tasks"]) == 12
+        assert len(state["completed_tasks"]) == 5
+        assert all(item.get("archived") is True for item in state["completed_tasks"])
         assert state["archive"]["archived_counts"]["runs"] > 0
+        assert state["archive"]["archived_counts"]["completed_tasks"] == 12
+        assert ActsArchive(tmp_path).get_counts()["completed_tasks"] == 12
 
     def test_failed_preflight_blocks_run(self, tmp_path):
         project = _make_project(tmp_path, brain={"invalid": "brain"})

@@ -153,6 +153,9 @@ properties:
           verifications:
             type: integer
             minimum: 0
+          completed_tasks:
+            type: integer
+            minimum: 0
       hot_limits:
         type: object
         properties:
@@ -163,6 +166,9 @@ properties:
             type: integer
             minimum: 0
           verifications:
+            type: integer
+            minimum: 0
+          completed_tasks:
             type: integer
             minimum: 0
 
@@ -334,6 +340,9 @@ properties:
         default: false
       pending_run_id:
         type: string
+      pending_run_number:
+        type: integer
+        minimum: 0
       pending_task:
         type: string
       pending_result:
@@ -344,6 +353,9 @@ properties:
         format: date-time
       last_synced_run_id:
         type: string
+      last_synced_run_number:
+        type: integer
+        minimum: 0
       last_synced_at:
         type: string
         format: date-time

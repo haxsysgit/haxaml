@@ -16,6 +16,9 @@ import yaml
 from haxaml.acts_archive import (
     ActsArchive,
     archive_metadata,
+    decision_id,
+    completed_task_id,
+    completed_task_stub,
     default_memory_policy,
     hot_limits_from_policy,
     normalize_memory_policy,
@@ -148,6 +151,7 @@ class StateManager:
                 completed = []
             completed.append(
                 {
+                    "id": f"completed-{uuid.uuid4().hex[:8]}",
                     "name": active["name"],
                     "result": result,
                     "summary": summary or changes or active.get("description", ""),
@@ -173,6 +177,7 @@ class StateManager:
                 raise StateError("No active task to complete")
 
             completed_entry = {
+                "id": f"completed-{uuid.uuid4().hex[:8]}",
                 "name": active["name"],
                 "result": result,
                 "summary": summary or active.get("description", ""),
@@ -218,6 +223,7 @@ class StateManager:
                 decisions = []
             decisions.append(
                 {
+                    "id": f"decision-{uuid.uuid4().hex[:8]}",
                     "decision": decision,
                     "reasoning": reasoning,
                     "date": now_iso(),
@@ -280,11 +286,13 @@ class StateManager:
                 return {
                     "archive_mode": policy.get("archive_mode", "manual"),
                     "trigger": "manual",
-                    "archived": {"runs": 0, "sessions": 0, "verifications": 0},
+                    "archived": {"runs": 0, "sessions": 0, "verifications": 0, "completed_tasks": 0, "decisions": 0},
                     "hot": {
                         "runs": len(state.get("runs", []) or []),
                         "sessions": len(state.get("sessions", []) or []),
                         "verifications": len(state.get("verifications", []) or []),
+                        "completed_tasks": len(state.get("completed_tasks", []) or []),
+                        "decisions": len(state.get("decisions", []) or []),
                     },
                     "dry_run": False,
                 }
@@ -294,6 +302,7 @@ class StateManager:
                 limits=limits,
                 archive_mode=archive_mode,
                 dry_run=False,
+                max_bytes=max_acts_bytes if size_triggered else 0,
             )
             result["trigger"] = "size" if size_triggered and archive_mode != "on_record" else "on_record"
             return result
@@ -324,6 +333,8 @@ class StateManager:
             "archived_run_count": int(archive_counts.get("runs", 0) or 0),
             "archived_session_count": int(archive_counts.get("sessions", 0) or 0),
             "archived_verification_count": int(archive_counts.get("verifications", 0) or 0),
+            "archived_completed_count": int(archive_counts.get("completed_tasks", 0) or 0),
+            "archived_decision_count": int(archive_counts.get("decisions", 0) or 0),
             "archive_mode": archive.get("archive_mode", "manual"),
             "archive_path": archive.get("path", ""),
             "file_size_bytes": file_size,
@@ -331,6 +342,11 @@ class StateManager:
             "total_runs": (len(runs) if isinstance(runs, list) else 0) + int(archive_counts.get("runs", 0) or 0),
             "total_sessions": len(state.get("sessions", []) or []) + int(archive_counts.get("sessions", 0) or 0),
             "total_verifications": len(state.get("verifications", []) or []) + int(archive_counts.get("verifications", 0) or 0),
+            "total_completed_tasks": max(
+                len(completed) if isinstance(completed, list) else 0,
+                int(archive_counts.get("completed_tasks", 0) or 0),
+            ),
+            "total_decisions": (len(decisions) if isinstance(decisions, list) else 0) + int(archive_counts.get("decisions", 0) or 0),
         }
 
     @contextmanager
@@ -375,28 +391,65 @@ class StateManager:
         limits: dict[str, int],
         archive_mode: str,
         dry_run: bool,
+        max_bytes: int = 0,
     ) -> dict[str, Any]:
         runs = list(state.get("runs", []) or [])
         sessions = list(state.get("sessions", []) or [])
         verifications = list(state.get("verifications", []) or [])
+        completed_tasks = [
+            self._normalize_completed_task(item)
+            for item in (state.get("completed_tasks", []) or [])
+            if isinstance(item, dict)
+        ]
+        decisions = [
+            self._normalize_decision(item)
+            for item in (state.get("decisions", []) or [])
+            if isinstance(item, dict)
+        ]
 
-        cold_runs = runs[:-limits["runs"]] if len(runs) > limits["runs"] else []
-        cold_sessions = sessions[:-limits["sessions"]] if len(sessions) > limits["sessions"] else []
+        if max_bytes > 0:
+            limits = self._limits_under_size_budget(
+                state,
+                limits=limits,
+                runs=runs,
+                sessions=sessions,
+                verifications=verifications,
+                completed_tasks=completed_tasks,
+                decisions=decisions,
+                max_bytes=max_bytes,
+            )
+
+        cold_runs = runs[:-limits["runs"]] if limits["runs"] > 0 and len(runs) > limits["runs"] else (runs[:] if limits["runs"] == 0 else [])
+        cold_sessions = (
+            sessions[:-limits["sessions"]]
+            if limits["sessions"] > 0 and len(sessions) > limits["sessions"]
+            else (sessions[:] if limits["sessions"] == 0 else [])
+        )
         cold_verifications = (
             verifications[:-limits["verifications"]]
-            if len(verifications) > limits["verifications"]
-            else []
+            if limits["verifications"] > 0 and len(verifications) > limits["verifications"]
+            else (verifications[:] if limits["verifications"] == 0 else [])
+        )
+        cold_completed = completed_tasks
+        cold_decisions = (
+            decisions[:-limits["decisions"]]
+            if limits["decisions"] > 0 and len(decisions) > limits["decisions"]
+            else (decisions[:] if limits["decisions"] == 0 else [])
         )
 
         archived_counts = {
             "runs": len(cold_runs),
             "sessions": len(cold_sessions),
             "verifications": len(cold_verifications),
+            "completed_tasks": len(cold_completed),
+            "decisions": len(cold_decisions),
         }
         hot_counts = {
             "runs": len(runs) - len(cold_runs),
             "sessions": len(sessions) - len(cold_sessions),
             "verifications": len(verifications) - len(cold_verifications),
+            "completed_tasks": min(len(completed_tasks), limits["completed_tasks"]),
+            "decisions": len(decisions) - len(cold_decisions),
         }
 
         self._ensure_archive_state(state, archive_mode=archive_mode, hot_limits=limits)
@@ -411,6 +464,8 @@ class StateManager:
                 "runs": hot_counts["runs"] + int(prior_counts.get("runs", 0) or 0) + archived_counts["runs"],
                 "sessions": hot_counts["sessions"] + int(prior_counts.get("sessions", 0) or 0) + archived_counts["sessions"],
                 "verifications": hot_counts["verifications"] + int(prior_counts.get("verifications", 0) or 0) + archived_counts["verifications"],
+                "completed_tasks": hot_counts["completed_tasks"] + int(prior_counts.get("completed_tasks", 0) or 0) + archived_counts["completed_tasks"],
+                "decisions": hot_counts["decisions"] + int(prior_counts.get("decisions", 0) or 0) + archived_counts["decisions"],
             },
             "dry_run": dry_run,
             "hot_limits": dict(limits),
@@ -419,15 +474,17 @@ class StateManager:
         if dry_run:
             return result
 
-        if archived_counts["runs"] or archived_counts["sessions"] or archived_counts["verifications"]:
+        if any(archived_counts.values()):
             append_counts = self.archive.append(
                 runs=cold_runs,
                 sessions=cold_sessions,
                 verifications=cold_verifications,
+                completed_tasks=cold_completed,
+                decisions=cold_decisions,
                 archive_mode=archive_mode,
             )
         else:
-            append_counts = {"runs": 0, "sessions": 0, "verifications": 0}
+            append_counts = {"runs": 0, "sessions": 0, "verifications": 0, "completed_tasks": 0, "decisions": 0}
 
         state["runs"] = runs[-limits["runs"] :] if limits["runs"] > 0 else []
         state["sessions"] = sessions[-limits["sessions"] :] if limits["sessions"] > 0 else []
@@ -436,10 +493,16 @@ class StateManager:
             if limits["verifications"] > 0
             else []
         )
+        state["completed_tasks"] = [
+            completed_task_stub(item)
+            for item in (completed_tasks[-limits["completed_tasks"] :] if limits["completed_tasks"] > 0 else [])
+        ]
+        state["decisions"] = decisions[-limits["decisions"] :] if limits["decisions"] > 0 else []
         self._ensure_archive_state(state, archive_mode=archive_mode, hot_limits=limits)
         archive_counts_total = self.archive.get_counts()
         state["archive"]["last_archived_at"] = now_iso()
         state["archive"]["archived_counts"] = archive_counts_total
+        self._refresh_continuity_summary(state, max_acts_bytes=max_bytes or int(self.memory_policy().get("max_acts_bytes", 16000) or 16000))
         self._atomic_write(state)
 
         result["archived"] = append_counts
@@ -447,13 +510,69 @@ class StateManager:
             "runs": len(state["runs"]),
             "sessions": len(state["sessions"]),
             "verifications": len(state["verifications"]),
+            "completed_tasks": len(state["completed_tasks"]),
+            "decisions": len(state["decisions"]),
         }
         result["totals"] = {
             "runs": len(state["runs"]) + archive_counts_total["runs"],
             "sessions": len(state["sessions"]) + archive_counts_total["sessions"],
             "verifications": len(state["verifications"]) + archive_counts_total["verifications"],
+            "completed_tasks": max(len(state["completed_tasks"]), archive_counts_total["completed_tasks"]),
+            "decisions": len(state["decisions"]) + archive_counts_total["decisions"],
         }
         return result
+
+    def _normalize_completed_task(self, item: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(item)
+        normalized["id"] = completed_task_id(normalized)
+        return normalized
+
+    def _normalize_decision(self, item: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(item)
+        normalized["id"] = decision_id(normalized)
+        return normalized
+
+    def _limits_under_size_budget(
+        self,
+        state: dict[str, Any],
+        *,
+        limits: dict[str, int],
+        runs: list[dict[str, Any]],
+        sessions: list[dict[str, Any]],
+        verifications: list[dict[str, Any]],
+        completed_tasks: list[dict[str, Any]],
+        decisions: list[dict[str, Any]],
+        max_bytes: int,
+    ) -> dict[str, int]:
+        effective = {key: max(0, int(value or 0)) for key, value in limits.items()}
+        kinds = ("runs", "sessions", "verifications", "completed_tasks", "decisions")
+
+        def projected_size(candidate_limits: dict[str, int]) -> int:
+            projected = dict(state)
+            projected["runs"] = runs[-candidate_limits["runs"] :]
+            projected["sessions"] = sessions[-candidate_limits["sessions"] :]
+            projected["verifications"] = verifications[-candidate_limits["verifications"] :]
+            projected["completed_tasks"] = [
+                completed_task_stub(item)
+                for item in completed_tasks[-candidate_limits["completed_tasks"] :]
+            ]
+            projected["decisions"] = [
+                dict(item)
+                for item in decisions[-candidate_limits["decisions"] :]
+            ]
+            self._refresh_continuity_summary(
+                projected,
+                max_acts_bytes=max_bytes,
+            )
+            return len(yaml.dump(projected, default_flow_style=False, sort_keys=False).encode("utf-8"))
+
+        while projected_size(effective) > max_bytes:
+            reducible = [kind for kind in kinds if effective.get(kind, 0) > 0]
+            if not reducible:
+                break
+            largest = max(reducible, key=lambda kind: effective[kind])
+            effective[largest] -= 1
+        return effective
 
     def _ensure_archive_state(
         self,
@@ -472,6 +591,10 @@ class StateManager:
         else:
             archived_counts = self.archive.get_counts()
         relative_archive_path = str(self.archive.path.relative_to(self.project_dir))
+        self._refresh_continuity_summary(
+            state,
+            max_acts_bytes=int(self.memory_policy().get("max_acts_bytes", 16000) or 16000),
+        )
         state["archive"] = {
             "path": relative_archive_path,
             "archive_mode": archive_mode,
@@ -481,6 +604,102 @@ class StateManager:
                 "runs": int(hot_limits.get("runs", 0) or 0),
                 "sessions": int(hot_limits.get("sessions", 0) or 0),
                 "verifications": int(hot_limits.get("verifications", 0) or 0),
+                "completed_tasks": int(hot_limits.get("completed_tasks", 0) or 0),
+                "decisions": int(hot_limits.get("decisions", 0) or 0),
+            },
+        }
+
+    def _refresh_continuity_summary(self, state: dict[str, Any], *, max_acts_bytes: int) -> None:
+        runs = [item for item in (state.get("runs", []) or []) if isinstance(item, dict)]
+        verifications = [item for item in (state.get("verifications", []) or []) if isinstance(item, dict)]
+        decisions = [item for item in (state.get("decisions", []) or []) if isinstance(item, dict)]
+        blocked_tasks = [item for item in (state.get("blocked_tasks", []) or []) if isinstance(item, dict)]
+        unresolved = [
+            item
+            for item in (state.get("unresolved_dependencies", []) or [])
+            if isinstance(item, dict)
+        ]
+        failures: list[dict[str, Any]] = []
+        for run in reversed(runs):
+            result = str(run.get("result", "")).strip().lower()
+            if result not in {"failed", "partial"}:
+                continue
+            failures.append(
+                {
+                    "kind": "run",
+                    "id": str(run.get("id", "")).strip(),
+                    "task": str(run.get("task", "")).strip(),
+                    "result": result,
+                    "summary": str(run.get("risks") or run.get("changes") or run.get("decisions") or "").strip(),
+                    "timestamp": str(run.get("timestamp", "")).strip(),
+                }
+            )
+            if len(failures) >= 4:
+                break
+        for verification in reversed(verifications):
+            verdict = str(verification.get("verdict", "")).strip().lower()
+            if verdict not in {"fail", "needs_clarification", "pass_with_risks"}:
+                continue
+            failures.append(
+                {
+                    "kind": "verification",
+                    "id": str(verification.get("id", "")).strip(),
+                    "task": str(verification.get("task", "")).strip(),
+                    "result": verdict,
+                    "summary": str(verification.get("summary", "")).strip(),
+                    "timestamp": str(verification.get("timestamp", "")).strip(),
+                }
+            )
+            if len(failures) >= 4:
+                break
+        blockers: list[dict[str, Any]] = []
+        for item in blocked_tasks[-4:]:
+            blockers.append(
+                {
+                    "kind": "blocked_task",
+                    "name": str(item.get("name", "")).strip(),
+                    "reason": str(item.get("reason", "")).strip(),
+                    "depends_on": str(item.get("depends_on", "")).strip(),
+                }
+            )
+        for item in unresolved:
+            if not bool(item.get("blocking")):
+                continue
+            blockers.append(
+                {
+                    "kind": "unresolved_dependency",
+                    "name": str(item.get("item", "")).strip(),
+                    "reason": str(item.get("reason", "") or item.get("owner", "")).strip(),
+                    "owner": str(item.get("owner", "")).strip(),
+                }
+            )
+            if len(blockers) >= 6:
+                break
+        decision_summary = []
+        for item in decisions[-4:]:
+            decision_summary.append(
+                {
+                    "decision": str(item.get("decision", "")).strip(),
+                    "reasoning": str(item.get("reasoning", "")).strip(),
+                    "date": str(item.get("date", "")).strip(),
+                }
+            )
+        hot_bytes = len(yaml.dump(state, default_flow_style=False, sort_keys=False).encode("utf-8"))
+        pressure_ratio = (hot_bytes / max_acts_bytes) if max_acts_bytes > 0 else 0.0
+        if pressure_ratio >= 1:
+            pressure = "over_budget"
+        elif pressure_ratio >= 0.85:
+            pressure = "tight"
+        else:
+            pressure = "healthy"
+        state["continuity"] = {
+            "recent_decisions": decision_summary,
+            "current_blockers": blockers,
+            "recent_failures": failures[:4],
+            "context_pressure": {
+                "hot_bytes": hot_bytes,
+                "max_hot_bytes": max_acts_bytes,
+                "status": pressure,
             },
         }
 

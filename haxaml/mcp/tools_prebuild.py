@@ -46,6 +46,11 @@ from haxaml.mcp.base import (
     ExecutionRunner,
     search_context_memory,
 )
+from haxaml.mcp.lifecycle_helpers import (
+    frame_blocking_inputs,
+    governed_handoff_summary,
+    split_structured_items,
+)
 
 
 # Utility tasks that should not trigger governed session start
@@ -66,6 +71,8 @@ def _readiness_from_health(
     task_type: str,
     risk: str,
     required_questions: list[str],
+    blocking_questions: list[str],
+    blocking_materials: list[str],
     guidance_status: str,
     missing_context: list[str],
 ) -> tuple[str, str]:
@@ -82,6 +89,9 @@ def _readiness_from_health(
 
     if missing_context:
         return "blocked_by_missing_context", "fix_frame_health"
+
+    if blocking_questions or blocking_materials:
+        return "blocked_by_missing_context", "resolve_blocking_inputs"
 
     if guidance_status == "action_required" and required_questions:
         return "needs_user_input", "ask_user"
@@ -194,7 +204,31 @@ def haxaml_prebuild(
     required_questions = list(dict.fromkeys(
         [*guidance.get("required_questions", []), *(tmpl.get("required_questions") or [])]
     ))
-    materials_needed = list(tmpl.get("materials_needed") or [])
+    question_split = split_structured_items(
+        list(tmpl.get("required_questions") or []),
+        keys=("question", "item", "name", "label", "text"),
+    )
+    material_split = split_structured_items(
+        list(tmpl.get("materials_needed") or []),
+        keys=("item", "question", "name", "label", "text"),
+    )
+    frame_inputs = frame_blocking_inputs(frame_dict)
+    blocking_questions = list(
+        dict.fromkeys([*frame_inputs["blocking_questions"], *question_split["blocking"]])
+    )
+    blocking_materials = list(
+        dict.fromkeys([*frame_inputs["blocking_materials"], *material_split["blocking"]])
+    )
+    advisory_materials = list(
+        dict.fromkeys([*material_split["advisory"], *frame_inputs["advisory_materials"]])
+    )
+    owner_provided_materials = list(
+        dict.fromkeys([*material_split["owner_provided"], *frame_inputs["owner_provided_materials"]])
+    )
+    materials_needed = list(dict.fromkeys([*blocking_materials, *advisory_materials]))
+    required_questions = list(
+        dict.fromkeys([*guidance.get("required_questions", []), *question_split["advisory"], *blocking_questions])
+    )
     done_criteria = list(tmpl.get("done_criteria") or [])
     likely_impact = list(tmpl.get("likely_impact") or [])
     risks = list(tmpl.get("risks") or [])
@@ -204,6 +238,8 @@ def haxaml_prebuild(
         task_type,
         risk,
         required_questions,
+        blocking_questions,
+        blocking_materials,
         str(guidance.get("status", "")),
         list(guidance.get("missing_context") or []),
     )
@@ -320,11 +356,16 @@ def haxaml_prebuild(
                     "updated": now,
                     "plan": plan,
                     "required_questions": required_questions,
+                    "blocking_questions": blocking_questions,
                     "materials_needed": materials_needed,
+                    "blocking_materials": blocking_materials,
+                    "advisory_materials": advisory_materials,
+                    "owner_provided_materials": owner_provided_materials,
                     "done_criteria": done_criteria,
                     "likely_impact": likely_impact,
                     "risks": risks,
                     "missing_context": list(guidance.get("missing_context") or []),
+                    "handoff_summary": governed_handoff_summary(state),
                     "file_refs": session_file_refs,
                     "module_refs": session_module_refs,
                     "keywords": session_keywords,
@@ -366,25 +407,36 @@ def haxaml_prebuild(
         # so the caller knows what to reference if they resolve and retry
         session_id = ""
 
+    message_lines = [
+        f"Prebuild complete: {readiness_status}",
+        f"Progress: {progress_summary['status']} — {progress_summary['reason']}",
+    ]
+    if blocking_questions:
+        message_lines.append(f"Blocking questions: {len(blocking_questions)}")
+    if blocking_materials:
+        message_lines.append(f"Blocking materials: {len(blocking_materials)}")
+    message_lines.append(f"Next step: {next_step}")
+
     payload: dict = {
-        "message": (
-            f"Prebuild complete: {readiness_status}\n"
-            f"Progress: {progress_summary['status']} — {progress_summary['reason']}\n"
-            f"Next step: {next_step}"
-        ),
+        "message": "\n".join(message_lines),
         "session_id": session_id,
         "readiness_status": readiness_status,
         "task_type": task_type,
         "guidance_type": guidance_type,
         "classification_reason": classification_reason,
         "required_questions": required_questions,
+        "blocking_questions": blocking_questions,
         "materials_needed": materials_needed,
+        "blocking_materials": blocking_materials,
+        "advisory_materials": advisory_materials,
+        "owner_provided_materials": owner_provided_materials,
         "done_criteria": done_criteria,
         "likely_impact": likely_impact,
         "risks": risks,
         "context_policy": ctx_policy,
         "frame_health": frame_health,
         "progress_summary": progress_summary,
+        "handoff_summary": governed_handoff_summary(frame.acts or {}),
         "plan": plan,
         "verification_expectations": verification_expectations,
         "next_step": next_step,

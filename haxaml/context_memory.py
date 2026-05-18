@@ -394,6 +394,26 @@ def _memory_candidates(project_dir: str, frame: dict[str, Any], *, sources: list
                     keywords=_clean_str_list(item.get("keywords", [])),
                 )
             )
+        for item in acts.get("completed_tasks", []) if isinstance(acts.get("completed_tasks", []), list) else []:
+            if not isinstance(item, dict):
+                continue
+            candidates.append(
+                _candidate(
+                    source="acts",
+                    kind="completed_task",
+                    title=f"completed:{_clean_str(item.get('name', ''))}",
+                    text=" ".join(
+                        [
+                            _clean_str(item.get("name", "")),
+                            _clean_str(item.get("summary", "")),
+                            _clean_str(item.get("result", "")),
+                        ]
+                    ),
+                    record_id=_clean_str(item.get("id", "")),
+                    timestamp=_clean_str(item.get("completed", "")),
+                    status_or_result=_clean_str(item.get("result", "")),
+                )
+            )
         for item in acts.get("verifications", []) if isinstance(acts.get("verifications", []), list) else []:
             if not isinstance(item, dict):
                 continue

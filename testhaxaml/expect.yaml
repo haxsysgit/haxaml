@@ -1,0 +1,52 @@
+planning:
+  goal: Complete scoped tasks with governed verification.
+  strategy: Iterative small runs with validation before record.
+  estimated_runs: 1
+  project_size: small
+  map_required: false
+  map_reason: Map is optional by default for a new scaffold.
+map_policy:
+  small_project_max_runs: 5
+  medium_project_max_runs: 12
+  module_threshold: 10
+  cross_impact_touch_threshold: 3
+  cross_impact_run_threshold: 2
+  dependency_fanout_threshold: 3
+  impact_check_threshold: 3
+  shared_integration_module_threshold: 2
+  require_map_when:
+  - Module count exceeds policy threshold.
+  agent_instruction: Read map.yaml when map_required is true or when task impact crosses
+    module boundaries.
+phases:
+- name: Phase 1
+  status: done
+  run_range: 1-1
+  target_runs: 1
+  description: Bootstrap and execute the first governed task.
+  done_when: A scoped task is verified and recorded.
+runbook:
+- run: 1
+  phase: Phase 1
+  status: done
+  goal: Execute one scoped task safely.
+  outcome: Task progress is verified and recorded.
+  depends_on: []
+  touches:
+  - scoped files only
+  requires:
+  - Clear task statement
+  uses_map: false
+  verify:
+  - Run tests or validation relevant to touched behavior.
+  done_when: Verification passes and session is recorded.
+upcoming:
+- task: Define the next scoped task
+  priority: critical
+  phase: Phase 1
+  description: Prepare context, execute, verify, and record.
+milestones:
+- name: First governed run complete
+  status: pending
+  criteria: At least one run is verified and recorded without unresolved blockers.
+open_questions: []

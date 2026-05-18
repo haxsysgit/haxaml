@@ -2,6 +2,8 @@
 
 `haxaml_prebuild` is the recommended high-level lifecycle phase that runs after `haxaml_guidance`. It classifies the task, runs semantic validation against FRAME, opens the governed session internally, and produces a readiness report.
 
+Use [haxaml-mcp.md](./haxaml-mcp.md) for the full governed operator flow. This page stays focused on what `prebuild` itself decides.
+
 ## When to Call It
 
 Call `haxaml_prebuild` for:
@@ -14,11 +16,7 @@ Skip for simple utility tasks (fix a typo, run a command). Utility mode detectio
 
 ## Lifecycle Position
 
-```
-about -> guidance -> prebuild -> context_pack -> ...
-```
-
-When `haxaml_prebuild` succeeds, it already creates the governed session and advances the lifecycle contract to `haxaml_context_pack`.
+`haxaml_prebuild` sits between task classification and context loading. When it succeeds, it already creates the governed session and advances the lifecycle contract to `haxaml_context_pack`.
 
 ## Parameters
 
@@ -135,29 +133,3 @@ The same `semantic_validate` function is called by:
 
 This means semantic quality gaps surface at all three checkpoints in the lifecycle:
 pre-build (classification), build-gate (validate), and completeness-check (doctor).
-
-## PromptRecipe Export Pipeline (0.6)
-
-The export engine now routes all exports through a `PromptRecipe` pipeline:
-
-```
-FrameModel.load() -> build_recipe(frame, agent) -> _render_recipe(recipe) -> Markdown
-```
-
-`PromptRecipe` is the normalised intermediate representation. Sections are keyed, ordered, and filterable:
-
-```python
-from haxaml.export_engine import build_recipe, _render_recipe
-from haxaml.frame_model import FrameModel
-
-frame = FrameModel.load(".")
-recipe = build_recipe(frame, "generic")
-# Inspect sections:
-for s in recipe.sections:
-    print(s.key, s.title)
-# Exclude a section:
-trimmed = recipe.exclude("acts")
-output = _render_recipe(trimmed)
-```
-
-This makes export deterministic and testable without a filesystem, and allows targeted section manipulation for custom agent adapters.

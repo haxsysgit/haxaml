@@ -1,0 +1,95 @@
+version: 0.7.4
+generator: haxaml-setup
+scope: project
+mode: adopted
+requested_target: auto
+selected_targets:
+- generic
+detected_targets:
+- codex
+- opencode
+- windsurf
+workflow_enabled: false
+managed_files:
+- path: .haxaml/facts.yaml
+  target: haxaml
+  kind: frame
+  scope: project
+  management: file
+  docs_url: https://github.com/haxsysgit/haxaml/blob/main/learn/FRAME.md
+  recipe_hash: b032a0554db9653d4b1bf7c05a63ef66c78f5b19cdfb75a79cfd6ce71b9b23d2
+  format: markdown
+  managed_key_path: ''
+- path: .haxaml/rules.yaml
+  target: haxaml
+  kind: frame
+  scope: project
+  management: file
+  docs_url: https://github.com/haxsysgit/haxaml/blob/main/learn/FRAME.md
+  recipe_hash: 24c31b8b931e25f390408adb659958c3a6c47ed4a056801d4b3a6512ccf237c7
+  format: markdown
+  managed_key_path: ''
+- path: .haxaml/acts.yaml
+  target: haxaml
+  kind: frame
+  scope: project
+  management: file
+  docs_url: https://github.com/haxsysgit/haxaml/blob/main/learn/FRAME.md
+  recipe_hash: e6e38a0333d7daf147e3cb272e37e77e6126747764bc2ba62ef08436eb75a6de
+  format: markdown
+  managed_key_path: ''
+- path: .haxaml/expect.yaml
+  target: haxaml
+  kind: frame
+  scope: project
+  management: file
+  docs_url: https://github.com/haxsysgit/haxaml/blob/main/learn/FRAME.md
+  recipe_hash: 66e53f7290ec9abd9bcb5a286332dc307f8e8cbbf4af44295879605d1270b4ee
+  format: markdown
+  managed_key_path: ''
+- path: .agents/skills/haxaml/SKILL.md
+  target: generic
+  kind: skills
+  scope: project
+  management: file
+  docs_url: https://developers.openai.com/codex/skills
+  recipe_hash: 261827ed1835bbc4671cfdae81a60e6729ff3e0d945dafbe959d4b4825c0866e
+  format: markdown
+  managed_key_path: ''
+- path: .haxaml/setup/targets/generic.md
+  target: generic
+  kind: instructions
+  scope: project
+  management: file
+  docs_url: https://developers.openai.com/codex/guides/agents-md
+  recipe_hash: 940245c85fb540274ffb33a2748ee87859280431d916f42e8ac290cd3762fb64
+  format: markdown
+  managed_key_path: ''
+- path: AGENTS.md
+  target: generic
+  kind: instructions
+  scope: project
+  management: pointer
+  docs_url: https://developers.openai.com/codex/guides/agents-md
+  recipe_hash: 965635a5bce1444e1c3caa32ab2837e5d6efb0827d0b38102fc03fca29b4691f
+  format: markdown
+  managed_key_path: ''
+- path: .haxaml/adoption/adoption.yaml
+  target: adoption
+  kind: frame
+  scope: project
+  management: file
+  docs_url: https://github.com/haxsysgit/haxaml/blob/main/0.7.x_Roadmap.md
+  recipe_hash: 13cdde3a04857752b520c5ec54bf33231518a3db5deb24ed19f91ae64d947d28
+  format: markdown
+  managed_key_path: ''
+- path: .haxaml/adoption/ADOPTION.md
+  target: adoption
+  kind: frame
+  scope: project
+  management: file
+  docs_url: https://github.com/haxsysgit/haxaml/blob/main/0.7.x_Roadmap.md
+  recipe_hash: 21012c154bc041f02c62b7fee643e543430486f00bfec5bd66f02e2a7bcfc55c
+  format: markdown
+  managed_key_path: ''
+manual_actions: []

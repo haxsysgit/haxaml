@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.7.5 - 2026-05-18
+
+- Made setup reruns feel way less sketchy: explicit `--targets` now wins cleanly, provider-specific outputs stop getting shadowed by generic ones, and setup review output now shows grouped actions, selection source, next steps, and write policy in plain terms.
+- Tightened hot Acts discipline so archive-on-record is actually usable in real life: byte-pressure compaction now shrinks hot state until it fits, hot decisions are bounded too, and older projects with legacy `acts-history.yaml` still read and migrate cleanly.
+- Added a compact continuity summary in hot `acts.yaml` so the next agent can see recent decisions, blockers, failure context, and context pressure without replaying old history.
+- Turned structured blocking materials and blocking questions into real governed gates across prebuild and context-pack, while still keeping plain legacy string entries advisory for compatibility.
+- Leveled up governed handoff output so guidance, prebuild, and context-pack all surface actual blocker/failure/pressure context instead of making the next agent infer it from raw state.
+- Extended setup, state, runtime-cache, runner, and MCP lifecycle coverage with the edge cases that actually mattered for this release.
+
 - Changed new FRAME scaffolds to default `memory_policy.archive_mode` to `on_record` so old Acts state compacts automatically during governed record flows.
 - Added a size-pressure archive trigger for older projects that still have `archive_mode: manual`.
 - Moved state lock files out of project directories so Haxaml no longer creates visible zero-byte `acts.lock` sidecars beside `acts.yaml`.

@@ -130,6 +130,7 @@ memory_policy:
   max_hot_runs: 5
   max_hot_sessions: 5
   max_hot_verifications: 5
+  max_hot_completed_tasks: 5
   max_acts_bytes: 16000
   keep_decisions_hot: true
 
@@ -185,10 +186,12 @@ archive:
     runs: 0
     sessions: 0
     verifications: 0
+    completed_tasks: 0
   hot_limits:
     runs: 5
     sessions: 5
     verifications: 5
+    completed_tasks: 5
 
 context_compaction:
   sessions_started: 0
@@ -199,10 +202,12 @@ context_compaction:
 expect_sync:
   required: false
   pending_run_id: ""
+  pending_run_number: 0
   pending_task: ""
   pending_result: ""
   pending_recorded_at: ""
   last_synced_run_id: ""
+  last_synced_run_number: 0
   last_synced_at: ""
   last_sync_status: ""
 

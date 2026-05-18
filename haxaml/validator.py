@@ -93,9 +93,11 @@ def _expect_sync_state(acts: dict[str, Any]) -> dict[str, str | bool]:
     return {
         "required": bool(state.get("required", False)),
         "pending_run_id": _normalized_text(state.get("pending_run_id", "")),
+        "pending_run_number": int(state.get("pending_run_number", 0) or 0),
         "pending_task": _normalized_text(state.get("pending_task", "")),
         "pending_result": _normalized_text(state.get("pending_result", "")),
         "last_synced_run_id": _normalized_text(state.get("last_synced_run_id", "")),
+        "last_synced_run_number": int(state.get("last_synced_run_number", 0) or 0),
     }
 
 

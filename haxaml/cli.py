@@ -96,6 +96,9 @@ def _setup_common_options(fn):
     fn = click.option("--dir", "project_dir", default=".", help="Project directory")(fn)
     fn = click.option("--scope", default="project", type=click.Choice(["project", "user"]), help="Write into the repo or the user home directory.")(fn)
     fn = click.option("--target", "target_id", default="auto", type=click.Choice(["auto", *SUPPORTED_TARGET_IDS]), help="Target agent/editor to onboard.")(fn)
+    fn = click.option("--targets", "target_ids", multiple=True, type=click.Choice(SUPPORTED_TARGET_IDS), help="Repeatable explicit target selection. When provided, these targets override --target.")(
+        fn
+    )
     fn = click.option("--mode", default="auto", type=click.Choice(["auto", "fresh", "adopted"]), help="Auto-detect setup mode or force fresh/adopted behavior.")(fn)
     fn = click.option("--only", "only", multiple=True, help="Repeatable or comma-separated subset of: frame,instructions,skills,agents,mcp,workflow")(fn)
     fn = click.option("--with-workflow", is_flag=True, help="Add project-scoped workflow adaptation assets for supported targets.")(fn)
@@ -116,7 +119,7 @@ def init(directory):
 @click.option("--non-interactive", is_flag=True, help="Disable the TTY wizard and use the direct flag-driven setup flow.")
 @click.option("--force", is_flag=True, help="Overwrite Haxaml-managed files and replace existing files when explicitly requested.")
 @click.option("--dry-run", is_flag=True, help="Plan writes without mutating files.")
-def setup(ctx, project_dir, scope, target_id, mode, only, with_workflow, output_format, non_interactive, force, dry_run):
+def setup(ctx, project_dir, scope, target_id, target_ids, mode, only, with_workflow, output_format, non_interactive, force, dry_run):
     """Install Haxaml into fresh or existing agent-specific integration points."""
     from haxaml.setup import cli as setup_commands
 
@@ -125,6 +128,7 @@ def setup(ctx, project_dir, scope, target_id, mode, only, with_workflow, output_
             "project_dir": project_dir,
             "scope": scope,
             "target_id": target_id,
+            "target_ids": target_ids,
             "mode": mode,
             "only": only,
             "with_workflow": with_workflow,
@@ -135,7 +139,7 @@ def setup(ctx, project_dir, scope, target_id, mode, only, with_workflow, output_
         }
         return
 
-    targets = None
+    targets = list(target_ids) or None
     if (
         not non_interactive
         and output_format == "text"
@@ -151,6 +155,8 @@ def setup(ctx, project_dir, scope, target_id, mode, only, with_workflow, output_
             prefilled.add("mode")
         if ctx.get_parameter_source("target_id") != ParameterSource.DEFAULT and target_id != "auto":
             prefilled.add("target")
+        if ctx.get_parameter_source("target_ids") != ParameterSource.DEFAULT and target_ids:
+            prefilled.add("target")
         if ctx.get_parameter_source("only") != ParameterSource.DEFAULT and only:
             prefilled.add("only")
         if ctx.get_parameter_source("with_workflow") != ParameterSource.DEFAULT and with_workflow:
@@ -160,6 +166,7 @@ def setup(ctx, project_dir, scope, target_id, mode, only, with_workflow, output_
             project_dir=project_dir,
             scope=scope,
             target=target_id,
+            targets=targets,
             mode=mode,
             only=only,
             with_workflow=with_workflow,
@@ -194,7 +201,7 @@ def setup(ctx, project_dir, scope, target_id, mode, only, with_workflow, output_
 
 @setup.command("print")
 @_setup_common_options
-def setup_print(project_dir, scope, target_id, mode, only, with_workflow, output_format):
+def setup_print(project_dir, scope, target_id, target_ids, mode, only, with_workflow, output_format):
     """Render the planned setup content without writing files."""
     from haxaml.setup import cli as setup_commands
 
@@ -202,6 +209,7 @@ def setup_print(project_dir, scope, target_id, mode, only, with_workflow, output
         project_dir=project_dir,
         scope=scope,
         target=target_id,
+        targets=list(target_ids) or None,
         mode=mode,
         only=only,
         with_workflow=with_workflow,

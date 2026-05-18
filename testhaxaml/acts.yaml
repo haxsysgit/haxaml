@@ -1,0 +1,1279 @@
+current_phase: ''
+active_task:
+  name: none
+completed_tasks:
+- name: Implement the minimal Vue 3 + Vite + TypeScript frontend and FastAPI backend
+    evidence-first slice with a shared deterministic Python service layer, CLI wrapper,
+    API endpoints, fixture-based tests, and Markdown/JSON reporting.
+  result: success
+  summary: Scaffolded a new Python runtime package under app/ with Pydantic schemas,
+    deterministic CV/JD parsing, evidence mapping, Markdown reporting, FastAPI endpoints,
+    and a thin CLI wrapper. Added backend pytest coverage for PDF/TXT parsing, workflow
+    analysis, reporting, and API endpoints. Scaffolded a Vue 3 + Vite + TypeScript
+    single-page frontend under web/ with upload, JD paste, analysis, results, and
+    JSON/Markdown download flows, plus Vitest coverage and production build support.
+  completed: '2026-05-16T00:06:30.420065+00:00'
+- name: 'Implement the planned repo usability slice: add scripts/dev.sh runner, refactor
+    FastAPI app structure into app/main.py with route/service/model layering and demo
+    endpoints, fix frontend local API wiring and backend health UX, add demo analysis
+    flow and results filtering, update tests, and verify end-to-end.'
+  result: success
+  summary: 'Backend: introduced app/main.py create_app(), app/core config/setup, route
+    modules for health/analysis/demo, model modules for analysis and health, demo
+    fixture service, metadata-aware reporting, and compatibility exports through app/schemas.py
+    and app/api/server.py. Tooling: added scripts/dev.sh and .run ignore handling.
+    Frontend: added API client helpers, Vite /api proxy, backend health banner, mode
+    persistence, demo analysis flow, clearer backend-unavailable errors, and filterable/expandable
+    results UI. Tests: expanded pytest coverage for factory, health env state, demo
+    endpoints, and Vitest coverage for health states, API URL resolution, demo flow,
+    unavailable backend handling, session restore, and result filtering.'
+  completed: '2026-05-16T02:35:05.084118+00:00'
+- name: 'Implement the v0.2 plan: update docs/ROADMAP.md, add deterministic application-pack
+    generation to backend and CLI outputs, adopt vue-router with routed dashboard
+    views, lightweight persisted frontend app state, route guards, and tests.'
+  result: success
+  summary: Added POST /api/generate-application-pack, deterministic generation services,
+    CLI writing of tailored output artifacts, vue-router routes for input/analysis/questions/outputs,
+    sessionStorage-backed app state, tabbed outputs UI, and targeted backend/frontend
+    tests.
+  completed: '2026-05-16T12:01:41.338562+00:00'
+- name: 'Extend v0.2 into a full UX/UI overhaul for the routed web app: choose a stronger
+    frontend architecture, redesign the information architecture and interaction model,
+    then implement the overhaul while preserving the evidence-first workflow and deterministic
+    backend contracts.'
+  result: success
+  summary: Replaced the thin routed shell with a workflow dashboard shell, consolidated
+    the IA to Workspace/Review/Drafts, merged follow-up resolution into Review, moved
+    draft selection into the URL, added reusable frontend components/pages, removed
+    stale legacy views, and updated the frontend tests to the new route model.
+  completed: '2026-05-16T12:28:37.486069+00:00'
+- name: Refine the new web UI so it is visually coherent, simpler to navigate, less
+    text-heavy, smaller in typography scale, and more attractive; remove unnecessary
+    legacy compatibility paths/files since the current user is the only user.
+  result: success
+  summary: Replaced the heavier shell with a compact topbar workflow shell, rewrote
+    the main stylesheet for smaller typography and calmer spacing, shortened verbose
+    copy across workspace/review/drafts, removed legacy route aliases from the router,
+    and updated frontend tests to the new route and label set.
+  completed: '2026-05-16T12:51:55.883472+00:00'
+- name: 'Continue the v0.2 polish scope so the web app feels like a full usable product
+    without adding complexity: improve visual coherence, simplify navigation and copy,
+    strengthen document readability, and keep the workflow as a small installable
+    agent tool rather than an overcomplicated product.'
+  result: success
+  summary: Simplified the shell status model, added workspace resume and reset actions,
+    tightened the copy across the three pages, added higher-signal review summary
+    cards, introduced rendered markdown previews for generated drafts, and aligned
+    roadmap language to the simpler three-step product flow.
+  completed: '2026-05-16T13:03:24.300218+00:00'
+- name: 'Redesign the HaxJobs web UI to feel cohesive and attractive rather than boxy
+    and text-heavy: remove low-value buttons and status chrome, simplify navigation,
+    adopt a strong matte-black or VS-dark HaxJobs visual identity, and keep the product
+    as a small installable workflow rather than a complex app.'
+  result: success
+  summary: Applied a cohesive matte-dark visual system and simplified UI chrome across
+    the Workspace/Review/Drafts flow without changing API/state orchestration. Removed
+    shell status chips/blocker text, hid backend-ready workspace banner in normal
+    state, emphasized CV+JD intake with one primary run action, reduced Review to
+    Evidence/Questions plus a slim snapshot rail, and made DraftStudio the dominant
+    surface while compressing metadata/session furniture. Updated frontend tests for
+    new labels and backend-ready visibility behavior.
+  completed: '2026-05-16T13:17:41.424790+00:00'
+- name: Implement v0.2 final UX pass with full-page low-text layout and sidebar anchors,
+    run tests/build, create release commit + annotated tag v0.2.0, then start v0.3
+    AI-first orchestration and additive API fields/tests including aspirational track.
+  result: success
+  summary: 'Frontend: converted shell to static left sidebar + per-route section anchors;
+    removed card-grid framing in Workspace/Review/Drafts and simplified controls and
+    copy. Backend: introduced AI-stage orchestrator (recruiter/applicant/evaluator/verification)
+    with OpenAI SDK path and deterministic fallback; AnalyzeResponse now carries analysis_engine,
+    recruiter/evaluator assessments, verification_questions, and aspirational_pack.
+    Generation now accepts user_claim_confirmations and treats confirmed claims as
+    resolved while preserving backward compatibility. Tests: added orchestrator unit
+    coverage and expanded API/generation assertions; updated frontend tests for new
+    layout and v0.3 state key.'
+  completed: '2026-05-16T19:23:47.060900+00:00'
+- name: 'Continue v0.3.0 implementation on branch v0.3-ai-first: ensure the demo flow
+    works end-to-end, keep the AI path testable by requiring LLM stages to return
+    JSON, and harden the OpenAI orchestration and related tests without breaking local
+    fallback behavior.'
+  result: success
+  summary: Archived old FRAME history into .haxaml/archive/acts-history.yaml and compacted
+    hot state. Reworked app/services/ai_orchestrator.py to use OpenAI Responses structured
+    parsing with Pydantic schema types instead of manual json.loads over output_text.
+    Extended the Review page to show recruiter/evaluator/verification stage output
+    and the Drafts page to show aspirational sample content, with sidebar anchors
+    updated accordingly. Expanded backend/frontend tests and added a direct demo API
+    smoke check during verification.
+  completed: '2026-05-16T19:48:08.332999+00:00'
+- name: Merge branch v0.3-ai-first back into main so the repository has one active
+    branch again, then push and remove the extra branch locally and remotely if the
+    merge is a clean fast-forward.
+  result: success
+  summary: Committed the Haxaml journal update required for the merge run, fast-forwarded
+    main from 62fa7b0 to 061b38f, pushed main to origin, deleted the merged v0.3-ai-first
+    branch locally, and deleted refs/heads/v0.3-ai-first on origin.
+  completed: '2026-05-16T19:59:40.201209+00:00'
+blocked_tasks: []
+decisions: []
+unresolved_dependencies: []
+runs:
+- id: run-8e14637c
+  task: 'Continue the v0.2 polish scope so the web app feels like a full usable product
+    without adding complexity: improve visual coherence, simplify navigation and copy,
+    strengthen document readability, and keep the workflow as a small installable
+    agent tool rather than an overcomplicated product.'
+  result: success
+  changes: Simplified the shell status model, added workspace resume and reset actions,
+    tightened the copy across the three pages, added higher-signal review summary
+    cards, introduced rendered markdown previews for generated drafts, and aligned
+    roadmap language to the simpler three-step product flow.
+  decisions: Kept the current router and local state model instead of introducing
+    more product complexity. Added a tiny local markdown renderer instead of a dependency
+    so the draft surface feels finished without expanding the stack.
+  risks: The markdown preview intentionally supports a narrow subset of markdown for
+    safety and simplicity, so very complex formatting will still fall back to a basic
+    presentation. Styling remains centralized in one stylesheet rather than fully
+    component-scoped.
+  timestamp: '2026-05-16T13:03:24.300218+00:00'
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - docs/ROADMAP.md
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/lib/markdown.ts
+  - web/src/style.css
+  - web/src/App.test.ts
+  - web/src/state/app-state.ts
+  module_refs: []
+  verification_id: verify-963c8e4ea8
+  keywords:
+  - continue
+  - polish
+  - scope
+  - feels
+  - like
+  - full
+  - usable
+  - product
+  - without
+  - adding
+  - complexity
+  - improve
+- id: run-6f757b34
+  task: 'Redesign the HaxJobs web UI to feel cohesive and attractive rather than boxy
+    and text-heavy: remove low-value buttons and status chrome, simplify navigation,
+    adopt a strong matte-black or VS-dark HaxJobs visual identity, and keep the product
+    as a small installable workflow rather than a complex app.'
+  result: success
+  changes: Applied a cohesive matte-dark visual system and simplified UI chrome across
+    the Workspace/Review/Drafts flow without changing API/state orchestration. Removed
+    shell status chips/blocker text, hid backend-ready workspace banner in normal
+    state, emphasized CV+JD intake with one primary run action, reduced Review to
+    Evidence/Questions plus a slim snapshot rail, and made DraftStudio the dominant
+    surface while compressing metadata/session furniture. Updated frontend tests for
+    new labels and backend-ready visibility behavior.
+  decisions: Kept existing API calls, route query model, and state/store functions
+    unchanged; confined changes to scoped frontend files and directly affected tests;
+    retained demo flow but moved it to a lower-emphasis options rail.
+  risks: One residual risk is visual/a11y contrast nuances on certain dark accents
+    that may need manual design QA in-browser across devices; functional behavior
+    and route guards are unchanged.
+  timestamp: '2026-05-16T13:17:41.424790+00:00'
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/src/style.css
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/App.test.ts
+  module_refs: []
+  verification_id: verify-27d2691826
+  keywords:
+  - redesign
+  - haxjobs
+  - feel
+  - cohesive
+  - attractive
+  - rather
+  - than
+  - boxy
+  - text
+  - heavy
+  - remove
+  - value
+- id: run-5cd486c7
+  task: Implement v0.2 final UX pass with full-page low-text layout and sidebar anchors,
+    run tests/build, create release commit + annotated tag v0.2.0, then start v0.3
+    AI-first orchestration and additive API fields/tests including aspirational track.
+  result: success
+  changes: 'Frontend: converted shell to static left sidebar + per-route section anchors;
+    removed card-grid framing in Workspace/Review/Drafts and simplified controls and
+    copy. Backend: introduced AI-stage orchestrator (recruiter/applicant/evaluator/verification)
+    with OpenAI SDK path and deterministic fallback; AnalyzeResponse now carries analysis_engine,
+    recruiter/evaluator assessments, verification_questions, and aspirational_pack.
+    Generation now accepts user_claim_confirmations and treats confirmed claims as
+    resolved while preserving backward compatibility. Tests: added orchestrator unit
+    coverage and expanded API/generation assertions; updated frontend tests for new
+    layout and v0.3 state key.'
+  decisions: Kept existing API endpoints and deterministic analysis core while layering
+    additive AI fields. Used model-tier environment settings for stage-cost control
+    and retained no-key fallback to keep local/dev and tests stable. Released all
+    current workspace changes as v0.2.0 baseline, then created/pushed v0.3-ai-first
+    branch for post-tag iteration.
+  risks: OpenAI stage parsing depends on model returning strict JSON; fallback path
+    handles failures but AI quality can vary. v0.2 tag includes kickoff AI additions
+    in the same release commit due existing in-flight tree integration context.
+  timestamp: '2026-05-16T19:23:47.060900+00:00'
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  - web/src/state/app-state.ts
+  - app/services/ai_orchestrator.py
+  - app/models/analysis.py
+  - app/services/workflow.py
+  - app/services/generation.py
+  - app/api/routes/analysis.py
+  - app/core/config.py
+  - tests/backend/test_api.py
+  - tests/backend/test_generation.py
+  - tests/backend/test_ai_orchestrator.py
+  - docs/ROADMAP.md
+  - pyproject.toml
+  - .haxaml/expect.yaml
+  - web/src/*
+  - app/services/*
+  - tests/backend/*
+  module_refs: []
+  verification_id: verify-9ee9b375d3
+  keywords:
+  - implement
+  - final
+  - pass
+  - with
+  - full
+  - page
+  - text
+  - layout
+  - sidebar
+  - anchors
+  - tests
+  - build
+- id: run-452ae1a8
+  task: 'Continue v0.3.0 implementation on branch v0.3-ai-first: ensure the demo flow
+    works end-to-end, keep the AI path testable by requiring LLM stages to return
+    JSON, and harden the OpenAI orchestration and related tests without breaking local
+    fallback behavior.'
+  result: success
+  changes: Archived old FRAME history into .haxaml/archive/acts-history.yaml and compacted
+    hot state. Reworked app/services/ai_orchestrator.py to use OpenAI Responses structured
+    parsing with Pydantic schema types instead of manual json.loads over output_text.
+    Extended the Review page to show recruiter/evaluator/verification stage output
+    and the Drafts page to show aspirational sample content, with sidebar anchors
+    updated accordingly. Expanded backend/frontend tests and added a direct demo API
+    smoke check during verification.
+  decisions: Kept the OpenAI path JSON-only by using schema-enforced parsed responses,
+    while preserving deterministic fallback when no API key or parse failure occurs.
+    Used the existing routed UI and additive response fields instead of introducing
+    a new orchestration framework or changing endpoint shapes.
+  risks: Frontend still does not collect user claim confirmations; backend support
+    exists but remains API-only. Structured parsing depends on the installed OpenAI
+    SDK parse helper and model compatibility, though fallback keeps the app operational
+    when unavailable.
+  timestamp: '2026-05-16T19:48:08.332999+00:00'
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - app/services/ai_orchestrator.py
+  - tests/backend/test_ai_orchestrator.py
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  - .haxaml/archive/acts-history.yaml
+  - .haxaml/expect.yaml
+  - app/services/workflow.py
+  - app/api/routes/demo.py
+  - tests/backend/test_api.py
+  module_refs: []
+  verification_id: verify-9cb045931e
+  keywords:
+  - continue
+  - v030
+  - implementation
+  - branch
+  - first
+  - ensure
+  - demo
+  - flow
+  - works
+  - keep
+  - path
+  - testable
+- id: run-90f98500
+  task: Merge branch v0.3-ai-first back into main so the repository has one active
+    branch again, then push and remove the extra branch locally and remotely if the
+    merge is a clean fast-forward.
+  result: success
+  changes: Committed the Haxaml journal update required for the merge run, fast-forwarded
+    main from 62fa7b0 to 061b38f, pushed main to origin, deleted the merged v0.3-ai-first
+    branch locally, and deleted refs/heads/v0.3-ai-first on origin.
+  decisions: Used a fast-forward merge instead of a merge commit so main now matches
+    the previously verified branch tip exactly. Kept existing release tags intact
+    because the request was to reduce branch count, not rewrite release history.
+  risks: Haxaml verification returned pass_with_risks, but no blocking issue was surfaced
+    beyond the expected presence of release tags. No code/test rerun was needed because
+    main was advanced to the already verified tip without additional content changes.
+  timestamp: '2026-05-16T19:59:40.201209+00:00'
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - git status --short --branch
+  - git branch -vv
+  - git log --oneline --decorate -n 6
+  - git ls-remote --heads origin
+  module_refs: []
+  verification_id: verify-07d8d8de8e
+  keywords:
+  - merge
+  - branch
+  - first
+  - back
+  - into
+  - main
+  - repository
+  - active
+  - again
+  - then
+  - push
+  - remove
+sessions:
+- id: session-d52dda6c00
+  task: 'Continue the v0.2 polish scope so the web app feels like a full usable product
+    without adding complexity: improve visual coherence, simplify navigation and copy,
+    strengthen document readability, and keep the workflow as a small installable
+    agent tool rather than an overcomplicated product.'
+  description: Polish the existing Workspace/Review/Drafts frontend into a cleaner,
+    smaller, more usable v0.2 product. Avoid new architecture and feature sprawl;
+    prefer readability, tighter flow, and better draft presentation.
+  execution_mode: governed
+  status: recorded
+  phase: record
+  risk_level: low
+  task_type: frontend_feature
+  guidance_type: implementation
+  readiness_status: ready_to_build_with_warnings
+  started: '2026-05-16T12:58:23.416316+00:00'
+  updated: '2026-05-16T13:03:25.530988+00:00'
+  plan:
+  - Review the readiness report and clarify any required questions.
+  - Call haxaml_context_pack to load task-scoped context.
+  - Apply the smallest logical change set within the scoped files.
+  - Run validations or tests for touched behavior.
+  - Call haxaml_session_verify before haxaml_session_record.
+  required_questions:
+  - What does this feature look like and how does the user interact with it?
+  - Does it require new API calls or can it use existing data?
+  - Are there design mockups or specifications?
+  - Which existing components or pages does it relate to?
+  materials_needed:
+  - design spec or mockup if available
+  - existing component structure
+  - API endpoints the feature depends on
+  done_criteria:
+  - feature renders and behaves as specified
+  - no existing UI is broken
+  - API calls are correctly handled
+  - basic interaction tests pass if the project has them
+  likely_impact:
+  - component files
+  - page or route files
+  - styles or CSS
+  - API integration layer
+  risks:
+  - feature depends on API that does not yet exist
+  - visual regression in adjacent components
+  missing_context: []
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - docs/ROADMAP.md
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/lib/markdown.ts
+  - web/src/style.css
+  - web/src/App.test.ts
+  - web/src/state/app-state.ts
+  module_refs: []
+  keywords:
+  - continue
+  - polish
+  - scope
+  - feels
+  - like
+  - full
+  - usable
+  - product
+  - without
+  - adding
+  - complexity
+  - improve
+  context_pack_calls: 1
+  last_context_pack_at: '2026-05-16T12:58:28.072896+00:00'
+  last_context_pack_reason: user_redirect
+  last_context_pack_reason_category: ''
+  ended: '2026-05-16T13:03:25.530993+00:00'
+  verification_id: verify-963c8e4ea8
+- id: session-599d4ba8e8
+  task: 'Redesign the HaxJobs web UI to feel cohesive and attractive rather than boxy
+    and text-heavy: remove low-value buttons and status chrome, simplify navigation,
+    adopt a strong matte-black or VS-dark HaxJobs visual identity, and keep the product
+    as a small installable workflow rather than a complex app.'
+  description: Use the current Workspace/Review/Drafts flow, but make it visually
+    coherent and much simpler. Remove clutter like repetitive headers, backend status
+    chrome, and too many button groups. Use a dark HaxJobs-specific theme inspired
+    by strong product UIs, while preserving the small deterministic workflow.
+  execution_mode: governed
+  status: recorded
+  phase: record
+  risk_level: low
+  task_type: frontend_feature
+  guidance_type: implementation
+  readiness_status: ready_to_build_with_warnings
+  started: '2026-05-16T13:06:34.384793+00:00'
+  updated: '2026-05-16T13:17:42.250402+00:00'
+  plan:
+  - Review the readiness report and clarify any required questions.
+  - Call haxaml_context_pack to load task-scoped context.
+  - Apply the smallest logical change set within the scoped files.
+  - Run validations or tests for touched behavior.
+  - Call haxaml_session_verify before haxaml_session_record.
+  required_questions:
+  - What does this feature look like and how does the user interact with it?
+  - Does it require new API calls or can it use existing data?
+  - Are there design mockups or specifications?
+  - Which existing components or pages does it relate to?
+  materials_needed:
+  - design spec or mockup if available
+  - existing component structure
+  - API endpoints the feature depends on
+  done_criteria:
+  - feature renders and behaves as specified
+  - no existing UI is broken
+  - API calls are correctly handled
+  - basic interaction tests pass if the project has them
+  likely_impact:
+  - component files
+  - page or route files
+  - styles or CSS
+  - API integration layer
+  risks:
+  - feature depends on API that does not yet exist
+  - visual regression in adjacent components
+  missing_context: []
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/src/style.css
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/App.test.ts
+  module_refs: []
+  keywords:
+  - redesign
+  - haxjobs
+  - feel
+  - cohesive
+  - attractive
+  - rather
+  - than
+  - boxy
+  - text
+  - heavy
+  - remove
+  - value
+  context_pack_calls: 1
+  last_context_pack_at: '2026-05-16T13:06:39.479487+00:00'
+  last_context_pack_reason: user_redirect
+  last_context_pack_reason_category: ''
+  context_fetch_calls: 1
+  last_context_fetch_at: '2026-05-16T13:09:12.646627+00:00'
+  last_context_fetch_query: frontend UI files, theme styles, shell/workspace/review/drafts
+    components
+  last_context_fetch_sources:
+  - facts
+  - rules
+  - acts
+  - archived_acts
+  - expect
+  - map
+  - file_refs
+  ended: '2026-05-16T13:17:42.250407+00:00'
+  verification_id: verify-27d2691826
+- id: session-73c7a83d2a
+  task: Implement v0.2 final UX pass with full-page low-text layout and sidebar anchors,
+    run tests/build, create release commit + annotated tag v0.2.0, then start v0.3
+    AI-first orchestration and additive API fields/tests including aspirational track.
+  description: Execute release-close + kickoff sequence in one pass while keeping
+    API backward compatibility.
+  execution_mode: governed
+  status: recorded
+  phase: record
+  risk_level: low
+  task_type: frontend_feature
+  guidance_type: implementation
+  readiness_status: ready_to_build_with_warnings
+  started: '2026-05-16T19:08:27.932253+00:00'
+  updated: '2026-05-16T19:23:48.488060+00:00'
+  plan:
+  - Review the readiness report and clarify any required questions.
+  - Call haxaml_context_pack to load task-scoped context.
+  - Apply the smallest logical change set within the scoped files.
+  - Run validations or tests for touched behavior.
+  - Call haxaml_session_verify before haxaml_session_record.
+  required_questions:
+  - What does this feature look like and how does the user interact with it?
+  - Does it require new API calls or can it use existing data?
+  - Are there design mockups or specifications?
+  - Which existing components or pages does it relate to?
+  materials_needed:
+  - design spec or mockup if available
+  - existing component structure
+  - API endpoints the feature depends on
+  done_criteria:
+  - feature renders and behaves as specified
+  - no existing UI is broken
+  - API calls are correctly handled
+  - basic interaction tests pass if the project has them
+  likely_impact:
+  - component files
+  - page or route files
+  - styles or CSS
+  - API integration layer
+  risks:
+  - feature depends on API that does not yet exist
+  - visual regression in adjacent components
+  missing_context: []
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  - web/src/state/app-state.ts
+  - app/services/ai_orchestrator.py
+  - app/models/analysis.py
+  - app/services/workflow.py
+  - app/services/generation.py
+  - app/api/routes/analysis.py
+  - app/core/config.py
+  - tests/backend/test_api.py
+  - tests/backend/test_generation.py
+  - tests/backend/test_ai_orchestrator.py
+  - docs/ROADMAP.md
+  - pyproject.toml
+  - .haxaml/expect.yaml
+  - web/src/*
+  - app/services/*
+  - tests/backend/*
+  module_refs: []
+  keywords:
+  - implement
+  - final
+  - pass
+  - with
+  - full
+  - page
+  - text
+  - layout
+  - sidebar
+  - anchors
+  - tests
+  - build
+  context_pack_calls: 1
+  last_context_pack_at: '2026-05-16T19:08:32.217687+00:00'
+  last_context_pack_reason: ''
+  last_context_pack_reason_category: ''
+  ended: '2026-05-16T19:23:48.488064+00:00'
+  verification_id: verify-9ee9b375d3
+- id: session-a5bc6655c2
+  task: 'Continue v0.3.0 implementation on branch v0.3-ai-first: ensure the demo flow
+    works end-to-end, keep the AI path testable by requiring LLM stages to return
+    JSON, and harden the OpenAI orchestration and related tests without breaking local
+    fallback behavior.'
+  description: Tighten the current AI-first slice around deterministic JSON responses,
+    demo stability, and testability.
+  execution_mode: governed
+  status: recorded
+  phase: record
+  risk_level: low
+  task_type: testing
+  guidance_type: implementation
+  readiness_status: ready_to_build_with_warnings
+  started: '2026-05-16T19:42:35.155503+00:00'
+  updated: '2026-05-16T19:48:09.433754+00:00'
+  plan:
+  - Review the readiness report and clarify any required questions.
+  - Call haxaml_context_pack to load task-scoped context.
+  - Apply the smallest logical change set within the scoped files.
+  - Run validations or tests for touched behavior.
+  - Call haxaml_session_verify before haxaml_session_record.
+  required_questions:
+  - What behavior should the tests cover?
+  - Are these unit tests, integration tests, or end-to-end tests?
+  - Should existing tests be extended or are these new tests?
+  - What does a passing test look like?
+  materials_needed:
+  - the code to be tested
+  - existing test files if extending
+  - test configuration or fixtures
+  done_criteria:
+  - tests cover the specified behavior
+  - tests pass in CI
+  - test names clearly describe what they verify
+  - no production code is changed as a side effect
+  likely_impact:
+  - test files
+  - test fixtures
+  - possibly test configuration
+  risks:
+  - tests that pass but do not actually verify the intended behavior
+  - over-mocking that hides real integration issues
+  missing_context: []
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - app/services/ai_orchestrator.py
+  - tests/backend/test_ai_orchestrator.py
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  - .haxaml/archive/acts-history.yaml
+  - .haxaml/expect.yaml
+  - app/services/workflow.py
+  - app/api/routes/demo.py
+  - tests/backend/test_api.py
+  module_refs: []
+  keywords:
+  - continue
+  - v030
+  - implementation
+  - branch
+  - first
+  - ensure
+  - demo
+  - flow
+  - works
+  - keep
+  - path
+  - testable
+  context_pack_calls: 1
+  last_context_pack_at: '2026-05-16T19:42:41.262142+00:00'
+  last_context_pack_reason: ''
+  last_context_pack_reason_category: ''
+  ended: '2026-05-16T19:48:09.433758+00:00'
+  verification_id: verify-9cb045931e
+- id: session-9f84e5cb70
+  task: Merge branch v0.3-ai-first back into main so the repository has one active
+    branch again, then push and remove the extra branch locally and remotely if the
+    merge is a clean fast-forward.
+  description: Repo-state cleanup after verified v0.3 branch work; prefer fast-forward
+    merge to preserve tested history exactly.
+  execution_mode: governed
+  status: recorded
+  phase: record
+  risk_level: medium
+  task_type: refactor
+  guidance_type: implementation
+  readiness_status: ready_to_build_with_warnings
+  started: '2026-05-16T19:58:46.244593+00:00'
+  updated: '2026-05-16T19:59:41.342850+00:00'
+  plan:
+  - Review the readiness report and clarify any required questions.
+  - Call haxaml_context_pack to load task-scoped context.
+  - Apply the smallest logical change set within the scoped files.
+  - Run validations or tests for touched behavior.
+  - Call haxaml_session_verify before haxaml_session_record.
+  required_questions:
+  - What is the specific scope of the refactor?
+  - Should behavior remain identical after the refactor?
+  - Are there known callers or dependents of the code being changed?
+  - What is the stopping condition for this refactor?
+  materials_needed:
+  - current code structure
+  - known callers or dependents
+  - existing test coverage
+  done_criteria:
+  - behavior is preserved or improvement is documented
+  - all existing tests pass after refactor
+  - scope did not expand beyond the defined boundary
+  likely_impact:
+  - the module being refactored
+  - callers or dependents of changed interfaces
+  - tests
+  risks:
+  - scope creep beyond the agreed boundary
+  - breaking callers that were not identified upfront
+  - refactor that changes behavior silently
+  missing_context: []
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - git status --short --branch
+  - git branch -vv
+  - git log --oneline --decorate -n 6
+  - git ls-remote --heads origin
+  module_refs: []
+  keywords:
+  - merge
+  - branch
+  - first
+  - back
+  - into
+  - main
+  - repository
+  - active
+  - again
+  - then
+  - push
+  - remove
+  context_pack_calls: 1
+  last_context_pack_at: '2026-05-16T19:58:51.468367+00:00'
+  last_context_pack_reason: ''
+  last_context_pack_reason_category: ''
+  ended: '2026-05-16T19:59:41.342854+00:00'
+  verification_id: verify-07d8d8de8e
+verifications:
+- id: verify-963c8e4ea8
+  session_id: session-d52dda6c00
+  task: 'Continue the v0.2 polish scope so the web app feels like a full usable product
+    without adding complexity: improve visual coherence, simplify navigation and copy,
+    strengthen document readability, and keep the workflow as a small installable
+    agent tool rather than an overcomplicated product.'
+  verdict: pass_with_risks
+  summary: 'Polished the existing Workspace/Review/Drafts flow into a simpler product
+    surface: lighter shell copy, resume/fresh-session controls, clearer review summaries,
+    rendered draft previews instead of raw markdown-only output, and roadmap copy
+    aligned to the simpler three-step workflow.'
+  unresolved_questions: []
+  assumptions:
+  - The product should stay as a small deterministic workflow app, so polish should
+    favor fewer concepts and clearer outputs instead of more features.
+  - Adding a small internal markdown renderer is acceptable because it avoids new
+    dependencies while making the generated documents readable.
+  follow_ups: []
+  checks:
+  - name: understood_task
+    passed: true
+    details: Task text was provided.
+  - name: inspected_context
+    passed: false
+    details: Inspected context includes required reads.
+  - name: changed_right_files
+    passed: true
+    details: Changed files or summary evidence was provided.
+  - name: risky_or_unrelated_touch
+    passed: true
+    details: No risky file patterns were reported.
+  - name: followed_rules
+    passed: true
+    details: No forbidden risky path was reported.
+  - name: updated_journal
+    passed: true
+    details: Journal update is enforced at session_record stage.
+  - name: unresolved_logged
+    passed: true
+    details: Unresolved items were explicitly captured or not required.
+  - name: explained_changes
+    passed: true
+    details: Summary explains what changed and why.
+  evidence_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - docs/ROADMAP.md
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/lib/markdown.ts
+  - web/src/style.css
+  - web/src/App.test.ts
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - docs/ROADMAP.md
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/lib/markdown.ts
+  - web/src/style.css
+  - web/src/App.test.ts
+  - web/src/state/app-state.ts
+  module_refs: []
+  keywords:
+  - continue
+  - polish
+  - scope
+  - feels
+  - like
+  - full
+  - usable
+  - product
+  - without
+  - adding
+  - complexity
+  - improve
+  timestamp: '2026-05-16T13:03:23.285354+00:00'
+- id: verify-27d2691826
+  session_id: session-599d4ba8e8
+  task: 'Redesign the HaxJobs web UI to feel cohesive and attractive rather than boxy
+    and text-heavy: remove low-value buttons and status chrome, simplify navigation,
+    adopt a strong matte-black or VS-dark HaxJobs visual identity, and keep the product
+    as a small installable workflow rather than a complex app.'
+  verdict: pass_with_risks
+  summary: Implemented matte dark redesign across shell/workspace/review/drafts surfaces
+    while preserving workflow/state model. Removed shell status chips/blocker line,
+    hid backend-ready banner in normal state, simplified workspace into main intake
+    plus slim options rail, reduced review to Evidence/Questions with one supporting
+    snapshot rail, focused drafts on document studio and compressed metadata chrome.
+    Updated App.test.ts expectations for ready-state behavior and revised labels.
+  unresolved_questions: []
+  assumptions:
+  - Existing API/state model and route guards remain unchanged and should continue
+    to drive navigation/disable states.
+  - Test updates should target behavior changes from UI redesign and not alter backend
+    contract assumptions.
+  follow_ups: []
+  checks:
+  - name: understood_task
+    passed: true
+    details: Task text was provided.
+  - name: inspected_context
+    passed: false
+    details: Inspected context includes required reads.
+  - name: changed_right_files
+    passed: true
+    details: Changed files or summary evidence was provided.
+  - name: risky_or_unrelated_touch
+    passed: true
+    details: No risky file patterns were reported.
+  - name: followed_rules
+    passed: true
+    details: No forbidden risky path was reported.
+  - name: updated_journal
+    passed: true
+    details: Journal update is enforced at session_record stage.
+  - name: unresolved_logged
+    passed: true
+    details: Unresolved items were explicitly captured or not required.
+  - name: explained_changes
+    passed: true
+    details: Summary explains what changed and why.
+  evidence_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/src/style.css
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/App.test.ts
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/src/style.css
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/App.test.ts
+  module_refs: []
+  keywords:
+  - redesign
+  - haxjobs
+  - feel
+  - cohesive
+  - attractive
+  - rather
+  - than
+  - boxy
+  - text
+  - heavy
+  - remove
+  - value
+  timestamp: '2026-05-16T13:17:33.378717+00:00'
+- id: verify-9ee9b375d3
+  session_id: session-73c7a83d2a
+  task: Implement v0.2 final UX pass with full-page low-text layout and sidebar anchors,
+    run tests/build, create release commit + annotated tag v0.2.0, then start v0.3
+    AI-first orchestration and additive API fields/tests including aspirational track.
+  verdict: pass
+  summary: Implemented full-page sidebar-driven UI, added AI-first multi-stage orchestration
+    with additive analyze fields and claim-confirmation generation payload support,
+    released commit/tag v0.2.0 on main, and created/pushed branch v0.3-ai-first for
+    follow-up work.
+  unresolved_questions:
+  - No unresolved functional blockers; release and branch push were successful.
+  assumptions:
+  - Existing pending workspace changes represented intended v0.2 baseline work and
+    should not be reverted.
+  - AI pipeline should remain operational with deterministic fallback when OpenAI
+    key/sdk path is unavailable.
+  follow_ups: []
+  checks:
+  - name: understood_task
+    passed: true
+    details: Task text was provided.
+  - name: inspected_context
+    passed: true
+    details: Inspected context includes required reads.
+  - name: changed_right_files
+    passed: true
+    details: Changed files or summary evidence was provided.
+  - name: risky_or_unrelated_touch
+    passed: true
+    details: No risky file patterns were reported.
+  - name: followed_rules
+    passed: true
+    details: No forbidden risky path was reported.
+  - name: updated_journal
+    passed: true
+    details: Journal update is enforced at session_record stage.
+  - name: unresolved_logged
+    passed: true
+    details: Unresolved items were explicitly captured or not required.
+  - name: explained_changes
+    passed: true
+    details: Summary explains what changed and why.
+  evidence_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  - web/src/state/app-state.ts
+  - app/services/ai_orchestrator.py
+  - app/models/analysis.py
+  - app/services/workflow.py
+  - app/services/generation.py
+  - app/api/routes/analysis.py
+  - app/core/config.py
+  - tests/backend/test_api.py
+  - tests/backend/test_generation.py
+  - tests/backend/test_ai_orchestrator.py
+  - docs/ROADMAP.md
+  - pyproject.toml
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  - web/src/state/app-state.ts
+  - app/services/ai_orchestrator.py
+  - app/models/analysis.py
+  - app/services/workflow.py
+  - app/services/generation.py
+  - app/api/routes/analysis.py
+  - app/core/config.py
+  - tests/backend/test_api.py
+  - tests/backend/test_generation.py
+  - tests/backend/test_ai_orchestrator.py
+  - docs/ROADMAP.md
+  - pyproject.toml
+  - .haxaml/expect.yaml
+  - web/src/*
+  - app/services/*
+  - tests/backend/*
+  module_refs: []
+  keywords:
+  - implement
+  - final
+  - pass
+  - with
+  - full
+  - page
+  - text
+  - layout
+  - sidebar
+  - anchors
+  - tests
+  - build
+  timestamp: '2026-05-16T19:23:36.967376+00:00'
+- id: verify-9cb045931e
+  session_id: session-a5bc6655c2
+  task: 'Continue v0.3.0 implementation on branch v0.3-ai-first: ensure the demo flow
+    works end-to-end, keep the AI path testable by requiring LLM stages to return
+    JSON, and harden the OpenAI orchestration and related tests without breaking local
+    fallback behavior.'
+  verdict: pass
+  summary: Compacted FRAME history, switched the AI orchestrator from prompt-only
+    JSON parsing to structured OpenAI responses parsing with Pydantic schemas, surfaced
+    AI-stage outputs and aspirational sample content in the Review and Drafts pages,
+    and verified the demo flow through tests and a direct demo API smoke request.
+  unresolved_questions:
+  - No blocking issues remain after verification; claim confirmation UI is still not
+    surfaced in the frontend.
+  assumptions:
+  - The installed OpenAI Python SDK parse helper remains the desired path for schema-enforced
+    JSON stage outputs.
+  - The v0.3 demo should visibly expose AI-stage results and aspirational content
+    rather than only returning them in API payloads.
+  follow_ups: []
+  checks:
+  - name: understood_task
+    passed: true
+    details: Task text was provided.
+  - name: inspected_context
+    passed: true
+    details: Inspected context includes required reads.
+  - name: changed_right_files
+    passed: true
+    details: Changed files or summary evidence was provided.
+  - name: risky_or_unrelated_touch
+    passed: true
+    details: No risky file patterns were reported.
+  - name: followed_rules
+    passed: true
+    details: No forbidden risky path was reported.
+  - name: updated_journal
+    passed: true
+    details: Journal update is enforced at session_record stage.
+  - name: unresolved_logged
+    passed: true
+    details: Unresolved items were explicitly captured or not required.
+  - name: explained_changes
+    passed: true
+    details: Summary explains what changed and why.
+  evidence_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - app/services/ai_orchestrator.py
+  - tests/backend/test_ai_orchestrator.py
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  - .haxaml/acts.yaml
+  - .haxaml/archive/acts-history.yaml
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - app/services/ai_orchestrator.py
+  - tests/backend/test_ai_orchestrator.py
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  - .haxaml/archive/acts-history.yaml
+  - .haxaml/expect.yaml
+  - app/services/workflow.py
+  - app/api/routes/demo.py
+  - tests/backend/test_api.py
+  module_refs: []
+  keywords:
+  - continue
+  - v030
+  - implementation
+  - branch
+  - first
+  - ensure
+  - demo
+  - flow
+  - works
+  - keep
+  - path
+  - testable
+  timestamp: '2026-05-16T19:47:59.825763+00:00'
+- id: verify-07d8d8de8e
+  session_id: session-9f84e5cb70
+  task: Merge branch v0.3-ai-first back into main so the repository has one active
+    branch again, then push and remove the extra branch locally and remotely if the
+    merge is a clean fast-forward.
+  verdict: pass_with_risks
+  summary: Recorded the governed merge run, fast-forwarded main to the verified v0.3
+    branch tip, pushed main, and removed v0.3-ai-first locally and remotely. Verified
+    that local and remote branch listings now contain only main.
+  unresolved_questions:
+  - No blocking issues remain; tags v0.1.0 and v0.2.0 remain in place, which is expected.
+  assumptions:
+  - The user's request to keep one branch authorizes removal of the merged feature
+    branch both locally and on origin.
+  follow_ups: []
+  checks:
+  - name: understood_task
+    passed: true
+    details: Task text was provided.
+  - name: inspected_context
+    passed: false
+    details: Inspected context includes required reads.
+  - name: changed_right_files
+    passed: true
+    details: Changed files or summary evidence was provided.
+  - name: risky_or_unrelated_touch
+    passed: true
+    details: No risky file patterns were reported.
+  - name: followed_rules
+    passed: true
+    details: No forbidden risky path was reported.
+  - name: updated_journal
+    passed: true
+    details: Journal update is enforced at session_record stage.
+  - name: unresolved_logged
+    passed: true
+    details: Unresolved items were explicitly captured or not required.
+  - name: explained_changes
+    passed: true
+    details: Summary explains what changed and why.
+  evidence_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - .haxaml/acts.yaml
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - git status --short --branch
+  - git branch -vv
+  - git log --oneline --decorate -n 6
+  - git ls-remote --heads origin
+  module_refs: []
+  keywords:
+  - merge
+  - branch
+  - first
+  - back
+  - into
+  - main
+  - repository
+  - active
+  - again
+  - then
+  - push
+  - remove
+  timestamp: '2026-05-16T19:59:32.861853+00:00'
+archive:
+  path: .haxaml/archive/acts-history.yaml
+  archive_mode: manual
+  last_archived_at: '2026-05-16T19:42:24.532876+00:00'
+  archived_counts:
+    runs: 5
+    sessions: 5
+    verifications: 5
+  hot_limits:
+    runs: 5
+    sessions: 5
+    verifications: 5
+context_compaction:
+  sessions_started: 10
+  full_reads_completed: 0
+  default_pack: minimal
+  last_pack_tokens: 148
+  last_window_usage:
+    pct_4000: 3.7
+    pct_8000: 1.85
+    pct_32000: 0.46
+    pct_128000: 0.12
+  last_refresh_mode: full
+expect_sync:
+  required: false
+  pending_run_id: ''
+  pending_task: ''
+  pending_result: ''
+  pending_recorded_at: ''
+  last_synced_run_id: run-90f98500
+  last_synced_at: '2026-05-16T19:59:47.345379+00:00'
+  last_sync_status: done
+lifecycle_contract:
+  phase: sync
+  required_next:
+  - haxaml_guidance
+  active_session_id: ''
+  active_task: ''
+  last_tool: haxaml_expect_sync
+  last_verification_id: verify-07d8d8de8e
+  last_verification_verdict: pass_with_risks
+  last_record_run_id: run-90f98500
+  last_record_result: success
+  updated_at: '2026-05-16T19:59:47.345398+00:00'
+about:
+  acknowledged_at: '2026-05-16T19:58:35.198747+00:00'
+  prompt_version: 0.6.7
+  haxaml_version: 0.7.4

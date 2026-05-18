@@ -102,6 +102,7 @@ def _compact_context_pack_payload(payload: dict) -> dict:
         "changed_sections": payload.get("changed_sections", meta.get("changed_sections", [])),
         "unchanged_sections": payload.get("unchanged_sections", meta.get("unchanged_sections", [])),
         "token_delta": int(payload.get("token_delta", meta.get("token_delta", 0)) or 0),
+        "handoff_summary": payload.get("handoff_summary", {}),
     }
     if payload.get("session_id"):
         compact["session_id"] = payload.get("session_id")
@@ -130,16 +131,17 @@ def _compact_success(tool: str, payload: dict) -> dict:
     if tool == "haxaml_guidance":
         compact = _pick_fields(
             payload,
-            [
-                "message",
-                "execution_mode",
-                "status",
-                "task_type",
-                "risk_level",
-                "required_questions",
-                "recommended_packs",
-                "next_step",
-            ],
+                    [
+                        "message",
+                        "execution_mode",
+                        "status",
+                        "task_type",
+                        "risk_level",
+                        "required_questions",
+                        "handoff_summary",
+                        "recommended_packs",
+                        "next_step",
+                    ],
         )
         if payload.get("execution_mode") == "governed":
             compact.update(
@@ -184,16 +186,21 @@ def _compact_success(tool: str, payload: dict) -> dict:
     if tool == "haxaml_prebuild":
         compact = _pick_fields(
             payload,
-            [
-                "message",
-                "session_id",
-                "readiness_status",
-                "task_type",
-                "guidance_type",
-                "required_questions",
-                "next_step",
-                "policy",
-            ],
+                    [
+                        "message",
+                        "session_id",
+                        "readiness_status",
+                        "task_type",
+                        "guidance_type",
+                        "required_questions",
+                        "blocking_questions",
+                        "blocking_materials",
+                        "advisory_materials",
+                        "owner_provided_materials",
+                        "handoff_summary",
+                        "next_step",
+                        "policy",
+                    ],
         )
         if "progress_summary" in payload:
             compact["progress_summary"] = _pick_fields(
@@ -285,6 +292,7 @@ def _compact_success(tool: str, payload: dict) -> dict:
                 "synced",
                 "run",
                 "applied_status",
+                "appended_run",
                 "expect_sync",
             ],
         )

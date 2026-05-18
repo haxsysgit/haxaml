@@ -1,0 +1,2173 @@
+metadata:
+  version: 0.6.7
+  managed_by: haxaml
+  created_at: '2026-05-16T19:42:23.925137+00:00'
+  last_archived_at: '2026-05-16T19:42:23.925774+00:00'
+  archive_mode: manual
+  counts:
+    runs: 5
+    sessions: 5
+    verifications: 5
+index:
+- kind: run
+  id: run-63abb035
+  task: Implement the minimal Vue 3 + Vite + TypeScript frontend and FastAPI backend
+    evidence-first slice with a shared deterministic Python service layer, CLI wrapper,
+    API endpoints, fixture-based tests, and Markdown/JSON reporting.
+  status_or_result: success
+  timestamp: '2026-05-16T00:06:30.420065+00:00'
+  summary: Scaffolded a new Python runtime package under app/ with Pydantic schemas,
+    deterministic CV/JD parsing, evidence mapping, Markdown reporting, FastAPI endpoints,
+    and a thin CLI wrapper. Added backend pytest coverage for PDF/TXT parsing, workflow
+    analysis, reporting, and API endpoints. Scaffolded a Vue 3 + Vite + TypeScript
+    single-page frontend under web/ with upload, JD paste, analysis, results, and
+    JSON/Markdown download flows, plus Vitest coverage and production build support.
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - .gitignore
+  - pyproject.toml
+  - app/__init__.py
+  - app/api/__init__.py
+  - app/api/server.py
+  - app/cli.py
+  - app/schemas.py
+  - app/services/__init__.py
+  - app/services/analysis.py
+  - app/services/documents.py
+  - app/services/reporting.py
+  - app/services/workflow.py
+  - tests/backend/test_analysis.py
+  - tests/backend/test_api.py
+  - tests/backend/test_documents.py
+  - web/index.html
+  - web/package-lock.json
+  - web/package.json
+  - web/src/App.test.ts
+  - web/src/App.vue
+  - web/src/lib/api.ts
+  - web/src/main.ts
+  - web/src/style.css
+  - web/src/test-setup.ts
+  - web/src/types.ts
+  - web/src/vite-env.d.ts
+  - web/tsconfig.json
+  - web/vite.config.ts
+  - AGENTS.md
+  - docs/HAXJOBS_AGENT_WORKFLOW_BLUEPRINT.md
+  - .haxaml/expect.yaml
+  - tests/jd/60x.txt
+  - tests/cv/Arinze_Agent_engineer_cv.pdf
+  module_refs: []
+  keywords:
+  - implement
+  - minimal
+  - vite
+  - typescript
+  - frontend
+  - fastapi
+  - backend
+  - evidence
+  - first
+  - slice
+  - with
+  - shared
+- kind: run
+  id: run-46ac25c9
+  task: 'Implement the planned repo usability slice: add scripts/dev.sh runner, refactor
+    FastAPI app structure into app/main.py with route/service/model layering and demo
+    endpoints, fix frontend local API wiring and backend health UX, add demo analysis
+    flow and results filtering, update tests, and verify end-to-end.'
+  status_or_result: success
+  timestamp: '2026-05-16T02:35:05.084118+00:00'
+  summary: 'Backend: introduced app/main.py create_app(), app/core config/setup, route
+    modules for health/analysis/demo, model modules for analysis and health, demo
+    fixture service, metadata-aware reporting, and compatibility exports through app/schemas.py
+    and app/api/server.py. Tooling: added scripts/dev.sh and .run ignore handling.
+    Frontend: added API client helpers, Vite /api proxy, backend health banner, mode
+    persistence, demo analysis flow, clearer backend-unavailable errors, and filterable/expandable
+    results UI. Tests: expanded pytest coverage for factory, health env state, demo
+    endpoints, and Vitest coverage for health states, API URL resolution, demo flow,
+    unavailable backend handling, session restore, and result filtering.'
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - app/main.py
+  - main.py
+  - app/core/config.py
+  - app/core/application.py
+  - app/api/routes/health.py
+  - app/api/routes/analysis.py
+  - app/api/routes/demo.py
+  - app/models/analysis.py
+  - app/models/health.py
+  - app/services/demo_fixtures.py
+  - app/services/workflow.py
+  - app/services/reporting.py
+  - app/services/analysis.py
+  - app/cli.py
+  - app/api/server.py
+  - app/api/__init__.py
+  - app/schemas.py
+  - pyproject.toml
+  - scripts/dev.sh
+  - .gitignore
+  - web/vite.config.ts
+  - web/src/lib/api.ts
+  - web/src/types.ts
+  - web/src/App.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  - web/src/lib/api.test.ts
+  - tests/backend/test_api.py
+  - tests/backend/test_app_factory.py
+  - AGENTS.md
+  - .agents/skills/haxaml/SKILL.md
+  - app/services/documents.py
+  - tests/backend/test_analysis.py
+  - tests/backend/test_documents.py
+  module_refs: []
+  keywords:
+  - implement
+  - planned
+  - repo
+  - usability
+  - slice
+  - scripts
+  - devsh
+  - runner
+  - refactor
+  - fastapi
+  - structure
+  - into
+- kind: run
+  id: run-57cb1d76
+  task: 'Implement the v0.2 plan: update docs/ROADMAP.md, add deterministic application-pack
+    generation to backend and CLI outputs, adopt vue-router with routed dashboard
+    views, lightweight persisted frontend app state, route guards, and tests.'
+  status_or_result: success
+  timestamp: '2026-05-16T12:01:41.338562+00:00'
+  summary: Added POST /api/generate-application-pack, deterministic generation services,
+    CLI writing of tailored output artifacts, vue-router routes for input/analysis/questions/outputs,
+    sessionStorage-backed app state, tabbed outputs UI, and targeted backend/frontend
+    tests.
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - docs/ROADMAP.md
+  - app/models/analysis.py
+  - app/services/generation.py
+  - app/services/workflow.py
+  - app/api/routes/analysis.py
+  - app/cli.py
+  - tests/backend/test_api.py
+  - tests/backend/test_generation.py
+  - tests/backend/test_cli.py
+  - tests/backend/test_app_factory.py
+  - web/package.json
+  - web/package-lock.json
+  - web/src/types.ts
+  - web/src/lib/api.ts
+  - web/src/state/app-state.ts
+  - web/src/router.ts
+  - web/src/views/InputView.vue
+  - web/src/views/AnalysisView.vue
+  - web/src/views/QuestionsView.vue
+  - web/src/views/OutputsView.vue
+  - web/src/App.vue
+  - web/src/main.ts
+  - web/src/style.css
+  - web/src/App.test.ts
+  - app/services/analysis.py
+  - app/services/reporting.py
+  - app/api/routes/demo.py
+  - app/core/application.py
+  - tests/backend/test_analysis.py
+  module_refs: []
+  keywords:
+  - implement
+  - plan
+  - update
+  - docs
+  - roadmapmd
+  - deterministic
+  - application
+  - pack
+  - generation
+  - backend
+  - outputs
+  - adopt
+- kind: run
+  id: run-1c7bdf47
+  task: 'Extend v0.2 into a full UX/UI overhaul for the routed web app: choose a stronger
+    frontend architecture, redesign the information architecture and interaction model,
+    then implement the overhaul while preserving the evidence-first workflow and deterministic
+    backend contracts.'
+  status_or_result: success
+  timestamp: '2026-05-16T12:28:37.486069+00:00'
+  summary: Replaced the thin routed shell with a workflow dashboard shell, consolidated
+    the IA to Workspace/Review/Drafts, merged follow-up resolution into Review, moved
+    draft selection into the URL, added reusable frontend components/pages, removed
+    stale legacy views, and updated the frontend tests to the new route model.
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/package.json
+  - web/package-lock.json
+  - web/src/App.vue
+  - web/src/main.ts
+  - web/src/router.ts
+  - web/src/state/app-state.ts
+  - web/src/types.ts
+  - web/src/lib/api.ts
+  - web/src/style.css
+  - web/src/App.test.ts
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  module_refs: []
+  keywords:
+  - extend
+  - into
+  - full
+  - overhaul
+  - routed
+  - choose
+  - stronger
+  - frontend
+  - architecture
+  - redesign
+  - information
+  - interaction
+- kind: run
+  id: run-695b8729
+  task: Refine the new web UI so it is visually coherent, simpler to navigate, less
+    text-heavy, smaller in typography scale, and more attractive; remove unnecessary
+    legacy compatibility paths/files since the current user is the only user.
+  status_or_result: success
+  timestamp: '2026-05-16T12:51:55.883472+00:00'
+  summary: Replaced the heavier shell with a compact topbar workflow shell, rewrote
+    the main stylesheet for smaller typography and calmer spacing, shortened verbose
+    copy across workspace/review/drafts, removed legacy route aliases from the router,
+    and updated frontend tests to the new route and label set.
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/src/router.ts
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  module_refs: []
+  keywords:
+  - refine
+  - visually
+  - coherent
+  - simpler
+  - navigate
+  - less
+  - text
+  - heavy
+  - smaller
+  - typography
+  - scale
+  - more
+- kind: session
+  id: session-ffc98dcfc3
+  task: Implement the minimal Vue 3 + Vite + TypeScript frontend and FastAPI backend
+    evidence-first slice with a shared deterministic Python service layer, CLI wrapper,
+    API endpoints, fixture-based tests, and Markdown/JSON reporting.
+  status_or_result: recorded
+  timestamp: '2026-05-16T00:06:30.609604+00:00'
+  summary: Fresh implementation based on an existing approved plan for the first workflow-first
+    web slice.
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - .gitignore
+  - pyproject.toml
+  - app/__init__.py
+  - app/api/__init__.py
+  - app/api/server.py
+  - app/cli.py
+  - app/schemas.py
+  - app/services/__init__.py
+  - app/services/analysis.py
+  - app/services/documents.py
+  - app/services/reporting.py
+  - app/services/workflow.py
+  - tests/backend/test_analysis.py
+  - tests/backend/test_api.py
+  - tests/backend/test_documents.py
+  - web/index.html
+  - web/package-lock.json
+  - web/package.json
+  - web/src/App.test.ts
+  - web/src/App.vue
+  - web/src/lib/api.ts
+  - web/src/main.ts
+  - web/src/style.css
+  - web/src/test-setup.ts
+  - web/src/types.ts
+  - web/src/vite-env.d.ts
+  - web/tsconfig.json
+  - web/vite.config.ts
+  - AGENTS.md
+  - docs/HAXJOBS_AGENT_WORKFLOW_BLUEPRINT.md
+  - .haxaml/expect.yaml
+  - tests/jd/60x.txt
+  - tests/cv/Arinze_Agent_engineer_cv.pdf
+  module_refs: []
+  keywords:
+  - implement
+  - minimal
+  - vite
+  - typescript
+  - frontend
+  - fastapi
+  - backend
+  - evidence
+  - first
+  - slice
+  - with
+  - shared
+- kind: session
+  id: session-fd83033992
+  task: 'Implement the planned repo usability slice: add scripts/dev.sh runner, refactor
+    FastAPI app structure into app/main.py with route/service/model layering and demo
+    endpoints, fix frontend local API wiring and backend health UX, add demo analysis
+    flow and results filtering, update tests, and verify end-to-end.'
+  status_or_result: recorded
+  timestamp: '2026-05-16T02:35:05.511404+00:00'
+  summary: Carry the provided plan through implementation and verification in one
+    pass.
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - app/main.py
+  - main.py
+  - app/core/config.py
+  - app/core/application.py
+  - app/api/routes/health.py
+  - app/api/routes/analysis.py
+  - app/api/routes/demo.py
+  - app/models/analysis.py
+  - app/models/health.py
+  - app/services/demo_fixtures.py
+  - app/services/workflow.py
+  - app/services/reporting.py
+  - app/services/analysis.py
+  - app/cli.py
+  - app/api/server.py
+  - app/api/__init__.py
+  - app/schemas.py
+  - pyproject.toml
+  - scripts/dev.sh
+  - .gitignore
+  - web/vite.config.ts
+  - web/src/lib/api.ts
+  - web/src/types.ts
+  - web/src/App.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  - web/src/lib/api.test.ts
+  - tests/backend/test_api.py
+  - tests/backend/test_app_factory.py
+  - AGENTS.md
+  - .agents/skills/haxaml/SKILL.md
+  - app/services/documents.py
+  - tests/backend/test_analysis.py
+  - tests/backend/test_documents.py
+  module_refs: []
+  keywords:
+  - implement
+  - planned
+  - repo
+  - usability
+  - slice
+  - scripts
+  - devsh
+  - runner
+  - refactor
+  - fastapi
+  - structure
+  - into
+- kind: session
+  id: session-8a18f1c920
+  task: 'Implement the v0.2 plan: update docs/ROADMAP.md, add deterministic application-pack
+    generation to backend and CLI outputs, adopt vue-router with routed dashboard
+    views, lightweight persisted frontend app state, route guards, and tests.'
+  status_or_result: recorded
+  timestamp: '2026-05-16T12:01:41.716527+00:00'
+  summary: Resume in fresh context from the prior governed session and implement the
+    planned v0.2 slice end-to-end.
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - docs/ROADMAP.md
+  - app/models/analysis.py
+  - app/services/generation.py
+  - app/services/workflow.py
+  - app/api/routes/analysis.py
+  - app/cli.py
+  - tests/backend/test_api.py
+  - tests/backend/test_generation.py
+  - tests/backend/test_cli.py
+  - tests/backend/test_app_factory.py
+  - web/package.json
+  - web/package-lock.json
+  - web/src/types.ts
+  - web/src/lib/api.ts
+  - web/src/state/app-state.ts
+  - web/src/router.ts
+  - web/src/views/InputView.vue
+  - web/src/views/AnalysisView.vue
+  - web/src/views/QuestionsView.vue
+  - web/src/views/OutputsView.vue
+  - web/src/App.vue
+  - web/src/main.ts
+  - web/src/style.css
+  - web/src/App.test.ts
+  - app/services/analysis.py
+  - app/services/reporting.py
+  - app/api/routes/demo.py
+  - app/core/application.py
+  - tests/backend/test_analysis.py
+  module_refs: []
+  keywords:
+  - implement
+  - plan
+  - update
+  - docs
+  - roadmapmd
+  - deterministic
+  - application
+  - pack
+  - generation
+  - backend
+  - outputs
+  - adopt
+- kind: session
+  id: session-fedd1b92d7
+  task: 'Extend v0.2 into a full UX/UI overhaul for the routed web app: choose a stronger
+    frontend architecture, redesign the information architecture and interaction model,
+    then implement the overhaul while preserving the evidence-first workflow and deterministic
+    backend contracts.'
+  status_or_result: recorded
+  timestamp: '2026-05-16T12:28:37.970347+00:00'
+  summary: User explicitly requested subagents to evaluate architecture first, then
+    draft the work, then implement using gpt-5.3-codex at high reasoning.
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/package.json
+  - web/package-lock.json
+  - web/src/App.vue
+  - web/src/main.ts
+  - web/src/router.ts
+  - web/src/state/app-state.ts
+  - web/src/types.ts
+  - web/src/lib/api.ts
+  - web/src/style.css
+  - web/src/App.test.ts
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  module_refs: []
+  keywords:
+  - extend
+  - into
+  - full
+  - overhaul
+  - routed
+  - choose
+  - stronger
+  - frontend
+  - architecture
+  - redesign
+  - information
+  - interaction
+- kind: session
+  id: session-04954bbb55
+  task: Refine the new web UI so it is visually coherent, simpler to navigate, less
+    text-heavy, smaller in typography scale, and more attractive; remove unnecessary
+    legacy compatibility paths/files since the current user is the only user.
+  status_or_result: recorded
+  timestamp: '2026-05-16T12:51:56.481563+00:00'
+  summary: 'User wants the UI itself improved: smaller typography, simpler navigation,
+    less text, coherent styling, and no legacy compatibility baggage.'
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/src/router.ts
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  module_refs: []
+  keywords:
+  - refine
+  - visually
+  - coherent
+  - simpler
+  - navigate
+  - less
+  - text
+  - heavy
+  - smaller
+  - typography
+  - scale
+  - more
+- kind: verification
+  id: verify-f60c7fc44b
+  task: Implement the minimal Vue 3 + Vite + TypeScript frontend and FastAPI backend
+    evidence-first slice with a shared deterministic Python service layer, CLI wrapper,
+    API endpoints, fixture-based tests, and Markdown/JSON reporting.
+  status_or_result: pass
+  timestamp: '2026-05-16T00:06:22.558034+00:00'
+  summary: Implemented the shared deterministic analysis workflow, FastAPI API, CLI
+    wrapper, fixture-based pytest coverage, Vue/Vite single-page frontend, Vitest
+    coverage, and verified the CLI plus frontend production build.
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - .gitignore
+  - pyproject.toml
+  - app/__init__.py
+  - app/api/__init__.py
+  - app/api/server.py
+  - app/cli.py
+  - app/schemas.py
+  - app/services/__init__.py
+  - app/services/analysis.py
+  - app/services/documents.py
+  - app/services/reporting.py
+  - app/services/workflow.py
+  - tests/backend/test_analysis.py
+  - tests/backend/test_api.py
+  - tests/backend/test_documents.py
+  - web/index.html
+  - web/package-lock.json
+  - web/package.json
+  - web/src/App.test.ts
+  - web/src/App.vue
+  - web/src/lib/api.ts
+  - web/src/main.ts
+  - web/src/style.css
+  - web/src/test-setup.ts
+  - web/src/types.ts
+  - web/src/vite-env.d.ts
+  - web/tsconfig.json
+  - web/vite.config.ts
+  - AGENTS.md
+  - docs/HAXJOBS_AGENT_WORKFLOW_BLUEPRINT.md
+  - .haxaml/expect.yaml
+  - tests/jd/60x.txt
+  - tests/cv/Arinze_Agent_engineer_cv.pdf
+  module_refs: []
+  keywords:
+  - implement
+  - minimal
+  - vite
+  - typescript
+  - frontend
+  - fastapi
+  - backend
+  - evidence
+  - first
+  - slice
+  - with
+  - shared
+- kind: verification
+  id: verify-c5e16ba5f1
+  task: 'Implement the planned repo usability slice: add scripts/dev.sh runner, refactor
+    FastAPI app structure into app/main.py with route/service/model layering and demo
+    endpoints, fix frontend local API wiring and backend health UX, add demo analysis
+    flow and results filtering, update tests, and verify end-to-end.'
+  status_or_result: pass_with_risks
+  timestamp: '2026-05-16T02:34:44.561587+00:00'
+  summary: Implemented the backend app factory and route/model split, added demo fixture
+    endpoints and response metadata, added the repo-local dev runner, switched the
+    web app to relative /api calls with a Vite proxy and health-aware UX, and expanded
+    backend/frontend tests.
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - app/main.py
+  - main.py
+  - app/core/config.py
+  - app/core/application.py
+  - app/api/routes/health.py
+  - app/api/routes/analysis.py
+  - app/api/routes/demo.py
+  - app/models/analysis.py
+  - app/models/health.py
+  - app/services/demo_fixtures.py
+  - app/services/workflow.py
+  - app/services/reporting.py
+  - app/services/analysis.py
+  - app/cli.py
+  - app/api/server.py
+  - app/api/__init__.py
+  - app/schemas.py
+  - pyproject.toml
+  - scripts/dev.sh
+  - .gitignore
+  - web/vite.config.ts
+  - web/src/lib/api.ts
+  - web/src/types.ts
+  - web/src/App.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  - web/src/lib/api.test.ts
+  - tests/backend/test_api.py
+  - tests/backend/test_app_factory.py
+  - AGENTS.md
+  - .agents/skills/haxaml/SKILL.md
+  - app/services/documents.py
+  - tests/backend/test_analysis.py
+  - tests/backend/test_documents.py
+  module_refs: []
+  keywords:
+  - implement
+  - planned
+  - repo
+  - usability
+  - slice
+  - scripts
+  - devsh
+  - runner
+  - refactor
+  - fastapi
+  - structure
+  - into
+- kind: verification
+  id: verify-a945ae8d95
+  task: 'Implement the v0.2 plan: update docs/ROADMAP.md, add deterministic application-pack
+    generation to backend and CLI outputs, adopt vue-router with routed dashboard
+    views, lightweight persisted frontend app state, route guards, and tests.'
+  status_or_result: pass_with_risks
+  timestamp: '2026-05-16T12:01:31.346316+00:00'
+  summary: Implemented deterministic application-pack generation, CLI artifact writing,
+    vue-router dashboard routes, persisted frontend workflow state, and targeted backend/frontend
+    tests.
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - docs/ROADMAP.md
+  - app/models/analysis.py
+  - app/services/generation.py
+  - app/services/workflow.py
+  - app/api/routes/analysis.py
+  - app/cli.py
+  - tests/backend/test_api.py
+  - tests/backend/test_generation.py
+  - tests/backend/test_cli.py
+  - tests/backend/test_app_factory.py
+  - web/package.json
+  - web/package-lock.json
+  - web/src/types.ts
+  - web/src/lib/api.ts
+  - web/src/state/app-state.ts
+  - web/src/router.ts
+  - web/src/views/InputView.vue
+  - web/src/views/AnalysisView.vue
+  - web/src/views/QuestionsView.vue
+  - web/src/views/OutputsView.vue
+  - web/src/App.vue
+  - web/src/main.ts
+  - web/src/style.css
+  - web/src/App.test.ts
+  - app/services/analysis.py
+  - app/services/reporting.py
+  - app/api/routes/demo.py
+  - app/core/application.py
+  - tests/backend/test_analysis.py
+  module_refs: []
+  keywords:
+  - implement
+  - plan
+  - update
+  - docs
+  - roadmapmd
+  - deterministic
+  - application
+  - pack
+  - generation
+  - backend
+  - outputs
+  - adopt
+- kind: verification
+  id: verify-0969a44a32
+  task: 'Extend v0.2 into a full UX/UI overhaul for the routed web app: choose a stronger
+    frontend architecture, redesign the information architecture and interaction model,
+    then implement the overhaul while preserving the evidence-first workflow and deterministic
+    backend contracts.'
+  status_or_result: pass_with_risks
+  timestamp: '2026-05-16T12:28:37.065737+00:00'
+  summary: Overhauled the frontend into a workflow-shell architecture with Workspace,
+    Review, and Drafts phases, reusable review/drafts components, URL-driven draft
+    selection, legacy route redirects, and updated tests/build verification.
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/package.json
+  - web/package-lock.json
+  - web/src/App.vue
+  - web/src/main.ts
+  - web/src/router.ts
+  - web/src/state/app-state.ts
+  - web/src/types.ts
+  - web/src/lib/api.ts
+  - web/src/style.css
+  - web/src/App.test.ts
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  module_refs: []
+  keywords:
+  - extend
+  - into
+  - full
+  - overhaul
+  - routed
+  - choose
+  - stronger
+  - frontend
+  - architecture
+  - redesign
+  - information
+  - interaction
+- kind: verification
+  id: verify-c09b8678bf
+  task: Refine the new web UI so it is visually coherent, simpler to navigate, less
+    text-heavy, smaller in typography scale, and more attractive; remove unnecessary
+    legacy compatibility paths/files since the current user is the only user.
+  status_or_result: pass_with_risks
+  timestamp: '2026-05-16T12:51:55.430078+00:00'
+  summary: Simplified the routed web shell into a compact top navigation layout, reduced
+    typography scale and copy density across workspace/review/drafts, removed legacy
+    compatibility routes, and updated frontend tests to the new direct route model.
+  file_refs:
+  - .haxaml/facts.yaml
+  - .haxaml/rules.yaml
+  - .haxaml/acts.yaml
+  - web/src/router.ts
+  - web/src/components/layout/WorkflowShell.vue
+  - web/src/pages/WorkspacePage.vue
+  - web/src/pages/ReviewPage.vue
+  - web/src/pages/DraftsPage.vue
+  - web/src/components/review/EvidenceMapBoard.vue
+  - web/src/components/review/FollowUpQuestionsPanel.vue
+  - web/src/components/drafts/DraftStudio.vue
+  - web/src/style.css
+  - web/src/App.test.ts
+  module_refs: []
+  keywords:
+  - refine
+  - visually
+  - coherent
+  - simpler
+  - navigate
+  - less
+  - text
+  - heavy
+  - smaller
+  - typography
+  - scale
+  - more
+history:
+  runs:
+  - id: run-63abb035
+    task: Implement the minimal Vue 3 + Vite + TypeScript frontend and FastAPI backend
+      evidence-first slice with a shared deterministic Python service layer, CLI wrapper,
+      API endpoints, fixture-based tests, and Markdown/JSON reporting.
+    result: success
+    changes: Scaffolded a new Python runtime package under app/ with Pydantic schemas,
+      deterministic CV/JD parsing, evidence mapping, Markdown reporting, FastAPI endpoints,
+      and a thin CLI wrapper. Added backend pytest coverage for PDF/TXT parsing, workflow
+      analysis, reporting, and API endpoints. Scaffolded a Vue 3 + Vite + TypeScript
+      single-page frontend under web/ with upload, JD paste, analysis, results, and
+      JSON/Markdown download flows, plus Vitest coverage and production build support.
+    decisions: Kept the slice stateless and deterministic with no database, auth,
+      or model calls. Used pdftotext for PDF extraction, .env file inspection for
+      llm_configured, and one shared workflow function so CLI and API behavior stay
+      aligned.
+    risks: The deterministic matcher is heuristic and intentionally conservative,
+      so some JD requirements may be over-broad or under-matched until later slices
+      refine requirement classification. Full browser-driven manual acceptance was
+      not run in this session; verification relied on pytest, Vitest, Vite build,
+      and a CLI fixture run.
+    timestamp: '2026-05-16T00:06:30.420065+00:00'
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - .gitignore
+    - pyproject.toml
+    - app/__init__.py
+    - app/api/__init__.py
+    - app/api/server.py
+    - app/cli.py
+    - app/schemas.py
+    - app/services/__init__.py
+    - app/services/analysis.py
+    - app/services/documents.py
+    - app/services/reporting.py
+    - app/services/workflow.py
+    - tests/backend/test_analysis.py
+    - tests/backend/test_api.py
+    - tests/backend/test_documents.py
+    - web/index.html
+    - web/package-lock.json
+    - web/package.json
+    - web/src/App.test.ts
+    - web/src/App.vue
+    - web/src/lib/api.ts
+    - web/src/main.ts
+    - web/src/style.css
+    - web/src/test-setup.ts
+    - web/src/types.ts
+    - web/src/vite-env.d.ts
+    - web/tsconfig.json
+    - web/vite.config.ts
+    - AGENTS.md
+    - docs/HAXJOBS_AGENT_WORKFLOW_BLUEPRINT.md
+    - .haxaml/expect.yaml
+    - tests/jd/60x.txt
+    - tests/cv/Arinze_Agent_engineer_cv.pdf
+    module_refs: []
+    verification_id: verify-f60c7fc44b
+    keywords:
+    - implement
+    - minimal
+    - vite
+    - typescript
+    - frontend
+    - fastapi
+    - backend
+    - evidence
+    - first
+    - slice
+    - with
+    - shared
+  - id: run-46ac25c9
+    task: 'Implement the planned repo usability slice: add scripts/dev.sh runner,
+      refactor FastAPI app structure into app/main.py with route/service/model layering
+      and demo endpoints, fix frontend local API wiring and backend health UX, add
+      demo analysis flow and results filtering, update tests, and verify end-to-end.'
+    result: success
+    changes: 'Backend: introduced app/main.py create_app(), app/core config/setup,
+      route modules for health/analysis/demo, model modules for analysis and health,
+      demo fixture service, metadata-aware reporting, and compatibility exports through
+      app/schemas.py and app/api/server.py. Tooling: added scripts/dev.sh and .run
+      ignore handling. Frontend: added API client helpers, Vite /api proxy, backend
+      health banner, mode persistence, demo analysis flow, clearer backend-unavailable
+      errors, and filterable/expandable results UI. Tests: expanded pytest coverage
+      for factory, health env state, demo endpoints, and Vitest coverage for health
+      states, API URL resolution, demo flow, unavailable backend handling, session
+      restore, and result filtering.'
+    decisions: Kept the deterministic analysis engine unchanged by continuing to ignore
+      mode inside the scoring workflow while still returning the chosen mode in response
+      metadata. Exposed only a small whitelist of existing fixture files through the
+      demo endpoints. Used detached shell wrappers in scripts/dev.sh so the tracked
+      PIDs remain alive after the launcher exits.
+    risks: Haxaml verification returned pass_with_risks with one failed check but
+      no additional follow-up detail. The frontend copy action assumes navigator.clipboard
+      is available in the browser context; unsupported environments would need a fallback
+      if that becomes a real requirement.
+    timestamp: '2026-05-16T02:35:05.084118+00:00'
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - app/main.py
+    - main.py
+    - app/core/config.py
+    - app/core/application.py
+    - app/api/routes/health.py
+    - app/api/routes/analysis.py
+    - app/api/routes/demo.py
+    - app/models/analysis.py
+    - app/models/health.py
+    - app/services/demo_fixtures.py
+    - app/services/workflow.py
+    - app/services/reporting.py
+    - app/services/analysis.py
+    - app/cli.py
+    - app/api/server.py
+    - app/api/__init__.py
+    - app/schemas.py
+    - pyproject.toml
+    - scripts/dev.sh
+    - .gitignore
+    - web/vite.config.ts
+    - web/src/lib/api.ts
+    - web/src/types.ts
+    - web/src/App.vue
+    - web/src/style.css
+    - web/src/App.test.ts
+    - web/src/lib/api.test.ts
+    - tests/backend/test_api.py
+    - tests/backend/test_app_factory.py
+    - AGENTS.md
+    - .agents/skills/haxaml/SKILL.md
+    - app/services/documents.py
+    - tests/backend/test_analysis.py
+    - tests/backend/test_documents.py
+    module_refs: []
+    verification_id: verify-c5e16ba5f1
+    keywords:
+    - implement
+    - planned
+    - repo
+    - usability
+    - slice
+    - scripts
+    - devsh
+    - runner
+    - refactor
+    - fastapi
+    - structure
+    - into
+  - id: run-57cb1d76
+    task: 'Implement the v0.2 plan: update docs/ROADMAP.md, add deterministic application-pack
+      generation to backend and CLI outputs, adopt vue-router with routed dashboard
+      views, lightweight persisted frontend app state, route guards, and tests.'
+    result: success
+    changes: Added POST /api/generate-application-pack, deterministic generation services,
+      CLI writing of tailored output artifacts, vue-router routes for input/analysis/questions/outputs,
+      sessionStorage-backed app state, tabbed outputs UI, and targeted backend/frontend
+      tests.
+    decisions: Kept /api/analyze and /api/analyze-demo response shapes stable, implemented
+      interview-mode blocking in route guards using high-priority follow-up questions,
+      and kept generation template-driven instead of introducing AI-assisted rewriting.
+    risks: Python verification depends on the local .venv created for this run because
+      the system Python environment is externally managed. The frontend still uses
+      lightweight local session state rather than server-side persistence, which matches
+      scope but limits cross-device continuity.
+    timestamp: '2026-05-16T12:01:41.338562+00:00'
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - docs/ROADMAP.md
+    - app/models/analysis.py
+    - app/services/generation.py
+    - app/services/workflow.py
+    - app/api/routes/analysis.py
+    - app/cli.py
+    - tests/backend/test_api.py
+    - tests/backend/test_generation.py
+    - tests/backend/test_cli.py
+    - tests/backend/test_app_factory.py
+    - web/package.json
+    - web/package-lock.json
+    - web/src/types.ts
+    - web/src/lib/api.ts
+    - web/src/state/app-state.ts
+    - web/src/router.ts
+    - web/src/views/InputView.vue
+    - web/src/views/AnalysisView.vue
+    - web/src/views/QuestionsView.vue
+    - web/src/views/OutputsView.vue
+    - web/src/App.vue
+    - web/src/main.ts
+    - web/src/style.css
+    - web/src/App.test.ts
+    - app/services/analysis.py
+    - app/services/reporting.py
+    - app/api/routes/demo.py
+    - app/core/application.py
+    - tests/backend/test_analysis.py
+    module_refs: []
+    verification_id: verify-a945ae8d95
+    keywords:
+    - implement
+    - plan
+    - update
+    - docs
+    - roadmapmd
+    - deterministic
+    - application
+    - pack
+    - generation
+    - backend
+    - outputs
+    - adopt
+  - id: run-1c7bdf47
+    task: 'Extend v0.2 into a full UX/UI overhaul for the routed web app: choose a
+      stronger frontend architecture, redesign the information architecture and interaction
+      model, then implement the overhaul while preserving the evidence-first workflow
+      and deterministic backend contracts.'
+    result: success
+    changes: Replaced the thin routed shell with a workflow dashboard shell, consolidated
+      the IA to Workspace/Review/Drafts, merged follow-up resolution into Review,
+      moved draft selection into the URL, added reusable frontend components/pages,
+      removed stale legacy views, and updated the frontend tests to the new route
+      model.
+    decisions: Chose a modular component-and-page architecture without adding new
+      frontend state/query dependencies, preserved backend API contracts, and kept
+      legacy paths working via redirects instead of breaking the existing URL surface.
+    risks: The overhaul still uses the lightweight in-repo state module rather than
+      a dedicated state/query library, which keeps scope down but leaves some orchestration
+      logic client-managed. Full markdown rendering is still plain-text preview based,
+      so richer document rendering remains a future enhancement.
+    timestamp: '2026-05-16T12:28:37.486069+00:00'
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - web/package.json
+    - web/package-lock.json
+    - web/src/App.vue
+    - web/src/main.ts
+    - web/src/router.ts
+    - web/src/state/app-state.ts
+    - web/src/types.ts
+    - web/src/lib/api.ts
+    - web/src/style.css
+    - web/src/App.test.ts
+    - web/src/components/layout/WorkflowShell.vue
+    - web/src/components/review/EvidenceMapBoard.vue
+    - web/src/components/review/FollowUpQuestionsPanel.vue
+    - web/src/components/drafts/DraftStudio.vue
+    - web/src/pages/WorkspacePage.vue
+    - web/src/pages/ReviewPage.vue
+    - web/src/pages/DraftsPage.vue
+    module_refs: []
+    verification_id: verify-0969a44a32
+    keywords:
+    - extend
+    - into
+    - full
+    - overhaul
+    - routed
+    - choose
+    - stronger
+    - frontend
+    - architecture
+    - redesign
+    - information
+    - interaction
+  - id: run-695b8729
+    task: Refine the new web UI so it is visually coherent, simpler to navigate, less
+      text-heavy, smaller in typography scale, and more attractive; remove unnecessary
+      legacy compatibility paths/files since the current user is the only user.
+    result: success
+    changes: Replaced the heavier shell with a compact topbar workflow shell, rewrote
+      the main stylesheet for smaller typography and calmer spacing, shortened verbose
+      copy across workspace/review/drafts, removed legacy route aliases from the router,
+      and updated frontend tests to the new route and label set.
+    decisions: Kept the three-route workflow model (Workspace, Review, Drafts) but
+      removed backward-compatibility paths because the user explicitly does not need
+      them. Favored a restrained card-and-topbar visual system over the earlier denser
+      dashboard language.
+    risks: The UI is materially cleaner and smaller, but styling still lives in a
+      shared global stylesheet rather than fully component-scoped styles. Draft preview
+      remains plain-text/markdown rather than a richer rendered document view.
+    timestamp: '2026-05-16T12:51:55.883472+00:00'
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - web/src/router.ts
+    - web/src/components/layout/WorkflowShell.vue
+    - web/src/pages/WorkspacePage.vue
+    - web/src/pages/ReviewPage.vue
+    - web/src/pages/DraftsPage.vue
+    - web/src/components/review/EvidenceMapBoard.vue
+    - web/src/components/review/FollowUpQuestionsPanel.vue
+    - web/src/components/drafts/DraftStudio.vue
+    - web/src/style.css
+    - web/src/App.test.ts
+    module_refs: []
+    verification_id: verify-c09b8678bf
+    keywords:
+    - refine
+    - visually
+    - coherent
+    - simpler
+    - navigate
+    - less
+    - text
+    - heavy
+    - smaller
+    - typography
+    - scale
+    - more
+  sessions:
+  - id: session-ffc98dcfc3
+    task: Implement the minimal Vue 3 + Vite + TypeScript frontend and FastAPI backend
+      evidence-first slice with a shared deterministic Python service layer, CLI wrapper,
+      API endpoints, fixture-based tests, and Markdown/JSON reporting.
+    description: Fresh implementation based on an existing approved plan for the first
+      workflow-first web slice.
+    execution_mode: governed
+    status: recorded
+    phase: record
+    risk_level: low
+    task_type: testing
+    guidance_type: implementation
+    readiness_status: ready_to_build_with_warnings
+    started: '2026-05-15T23:54:27.518799+00:00'
+    updated: '2026-05-16T00:06:30.609604+00:00'
+    plan:
+    - Review the readiness report and clarify any required questions.
+    - Call haxaml_context_pack to load task-scoped context.
+    - Apply the smallest logical change set within the scoped files.
+    - Run validations or tests for touched behavior.
+    - Call haxaml_session_verify before haxaml_session_record.
+    required_questions:
+    - What behavior should the tests cover?
+    - Are these unit tests, integration tests, or end-to-end tests?
+    - Should existing tests be extended or are these new tests?
+    - What does a passing test look like?
+    materials_needed:
+    - the code to be tested
+    - existing test files if extending
+    - test configuration or fixtures
+    done_criteria:
+    - tests cover the specified behavior
+    - tests pass in CI
+    - test names clearly describe what they verify
+    - no production code is changed as a side effect
+    likely_impact:
+    - test files
+    - test fixtures
+    - possibly test configuration
+    risks:
+    - tests that pass but do not actually verify the intended behavior
+    - over-mocking that hides real integration issues
+    missing_context: []
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - .gitignore
+    - pyproject.toml
+    - app/__init__.py
+    - app/api/__init__.py
+    - app/api/server.py
+    - app/cli.py
+    - app/schemas.py
+    - app/services/__init__.py
+    - app/services/analysis.py
+    - app/services/documents.py
+    - app/services/reporting.py
+    - app/services/workflow.py
+    - tests/backend/test_analysis.py
+    - tests/backend/test_api.py
+    - tests/backend/test_documents.py
+    - web/index.html
+    - web/package-lock.json
+    - web/package.json
+    - web/src/App.test.ts
+    - web/src/App.vue
+    - web/src/lib/api.ts
+    - web/src/main.ts
+    - web/src/style.css
+    - web/src/test-setup.ts
+    - web/src/types.ts
+    - web/src/vite-env.d.ts
+    - web/tsconfig.json
+    - web/vite.config.ts
+    - AGENTS.md
+    - docs/HAXJOBS_AGENT_WORKFLOW_BLUEPRINT.md
+    - .haxaml/expect.yaml
+    - tests/jd/60x.txt
+    - tests/cv/Arinze_Agent_engineer_cv.pdf
+    module_refs: []
+    keywords:
+    - implement
+    - minimal
+    - vite
+    - typescript
+    - frontend
+    - fastapi
+    - backend
+    - evidence
+    - first
+    - slice
+    - with
+    - shared
+    context_pack_calls: 1
+    last_context_pack_at: '2026-05-15T23:54:36.140714+00:00'
+    last_context_pack_reason: Fresh context for implementation from approved plan.
+    last_context_pack_reason_category: other_context_shift
+    ended: '2026-05-16T00:06:30.609608+00:00'
+    verification_id: verify-f60c7fc44b
+  - id: session-fd83033992
+    task: 'Implement the planned repo usability slice: add scripts/dev.sh runner,
+      refactor FastAPI app structure into app/main.py with route/service/model layering
+      and demo endpoints, fix frontend local API wiring and backend health UX, add
+      demo analysis flow and results filtering, update tests, and verify end-to-end.'
+    description: Carry the provided plan through implementation and verification in
+      one pass.
+    execution_mode: governed
+    status: recorded
+    phase: record
+    risk_level: medium
+    task_type: api_endpoint
+    guidance_type: implementation
+    readiness_status: ready_to_build_with_warnings
+    started: '2026-05-16T02:19:15.225799+00:00'
+    updated: '2026-05-16T02:35:05.511404+00:00'
+    plan:
+    - Review the readiness report and clarify any required questions.
+    - Call haxaml_context_pack to load task-scoped context.
+    - Apply the smallest logical change set within the scoped files.
+    - Run validations or tests for touched behavior.
+    - Call haxaml_session_verify before haxaml_session_record.
+    required_questions:
+    - What HTTP method and path should this endpoint use?
+    - What input does it expect and what does it return?
+    - Are there authentication or permission requirements?
+    - Does a similar endpoint already exist?
+    materials_needed:
+    - route structure or router file
+    - request and response schema
+    - auth or permission middleware
+    - existing similar endpoints for reference
+    done_criteria:
+    - endpoint responds correctly to valid input
+    - auth requirements are enforced
+    - error cases return appropriate status codes
+    - endpoint is tested
+    likely_impact:
+    - router or URL config
+    - handler or controller
+    - serializer or schema
+    - auth middleware
+    - tests
+    risks:
+    - missing auth check on a protected resource
+    - breaking change to an existing API contract
+    - unvalidated input reaching the handler
+    missing_context: []
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - app/main.py
+    - main.py
+    - app/core/config.py
+    - app/core/application.py
+    - app/api/routes/health.py
+    - app/api/routes/analysis.py
+    - app/api/routes/demo.py
+    - app/models/analysis.py
+    - app/models/health.py
+    - app/services/demo_fixtures.py
+    - app/services/workflow.py
+    - app/services/reporting.py
+    - app/services/analysis.py
+    - app/cli.py
+    - app/api/server.py
+    - app/api/__init__.py
+    - app/schemas.py
+    - pyproject.toml
+    - scripts/dev.sh
+    - .gitignore
+    - web/vite.config.ts
+    - web/src/lib/api.ts
+    - web/src/types.ts
+    - web/src/App.vue
+    - web/src/style.css
+    - web/src/App.test.ts
+    - web/src/lib/api.test.ts
+    - tests/backend/test_api.py
+    - tests/backend/test_app_factory.py
+    - AGENTS.md
+    - .agents/skills/haxaml/SKILL.md
+    - app/services/documents.py
+    - tests/backend/test_analysis.py
+    - tests/backend/test_documents.py
+    module_refs: []
+    keywords:
+    - implement
+    - planned
+    - repo
+    - usability
+    - slice
+    - scripts
+    - devsh
+    - runner
+    - refactor
+    - fastapi
+    - structure
+    - into
+    context_pack_calls: 1
+    last_context_pack_at: '2026-05-16T02:19:24.775021+00:00'
+    last_context_pack_reason: ''
+    last_context_pack_reason_category: ''
+    ended: '2026-05-16T02:35:05.511411+00:00'
+    verification_id: verify-c5e16ba5f1
+  - id: session-8a18f1c920
+    task: 'Implement the v0.2 plan: update docs/ROADMAP.md, add deterministic application-pack
+      generation to backend and CLI outputs, adopt vue-router with routed dashboard
+      views, lightweight persisted frontend app state, route guards, and tests.'
+    description: Resume in fresh context from the prior governed session and implement
+      the planned v0.2 slice end-to-end.
+    execution_mode: governed
+    status: recorded
+    phase: record
+    risk_level: low
+    task_type: frontend_feature
+    guidance_type: implementation
+    readiness_status: ready_to_build_with_warnings
+    started: '2026-05-16T11:46:09.395625+00:00'
+    updated: '2026-05-16T12:01:41.716527+00:00'
+    plan:
+    - Review the readiness report and clarify any required questions.
+    - Call haxaml_context_pack to load task-scoped context.
+    - Apply the smallest logical change set within the scoped files.
+    - Run validations or tests for touched behavior.
+    - Call haxaml_session_verify before haxaml_session_record.
+    required_questions:
+    - What does this feature look like and how does the user interact with it?
+    - Does it require new API calls or can it use existing data?
+    - Are there design mockups or specifications?
+    - Which existing components or pages does it relate to?
+    materials_needed:
+    - design spec or mockup if available
+    - existing component structure
+    - API endpoints the feature depends on
+    done_criteria:
+    - feature renders and behaves as specified
+    - no existing UI is broken
+    - API calls are correctly handled
+    - basic interaction tests pass if the project has them
+    likely_impact:
+    - component files
+    - page or route files
+    - styles or CSS
+    - API integration layer
+    risks:
+    - feature depends on API that does not yet exist
+    - visual regression in adjacent components
+    missing_context: []
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - docs/ROADMAP.md
+    - app/models/analysis.py
+    - app/services/generation.py
+    - app/services/workflow.py
+    - app/api/routes/analysis.py
+    - app/cli.py
+    - tests/backend/test_api.py
+    - tests/backend/test_generation.py
+    - tests/backend/test_cli.py
+    - tests/backend/test_app_factory.py
+    - web/package.json
+    - web/package-lock.json
+    - web/src/types.ts
+    - web/src/lib/api.ts
+    - web/src/state/app-state.ts
+    - web/src/router.ts
+    - web/src/views/InputView.vue
+    - web/src/views/AnalysisView.vue
+    - web/src/views/QuestionsView.vue
+    - web/src/views/OutputsView.vue
+    - web/src/App.vue
+    - web/src/main.ts
+    - web/src/style.css
+    - web/src/App.test.ts
+    - app/services/analysis.py
+    - app/services/reporting.py
+    - app/api/routes/demo.py
+    - app/core/application.py
+    - tests/backend/test_analysis.py
+    module_refs: []
+    keywords:
+    - implement
+    - plan
+    - update
+    - docs
+    - roadmapmd
+    - deterministic
+    - application
+    - pack
+    - generation
+    - backend
+    - outputs
+    - adopt
+    context_pack_calls: 1
+    last_context_pack_at: '2026-05-16T11:46:20.364569+00:00'
+    last_context_pack_reason: ''
+    last_context_pack_reason_category: ''
+    ended: '2026-05-16T12:01:41.716530+00:00'
+    verification_id: verify-a945ae8d95
+  - id: session-fedd1b92d7
+    task: 'Extend v0.2 into a full UX/UI overhaul for the routed web app: choose a
+      stronger frontend architecture, redesign the information architecture and interaction
+      model, then implement the overhaul while preserving the evidence-first workflow
+      and deterministic backend contracts.'
+    description: User explicitly requested subagents to evaluate architecture first,
+      then draft the work, then implement using gpt-5.3-codex at high reasoning.
+    execution_mode: governed
+    status: recorded
+    phase: record
+    risk_level: low
+    task_type: frontend_feature
+    guidance_type: implementation
+    readiness_status: ready_to_build_with_warnings
+    started: '2026-05-16T12:15:24.790131+00:00'
+    updated: '2026-05-16T12:28:37.970347+00:00'
+    plan:
+    - Review the readiness report and clarify any required questions.
+    - Call haxaml_context_pack to load task-scoped context.
+    - Apply the smallest logical change set within the scoped files.
+    - Run validations or tests for touched behavior.
+    - Call haxaml_session_verify before haxaml_session_record.
+    required_questions:
+    - What does this feature look like and how does the user interact with it?
+    - Does it require new API calls or can it use existing data?
+    - Are there design mockups or specifications?
+    - Which existing components or pages does it relate to?
+    materials_needed:
+    - design spec or mockup if available
+    - existing component structure
+    - API endpoints the feature depends on
+    done_criteria:
+    - feature renders and behaves as specified
+    - no existing UI is broken
+    - API calls are correctly handled
+    - basic interaction tests pass if the project has them
+    likely_impact:
+    - component files
+    - page or route files
+    - styles or CSS
+    - API integration layer
+    risks:
+    - feature depends on API that does not yet exist
+    - visual regression in adjacent components
+    missing_context: []
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - web/package.json
+    - web/package-lock.json
+    - web/src/App.vue
+    - web/src/main.ts
+    - web/src/router.ts
+    - web/src/state/app-state.ts
+    - web/src/types.ts
+    - web/src/lib/api.ts
+    - web/src/style.css
+    - web/src/App.test.ts
+    - web/src/components/layout/WorkflowShell.vue
+    - web/src/components/review/EvidenceMapBoard.vue
+    - web/src/components/review/FollowUpQuestionsPanel.vue
+    - web/src/components/drafts/DraftStudio.vue
+    - web/src/pages/WorkspacePage.vue
+    - web/src/pages/ReviewPage.vue
+    - web/src/pages/DraftsPage.vue
+    module_refs: []
+    keywords:
+    - extend
+    - into
+    - full
+    - overhaul
+    - routed
+    - choose
+    - stronger
+    - frontend
+    - architecture
+    - redesign
+    - information
+    - interaction
+    context_pack_calls: 1
+    last_context_pack_at: '2026-05-16T12:15:42.270994+00:00'
+    last_context_pack_reason: ''
+    last_context_pack_reason_category: ''
+    context_fetch_calls: 1
+    last_context_fetch_at: '2026-05-16T12:19:11.211671+00:00'
+    last_context_fetch_query: frontend route model /, /review, /drafts, guard semantics,
+      interview-mode gating, persistence, tests and build requirements in web/src
+    last_context_fetch_sources:
+    - facts
+    - rules
+    - acts
+    - archived_acts
+    - expect
+    - map
+    - file_refs
+    ended: '2026-05-16T12:28:37.970350+00:00'
+    verification_id: verify-0969a44a32
+  - id: session-04954bbb55
+    task: Refine the new web UI so it is visually coherent, simpler to navigate, less
+      text-heavy, smaller in typography scale, and more attractive; remove unnecessary
+      legacy compatibility paths/files since the current user is the only user.
+    description: 'User wants the UI itself improved: smaller typography, simpler navigation,
+      less text, coherent styling, and no legacy compatibility baggage.'
+    execution_mode: governed
+    status: recorded
+    phase: record
+    risk_level: low
+    task_type: frontend_feature
+    guidance_type: implementation
+    readiness_status: ready_to_build_with_warnings
+    started: '2026-05-16T12:45:38.887685+00:00'
+    updated: '2026-05-16T12:51:56.481563+00:00'
+    plan:
+    - Review the readiness report and clarify any required questions.
+    - Call haxaml_context_pack to load task-scoped context.
+    - Apply the smallest logical change set within the scoped files.
+    - Run validations or tests for touched behavior.
+    - Call haxaml_session_verify before haxaml_session_record.
+    required_questions:
+    - What does this feature look like and how does the user interact with it?
+    - Does it require new API calls or can it use existing data?
+    - Are there design mockups or specifications?
+    - Which existing components or pages does it relate to?
+    materials_needed:
+    - design spec or mockup if available
+    - existing component structure
+    - API endpoints the feature depends on
+    done_criteria:
+    - feature renders and behaves as specified
+    - no existing UI is broken
+    - API calls are correctly handled
+    - basic interaction tests pass if the project has them
+    likely_impact:
+    - component files
+    - page or route files
+    - styles or CSS
+    - API integration layer
+    risks:
+    - feature depends on API that does not yet exist
+    - visual regression in adjacent components
+    missing_context: []
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - web/src/router.ts
+    - web/src/components/layout/WorkflowShell.vue
+    - web/src/pages/WorkspacePage.vue
+    - web/src/pages/ReviewPage.vue
+    - web/src/pages/DraftsPage.vue
+    - web/src/components/review/EvidenceMapBoard.vue
+    - web/src/components/review/FollowUpQuestionsPanel.vue
+    - web/src/components/drafts/DraftStudio.vue
+    - web/src/style.css
+    - web/src/App.test.ts
+    module_refs: []
+    keywords:
+    - refine
+    - visually
+    - coherent
+    - simpler
+    - navigate
+    - less
+    - text
+    - heavy
+    - smaller
+    - typography
+    - scale
+    - more
+    context_pack_calls: 1
+    last_context_pack_at: '2026-05-16T12:45:53.517442+00:00'
+    last_context_pack_reason: ''
+    last_context_pack_reason_category: ''
+    ended: '2026-05-16T12:51:56.481566+00:00'
+    verification_id: verify-c09b8678bf
+  verifications:
+  - id: verify-f60c7fc44b
+    session_id: session-ffc98dcfc3
+    task: Implement the minimal Vue 3 + Vite + TypeScript frontend and FastAPI backend
+      evidence-first slice with a shared deterministic Python service layer, CLI wrapper,
+      API endpoints, fixture-based tests, and Markdown/JSON reporting.
+    verdict: pass
+    summary: Implemented the shared deterministic analysis workflow, FastAPI API,
+      CLI wrapper, fixture-based pytest coverage, Vue/Vite single-page frontend, Vitest
+      coverage, and verified the CLI plus frontend production build.
+    unresolved_questions:
+    - No full browser-driven manual acceptance session was run; verification covered
+      pytest, Vitest, Vite build, and a real CLI fixture run instead.
+    assumptions:
+    - Slice 1 remains deterministic and ignores the mode argument for analysis behavior.
+    - The health endpoint should treat llm_configured as whether .env contains OPENAI_API_KEY
+      rather than calling any model.
+    - The CLI should always write default JSON and Markdown artifacts into outputs/
+      when explicit paths are omitted.
+    follow_ups: []
+    checks:
+    - name: understood_task
+      passed: true
+      details: Task text was provided.
+    - name: inspected_context
+      passed: true
+      details: Inspected context includes required reads.
+    - name: changed_right_files
+      passed: true
+      details: Changed files or summary evidence was provided.
+    - name: risky_or_unrelated_touch
+      passed: true
+      details: No risky file patterns were reported.
+    - name: followed_rules
+      passed: true
+      details: No forbidden risky path was reported.
+    - name: updated_journal
+      passed: true
+      details: Journal update is enforced at session_record stage.
+    - name: unresolved_logged
+      passed: true
+      details: Unresolved items were explicitly captured or not required.
+    - name: explained_changes
+      passed: true
+      details: Summary explains what changed and why.
+    evidence_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - .gitignore
+    - pyproject.toml
+    - app/__init__.py
+    - app/api/__init__.py
+    - app/api/server.py
+    - app/cli.py
+    - app/schemas.py
+    - app/services/__init__.py
+    - app/services/analysis.py
+    - app/services/documents.py
+    - app/services/reporting.py
+    - app/services/workflow.py
+    - tests/backend/test_analysis.py
+    - tests/backend/test_api.py
+    - tests/backend/test_documents.py
+    - web/index.html
+    - web/package-lock.json
+    - web/package.json
+    - web/src/App.test.ts
+    - web/src/App.vue
+    - web/src/lib/api.ts
+    - web/src/main.ts
+    - web/src/style.css
+    - web/src/test-setup.ts
+    - web/src/types.ts
+    - web/src/vite-env.d.ts
+    - web/tsconfig.json
+    - web/vite.config.ts
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - .gitignore
+    - pyproject.toml
+    - app/__init__.py
+    - app/api/__init__.py
+    - app/api/server.py
+    - app/cli.py
+    - app/schemas.py
+    - app/services/__init__.py
+    - app/services/analysis.py
+    - app/services/documents.py
+    - app/services/reporting.py
+    - app/services/workflow.py
+    - tests/backend/test_analysis.py
+    - tests/backend/test_api.py
+    - tests/backend/test_documents.py
+    - web/index.html
+    - web/package-lock.json
+    - web/package.json
+    - web/src/App.test.ts
+    - web/src/App.vue
+    - web/src/lib/api.ts
+    - web/src/main.ts
+    - web/src/style.css
+    - web/src/test-setup.ts
+    - web/src/types.ts
+    - web/src/vite-env.d.ts
+    - web/tsconfig.json
+    - web/vite.config.ts
+    - AGENTS.md
+    - docs/HAXJOBS_AGENT_WORKFLOW_BLUEPRINT.md
+    - .haxaml/expect.yaml
+    - tests/jd/60x.txt
+    - tests/cv/Arinze_Agent_engineer_cv.pdf
+    module_refs: []
+    keywords:
+    - implement
+    - minimal
+    - vite
+    - typescript
+    - frontend
+    - fastapi
+    - backend
+    - evidence
+    - first
+    - slice
+    - with
+    - shared
+    timestamp: '2026-05-16T00:06:22.558034+00:00'
+  - id: verify-c5e16ba5f1
+    session_id: session-fd83033992
+    task: 'Implement the planned repo usability slice: add scripts/dev.sh runner,
+      refactor FastAPI app structure into app/main.py with route/service/model layering
+      and demo endpoints, fix frontend local API wiring and backend health UX, add
+      demo analysis flow and results filtering, update tests, and verify end-to-end.'
+    verdict: pass_with_risks
+    summary: Implemented the backend app factory and route/model split, added demo
+      fixture endpoints and response metadata, added the repo-local dev runner, switched
+      the web app to relative /api calls with a Vite proxy and health-aware UX, and
+      expanded backend/frontend tests.
+    unresolved_questions: []
+    assumptions:
+    - Existing repo fixtures under tests/cv and tests/jd are safe to expose as a dev/demo-only
+      whitelist.
+    - The deterministic analysis pipeline should keep ignoring the selected mode for
+      scoring behavior in this pass while still returning the chosen mode in metadata.
+    follow_ups: []
+    checks:
+    - name: understood_task
+      passed: true
+      details: Task text was provided.
+    - name: inspected_context
+      passed: false
+      details: Inspected context includes required reads.
+    - name: changed_right_files
+      passed: true
+      details: Changed files or summary evidence was provided.
+    - name: risky_or_unrelated_touch
+      passed: true
+      details: No risky file patterns were reported.
+    - name: followed_rules
+      passed: true
+      details: No forbidden risky path was reported.
+    - name: updated_journal
+      passed: true
+      details: Journal update is enforced at session_record stage.
+    - name: unresolved_logged
+      passed: true
+      details: Unresolved items were explicitly captured or not required.
+    - name: explained_changes
+      passed: true
+      details: Summary explains what changed and why.
+    evidence_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - app/main.py
+    - main.py
+    - app/core/config.py
+    - app/core/application.py
+    - app/api/routes/health.py
+    - app/api/routes/analysis.py
+    - app/api/routes/demo.py
+    - app/models/analysis.py
+    - app/models/health.py
+    - app/services/demo_fixtures.py
+    - app/services/workflow.py
+    - app/services/reporting.py
+    - app/services/analysis.py
+    - app/cli.py
+    - app/api/server.py
+    - app/api/__init__.py
+    - app/schemas.py
+    - pyproject.toml
+    - scripts/dev.sh
+    - .gitignore
+    - web/vite.config.ts
+    - web/src/lib/api.ts
+    - web/src/types.ts
+    - web/src/App.vue
+    - web/src/style.css
+    - web/src/App.test.ts
+    - web/src/lib/api.test.ts
+    - tests/backend/test_api.py
+    - tests/backend/test_app_factory.py
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - app/main.py
+    - main.py
+    - app/core/config.py
+    - app/core/application.py
+    - app/api/routes/health.py
+    - app/api/routes/analysis.py
+    - app/api/routes/demo.py
+    - app/models/analysis.py
+    - app/models/health.py
+    - app/services/demo_fixtures.py
+    - app/services/workflow.py
+    - app/services/reporting.py
+    - app/services/analysis.py
+    - app/cli.py
+    - app/api/server.py
+    - app/api/__init__.py
+    - app/schemas.py
+    - pyproject.toml
+    - scripts/dev.sh
+    - .gitignore
+    - web/vite.config.ts
+    - web/src/lib/api.ts
+    - web/src/types.ts
+    - web/src/App.vue
+    - web/src/style.css
+    - web/src/App.test.ts
+    - web/src/lib/api.test.ts
+    - tests/backend/test_api.py
+    - tests/backend/test_app_factory.py
+    - AGENTS.md
+    - .agents/skills/haxaml/SKILL.md
+    - app/services/documents.py
+    - tests/backend/test_analysis.py
+    - tests/backend/test_documents.py
+    module_refs: []
+    keywords:
+    - implement
+    - planned
+    - repo
+    - usability
+    - slice
+    - scripts
+    - devsh
+    - runner
+    - refactor
+    - fastapi
+    - structure
+    - into
+    timestamp: '2026-05-16T02:34:44.561587+00:00'
+  - id: verify-a945ae8d95
+    session_id: session-8a18f1c920
+    task: 'Implement the v0.2 plan: update docs/ROADMAP.md, add deterministic application-pack
+      generation to backend and CLI outputs, adopt vue-router with routed dashboard
+      views, lightweight persisted frontend app state, route guards, and tests.'
+    verdict: pass_with_risks
+    summary: Implemented deterministic application-pack generation, CLI artifact writing,
+      vue-router dashboard routes, persisted frontend workflow state, and targeted
+      backend/frontend tests.
+    unresolved_questions: []
+    assumptions:
+    - The new generation endpoint should accept the existing AnalyzeResponse payload
+      from the frontend without reshaping analyze results.
+    - Interview-mode output blocking is enforced by frontend guards for high-priority
+      questions, while backend generation remains deterministic and stateless.
+    follow_ups: []
+    checks:
+    - name: understood_task
+      passed: true
+      details: Task text was provided.
+    - name: inspected_context
+      passed: false
+      details: Inspected context includes required reads.
+    - name: changed_right_files
+      passed: true
+      details: Changed files or summary evidence was provided.
+    - name: risky_or_unrelated_touch
+      passed: true
+      details: No risky file patterns were reported.
+    - name: followed_rules
+      passed: true
+      details: No forbidden risky path was reported.
+    - name: updated_journal
+      passed: true
+      details: Journal update is enforced at session_record stage.
+    - name: unresolved_logged
+      passed: true
+      details: Unresolved items were explicitly captured or not required.
+    - name: explained_changes
+      passed: true
+      details: Summary explains what changed and why.
+    evidence_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - docs/ROADMAP.md
+    - app/models/analysis.py
+    - app/services/generation.py
+    - app/services/workflow.py
+    - app/api/routes/analysis.py
+    - app/cli.py
+    - tests/backend/test_api.py
+    - tests/backend/test_generation.py
+    - tests/backend/test_cli.py
+    - tests/backend/test_app_factory.py
+    - web/package.json
+    - web/package-lock.json
+    - web/src/types.ts
+    - web/src/lib/api.ts
+    - web/src/state/app-state.ts
+    - web/src/router.ts
+    - web/src/views/InputView.vue
+    - web/src/views/AnalysisView.vue
+    - web/src/views/QuestionsView.vue
+    - web/src/views/OutputsView.vue
+    - web/src/App.vue
+    - web/src/main.ts
+    - web/src/style.css
+    - web/src/App.test.ts
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - docs/ROADMAP.md
+    - app/models/analysis.py
+    - app/services/generation.py
+    - app/services/workflow.py
+    - app/api/routes/analysis.py
+    - app/cli.py
+    - tests/backend/test_api.py
+    - tests/backend/test_generation.py
+    - tests/backend/test_cli.py
+    - tests/backend/test_app_factory.py
+    - web/package.json
+    - web/package-lock.json
+    - web/src/types.ts
+    - web/src/lib/api.ts
+    - web/src/state/app-state.ts
+    - web/src/router.ts
+    - web/src/views/InputView.vue
+    - web/src/views/AnalysisView.vue
+    - web/src/views/QuestionsView.vue
+    - web/src/views/OutputsView.vue
+    - web/src/App.vue
+    - web/src/main.ts
+    - web/src/style.css
+    - web/src/App.test.ts
+    - app/services/analysis.py
+    - app/services/reporting.py
+    - app/api/routes/demo.py
+    - app/core/application.py
+    - tests/backend/test_analysis.py
+    module_refs: []
+    keywords:
+    - implement
+    - plan
+    - update
+    - docs
+    - roadmapmd
+    - deterministic
+    - application
+    - pack
+    - generation
+    - backend
+    - outputs
+    - adopt
+    timestamp: '2026-05-16T12:01:31.346316+00:00'
+  - id: verify-0969a44a32
+    session_id: session-fedd1b92d7
+    task: 'Extend v0.2 into a full UX/UI overhaul for the routed web app: choose a
+      stronger frontend architecture, redesign the information architecture and interaction
+      model, then implement the overhaul while preserving the evidence-first workflow
+      and deterministic backend contracts.'
+    verdict: pass_with_risks
+    summary: Overhauled the frontend into a workflow-shell architecture with Workspace,
+      Review, and Drafts phases, reusable review/drafts components, URL-driven draft
+      selection, legacy route redirects, and updated tests/build verification.
+    unresolved_questions: []
+    assumptions:
+    - No new state-management or server-state dependency was added in this pass, so
+      the overhaul uses modular local state instead of Pinia or TanStack Query.
+    - Legacy routes are preserved through redirects while the primary information
+      architecture moves to Workspace, Review, and Drafts.
+    follow_ups: []
+    checks:
+    - name: understood_task
+      passed: true
+      details: Task text was provided.
+    - name: inspected_context
+      passed: false
+      details: Inspected context includes required reads.
+    - name: changed_right_files
+      passed: true
+      details: Changed files or summary evidence was provided.
+    - name: risky_or_unrelated_touch
+      passed: true
+      details: No risky file patterns were reported.
+    - name: followed_rules
+      passed: true
+      details: No forbidden risky path was reported.
+    - name: updated_journal
+      passed: true
+      details: Journal update is enforced at session_record stage.
+    - name: unresolved_logged
+      passed: true
+      details: Unresolved items were explicitly captured or not required.
+    - name: explained_changes
+      passed: true
+      details: Summary explains what changed and why.
+    evidence_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - web/package.json
+    - web/package-lock.json
+    - web/src/App.vue
+    - web/src/main.ts
+    - web/src/router.ts
+    - web/src/state/app-state.ts
+    - web/src/types.ts
+    - web/src/lib/api.ts
+    - web/src/style.css
+    - web/src/App.test.ts
+    - web/src/components/layout/WorkflowShell.vue
+    - web/src/components/review/EvidenceMapBoard.vue
+    - web/src/components/review/FollowUpQuestionsPanel.vue
+    - web/src/components/drafts/DraftStudio.vue
+    - web/src/pages/WorkspacePage.vue
+    - web/src/pages/ReviewPage.vue
+    - web/src/pages/DraftsPage.vue
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - web/package.json
+    - web/package-lock.json
+    - web/src/App.vue
+    - web/src/main.ts
+    - web/src/router.ts
+    - web/src/state/app-state.ts
+    - web/src/types.ts
+    - web/src/lib/api.ts
+    - web/src/style.css
+    - web/src/App.test.ts
+    - web/src/components/layout/WorkflowShell.vue
+    - web/src/components/review/EvidenceMapBoard.vue
+    - web/src/components/review/FollowUpQuestionsPanel.vue
+    - web/src/components/drafts/DraftStudio.vue
+    - web/src/pages/WorkspacePage.vue
+    - web/src/pages/ReviewPage.vue
+    - web/src/pages/DraftsPage.vue
+    module_refs: []
+    keywords:
+    - extend
+    - into
+    - full
+    - overhaul
+    - routed
+    - choose
+    - stronger
+    - frontend
+    - architecture
+    - redesign
+    - information
+    - interaction
+    timestamp: '2026-05-16T12:28:37.065737+00:00'
+  - id: verify-c09b8678bf
+    session_id: session-04954bbb55
+    task: Refine the new web UI so it is visually coherent, simpler to navigate, less
+      text-heavy, smaller in typography scale, and more attractive; remove unnecessary
+      legacy compatibility paths/files since the current user is the only user.
+    verdict: pass_with_risks
+    summary: Simplified the routed web shell into a compact top navigation layout,
+      reduced typography scale and copy density across workspace/review/drafts, removed
+      legacy compatibility routes, and updated frontend tests to the new direct route
+      model.
+    unresolved_questions: []
+    assumptions:
+    - The current user is the only consumer, so removing legacy frontend route aliases
+      is acceptable.
+    - The existing workflow architecture should stay intact while the UI becomes quieter
+      and easier to scan.
+    follow_ups: []
+    checks:
+    - name: understood_task
+      passed: true
+      details: Task text was provided.
+    - name: inspected_context
+      passed: false
+      details: Inspected context includes required reads.
+    - name: changed_right_files
+      passed: true
+      details: Changed files or summary evidence was provided.
+    - name: risky_or_unrelated_touch
+      passed: true
+      details: No risky file patterns were reported.
+    - name: followed_rules
+      passed: true
+      details: No forbidden risky path was reported.
+    - name: updated_journal
+      passed: true
+      details: Journal update is enforced at session_record stage.
+    - name: unresolved_logged
+      passed: true
+      details: Unresolved items were explicitly captured or not required.
+    - name: explained_changes
+      passed: true
+      details: Summary explains what changed and why.
+    evidence_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - web/src/router.ts
+    - web/src/components/layout/WorkflowShell.vue
+    - web/src/pages/WorkspacePage.vue
+    - web/src/pages/ReviewPage.vue
+    - web/src/pages/DraftsPage.vue
+    - web/src/components/review/EvidenceMapBoard.vue
+    - web/src/components/review/FollowUpQuestionsPanel.vue
+    - web/src/components/drafts/DraftStudio.vue
+    - web/src/style.css
+    - web/src/App.test.ts
+    file_refs:
+    - .haxaml/facts.yaml
+    - .haxaml/rules.yaml
+    - .haxaml/acts.yaml
+    - web/src/router.ts
+    - web/src/components/layout/WorkflowShell.vue
+    - web/src/pages/WorkspacePage.vue
+    - web/src/pages/ReviewPage.vue
+    - web/src/pages/DraftsPage.vue
+    - web/src/components/review/EvidenceMapBoard.vue
+    - web/src/components/review/FollowUpQuestionsPanel.vue
+    - web/src/components/drafts/DraftStudio.vue
+    - web/src/style.css
+    - web/src/App.test.ts
+    module_refs: []
+    keywords:
+    - refine
+    - visually
+    - coherent
+    - simpler
+    - navigate
+    - less
+    - text
+    - heavy
+    - smaller
+    - typography
+    - scale
+    - more
+    timestamp: '2026-05-16T12:51:55.430078+00:00'

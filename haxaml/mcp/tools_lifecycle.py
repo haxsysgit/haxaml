@@ -1,6 +1,7 @@
 """MCP lifecycle tools for Haxaml."""
 
 from haxaml.mcp.base import *
+from haxaml.mcp.lifecycle_helpers import frame_blocking_inputs, governed_handoff_summary
 
 
 def _contract_violation(
@@ -88,6 +89,78 @@ def _dedupe_strs(items: list[str]) -> list[str]:
         seen.add(text)
         out.append(text)
     return out
+
+
+def _active_expect_run_number(project_dir: str) -> int:
+    """Return the single active expect.runbook number, or 0 when legacy inference is unsafe."""
+    expect_path = resolve_frame_file(Path(project_dir).resolve(), "expect.yaml")
+    if not expect_path:
+        return 0
+    expect = load_yaml(str(expect_path))
+    runbook = expect.get("runbook", [])
+    if not isinstance(runbook, list):
+        return 0
+    active_runs = [
+        int(item.get("run"))
+        for item in runbook
+        if isinstance(item, dict) and item.get("status") == "active" and isinstance(item.get("run"), int)
+    ]
+    return active_runs[0] if len(active_runs) == 1 else 0
+
+
+def _new_default_runbook_item(run_number: int, *, phase: str, depends_on: int) -> dict[str, Any]:
+    return {
+        "run": run_number,
+        "phase": phase or "Phase 1",
+        "status": "active",
+        "goal": "Execute the next scoped governed task safely.",
+        "outcome": "Task progress is verified, recorded, and synced.",
+        "depends_on": [depends_on] if depends_on > 0 else [],
+        "touches": ["scoped files only"],
+        "requires": ["Clear task statement"],
+        "uses_map": False,
+        "verify": ["Run tests or validation relevant to touched behavior."],
+        "done_when": "Verification passes and session is recorded.",
+    }
+
+
+def _append_next_default_run_if_needed(expect: dict[str, Any], runbook: list[dict[str, Any]], target: dict[str, Any], target_run: int) -> dict[str, Any]:
+    existing_numbers = [
+        int(item.get("run"))
+        for item in runbook
+        if isinstance(item, dict) and isinstance(item.get("run"), int)
+    ]
+    next_run = max(existing_numbers or [target_run]) + 1
+    phase = str(target.get("phase", "") or "Phase 1")
+    next_item = _new_default_runbook_item(next_run, phase=phase, depends_on=target_run)
+    runbook.append(next_item)
+
+    phases = expect.get("phases", [])
+    if isinstance(phases, list):
+        phase_entry = next(
+            (item for item in phases if isinstance(item, dict) and str(item.get("name", "")).strip() == phase),
+            None,
+        )
+        if phase_entry is None:
+            phases.append(
+                {
+                    "name": phase,
+                    "status": "active",
+                    "run_range": f"{target_run}-{next_run}",
+                    "target_runs": 1,
+                    "description": "Auto-extended governed run phase.",
+                    "done_when": "All runs in this phase are complete.",
+                }
+            )
+        else:
+            phase_entry["status"] = "active"
+            phase_entry["target_runs"] = max(int(phase_entry.get("target_runs", 0) or 0), len([
+                item for item in runbook if isinstance(item, dict) and str(item.get("phase", "")).strip() == phase
+            ]))
+            if isinstance(phase_entry.get("run_range"), str) and "-" in phase_entry["run_range"]:
+                start = phase_entry["run_range"].split("-", 1)[0].strip() or str(target_run)
+                phase_entry["run_range"] = f"{start}-{next_run}"
+    return next_item
 
 
 def _record_keywords(*parts: Any) -> list[str]:
@@ -247,6 +320,7 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
     call_budget = _call_budget_for(guidance["task_type"], guidance["risk_level"])
     status = guidance["status"]
     execution_mode = guidance["execution_mode"]
+    handoff_summary = governed_handoff_summary(state) if execution_mode == "governed" else {}
     msg_lines = [
         f"Mode: {execution_mode}",
         f"Task type: {guidance['task_type']}",
@@ -270,6 +344,12 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
     if guidance["missing_context"]:
         msg_lines.append("Missing context:")
         msg_lines.extend([f"  - {m}" for m in guidance["missing_context"]])
+    if handoff_summary.get("current_blockers"):
+        msg_lines.append("Current blockers:")
+        for blocker in handoff_summary["current_blockers"][:3]:
+            if isinstance(blocker, dict):
+                label = blocker.get("name") or blocker.get("reason") or blocker.get("kind") or "blocker"
+                msg_lines.append(f"  - {label}")
 
     # Keep the payload split between human-readable summary text and machine-usable fields.
     payload = {
@@ -286,6 +366,7 @@ def haxaml_guidance(task: str, project_dir: str = ".", detail: str = DETAIL_SHOR
         "suggested_questions": guidance["suggested_questions"],
         "safer_path": guidance["safer_path"],
         "recommended_packs": guidance["recommended_packs"],
+        "handoff_summary": handoff_summary,
         "next_step": next_step,
         "lifecycle": _lifecycle_hint(
             tool="haxaml_guidance",
@@ -368,6 +449,18 @@ def haxaml_context_pack(
                 "project_dir": str(Path(project_dir).resolve()),
                 "expected_next": ["haxaml_context_pack"],
                 "retry_after": ["haxaml_prebuild(task=..., description=..., project_dir='.')"],
+            },
+        )
+    frame_inputs = frame_blocking_inputs(frame)
+    if frame_inputs["blocking_materials"] or frame_inputs["blocking_questions"]:
+        return _err(
+            "haxaml_context_pack",
+            "blocking_inputs_unresolved",
+            "Blocking materials or clarification items remain unresolved. Resolve them before generating governed context.",
+            {
+                "blocking_materials": frame_inputs["blocking_materials"],
+                "blocking_questions": frame_inputs["blocking_questions"],
+                "owner_provided_materials": frame_inputs["owner_provided_materials"],
             },
         )
 
@@ -559,6 +652,7 @@ def haxaml_context_pack(
     session["last_context_pack_at"] = _now_iso()
     session["last_context_pack_reason"] = refresh_info["reason"]
     session["last_context_pack_reason_category"] = refresh_info["category"]
+    session["handoff_summary"] = governed_handoff_summary(state)
     contract = _contract_touch(
         contract,
         phase="context",
@@ -588,6 +682,7 @@ def haxaml_context_pack(
             "changed_sections": changed_sections,
             "unchanged_sections": unchanged_sections,
             "token_delta": token_delta if refresh_mode != "full" else 0,
+            "handoff_summary": governed_handoff_summary(state),
             "next_step": "haxaml_session_verify",
             "lifecycle": _lifecycle_hint(
                 tool="haxaml_context_pack",
@@ -1092,6 +1187,7 @@ def haxaml_session_record(
                 },
             )
 
+    pending_run_number = _active_expect_run_number(project_dir)
     run_result = runner.finish_run(
         task=task,
         result=result,
@@ -1131,6 +1227,7 @@ def haxaml_session_record(
         {
             "required": True,
             "pending_run_id": run_result.run_id,
+            "pending_run_number": pending_run_number,
             "pending_task": task,
             "pending_result": result,
             "pending_recorded_at": _now_iso(),
@@ -1268,6 +1365,8 @@ def haxaml_expect_sync(
 
     target_run = int(run) if isinstance(run, int) else 0
     if target_run <= 0:
+        target_run = int(sync_state.get("pending_run_number", 0) or 0)
+    if target_run <= 0:
         active_runs = [
             int(item.get("run"))
             for item in runbook
@@ -1308,6 +1407,7 @@ def haxaml_expect_sync(
             ):
                 item["status"] = "planned"
 
+    appended_run = None
     if pending_result == "success":
         done_like = {"done", "skipped"}
         next_candidate = None
@@ -1334,6 +1434,8 @@ def haxaml_expect_sync(
                 break
         if next_candidate:
             next_candidate["status"] = "active"
+        else:
+            appended_run = _append_next_default_run_if_needed(expect, runbook, target, target_run)
 
     phases = expect.get("phases", [])
     if isinstance(phases, list):
@@ -1371,9 +1473,11 @@ def haxaml_expect_sync(
     now = _now_iso()
     sync_state["required"] = False
     sync_state["last_synced_run_id"] = sync_state["pending_run_id"]
+    sync_state["last_synced_run_number"] = target_run
     sync_state["last_synced_at"] = now
     sync_state["last_sync_status"] = expected_status
     sync_state["pending_run_id"] = ""
+    sync_state["pending_run_number"] = 0
     sync_state["pending_task"] = ""
     sync_state["pending_result"] = ""
     sync_state["pending_recorded_at"] = ""
@@ -1405,6 +1509,7 @@ def haxaml_expect_sync(
             "synced": True,
             "run": target_run,
             "applied_status": expected_status,
+            "appended_run": appended_run.get("run") if isinstance(appended_run, dict) else 0,
             "expect_sync": sync_state,
             "next_step": "haxaml_guidance",
             "lifecycle": _lifecycle_hint(

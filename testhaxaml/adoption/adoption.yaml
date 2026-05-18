@@ -1,0 +1,259 @@
+version: 0.7.4
+managed_by: haxaml-setup
+mode: adopted
+selected_targets:
+- generic
+detected_targets:
+- codex
+- opencode
+- windsurf
+strong_detected_targets: []
+weak_detected_targets:
+- codex
+- opencode
+- windsurf
+target_candidates:
+- target: codex
+  label: OpenAI Codex
+  strong_paths: []
+  weak_paths:
+  - AGENTS.md
+  evidence_paths:
+  - AGENTS.md
+- target: opencode
+  label: OpenCode
+  strong_paths: []
+  weak_paths:
+  - AGENTS.md
+  evidence_paths:
+  - AGENTS.md
+- target: windsurf
+  label: Windsurf
+  strong_paths: []
+  weak_paths:
+  - AGENTS.md
+  evidence_paths:
+  - AGENTS.md
+native_files:
+- kind: codex
+  label: OpenAI Codex
+  path: AGENTS.md
+- kind: windsurf
+  label: Windsurf
+  path: AGENTS.md
+- kind: opencode
+  label: OpenCode
+  path: AGENTS.md
+analysis:
+  conflicts: []
+  duplicates:
+  - id: adopt-duplicate-001
+    rule_summary: ask targeted follow-up questions only when useful
+    sources:
+    - kind: codex
+      label: OpenAI Codex
+      path: AGENTS.md
+      scope: file
+    - kind: opencode
+      label: OpenCode
+      path: AGENTS.md
+      scope: file
+    - kind: windsurf
+      label: Windsurf
+      path: AGENTS.md
+      scope: file
+  - id: adopt-duplicate-002
+    rule_summary: create an aspirational example for the kind of candidate the jd
+      appears to want. this must be clearly labeled as an example, not the user's
+      real cv
+    sources:
+    - kind: codex
+      label: OpenAI Codex
+      path: AGENTS.md
+      scope: file
+    - kind: opencode
+      label: OpenCode
+      path: AGENTS.md
+      scope: file
+    - kind: windsurf
+      label: Windsurf
+      path: AGENTS.md
+      scope: file
+  - id: adopt-duplicate-003
+    rule_summary: evidence before polish. safety before hype. stronger wording only
+      when the user can defend it
+    sources:
+    - kind: codex
+      label: OpenAI Codex
+      path: AGENTS.md
+      scope: file
+    - kind: opencode
+      label: OpenCode
+      path: AGENTS.md
+      scope: file
+    - kind: windsurf
+      label: Windsurf
+      path: AGENTS.md
+      scope: file
+  - id: adopt-duplicate-004
+    rule_summary: haxjobs must not invent
+    sources:
+    - kind: codex
+      label: OpenAI Codex
+      path: AGENTS.md
+      scope: file
+    - kind: opencode
+      label: OpenCode
+      path: AGENTS.md
+      scope: file
+    - kind: windsurf
+      label: Windsurf
+      path: AGENTS.md
+      scope: file
+  - id: adopt-duplicate-005
+    rule_summary: haxjobs should
+    sources:
+    - kind: codex
+      label: OpenAI Codex
+      path: AGENTS.md
+      scope: file
+    - kind: opencode
+      label: OpenCode
+      path: AGENTS.md
+      scope: file
+    - kind: windsurf
+      label: Windsurf
+      path: AGENTS.md
+      scope: file
+  - id: adopt-duplicate-006
+    rule_summary: haxjobs should stay
+    sources:
+    - kind: codex
+      label: OpenAI Codex
+      path: AGENTS.md
+      scope: file
+    - kind: opencode
+      label: OpenCode
+      path: AGENTS.md
+      scope: file
+    - kind: windsurf
+      label: Windsurf
+      path: AGENTS.md
+      scope: file
+  - id: adopt-duplicate-007
+    rule_summary: if evidence is missing, haxjobs should use
+    sources:
+    - kind: codex
+      label: OpenAI Codex
+      path: AGENTS.md
+      scope: file
+    - kind: opencode
+      label: OpenCode
+      path: AGENTS.md
+      scope: file
+    - kind: windsurf
+      label: Windsurf
+      path: AGENTS.md
+      scope: file
+  - id: adopt-duplicate-008
+    rule_summary: it should feel like a recruiter, cv editor, career coach, and interview-prep
+      assistant working together
+    sources:
+    - kind: codex
+      label: OpenAI Codex
+      path: AGENTS.md
+      scope: file
+    - kind: opencode
+      label: OpenCode
+      path: AGENTS.md
+      scope: file
+    - kind: windsurf
+      label: Windsurf
+      path: AGENTS.md
+      scope: file
+  - id: adopt-duplicate-009
+    rule_summary: it should not feel like a generic cv generator
+    sources:
+    - kind: codex
+      label: OpenAI Codex
+      path: AGENTS.md
+      scope: file
+    - kind: opencode
+      label: OpenCode
+      path: AGENTS.md
+      scope: file
+    - kind: windsurf
+      label: Windsurf
+      path: AGENTS.md
+      scope: file
+  - id: adopt-duplicate-010
+    rule_summary: outputs should be
+    sources:
+    - kind: codex
+      label: OpenAI Codex
+      path: AGENTS.md
+      scope: file
+    - kind: opencode
+      label: OpenCode
+      path: AGENTS.md
+      scope: file
+    - kind: windsurf
+      label: Windsurf
+      path: AGENTS.md
+      scope: file
+  - id: adopt-duplicate-011
+    rule_summary: the evidence map should exist before the final cv is generated
+    sources:
+    - kind: codex
+      label: OpenAI Codex
+      path: AGENTS.md
+      scope: file
+    - kind: opencode
+      label: OpenCode
+      path: AGENTS.md
+      scope: file
+    - kind: windsurf
+      label: Windsurf
+      path: AGENTS.md
+      scope: file
+  - id: adopt-duplicate-012
+    rule_summary: the orchestrator should manage stages and handoffs, not do all the
+      work itself
+    sources:
+    - kind: codex
+      label: OpenAI Codex
+      path: AGENTS.md
+      scope: file
+    - kind: opencode
+      label: OpenCode
+      path: AGENTS.md
+      scope: file
+    - kind: windsurf
+      label: Windsurf
+      path: AGENTS.md
+      scope: file
+  - id: adopt-duplicate-013
+    rule_summary: use only clearly confirmed evidence. conservative and low-risk
+    sources:
+    - kind: codex
+      label: OpenAI Codex
+      path: AGENTS.md
+      scope: file
+    - kind: opencode
+      label: OpenCode
+      path: AGENTS.md
+      scope: file
+    - kind: windsurf
+      label: Windsurf
+      path: AGENTS.md
+      scope: file
+  precedence_decision_required: false
+  precedence_candidates: []
+  counts:
+    conflicts: 0
+    duplicates: 13
+    sources_scanned: 3
+    readme_sections_scanned: 0
+adapter_files:
+- .haxaml/setup/targets/generic.md
+skipped_files: []

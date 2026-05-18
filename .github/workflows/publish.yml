@@ -1,6 +1,9 @@
 name: Build Python Distributions
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
@@ -20,6 +23,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   build:
@@ -90,3 +94,21 @@ jobs:
       - name: Check Haxaml UI package metadata
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.package_target == 'all' || github.event.inputs.package_target == 'ui'
         run: uv run twine check packages/haxaml-ui/dist/*
+
+      - name: Publish Haxaml package
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: uv publish dist/*
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Publish Haxaml MCP launcher package
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: uv publish packages/haxaml-mcp/dist/*
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Publish Haxaml UI package
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: uv publish packages/haxaml-ui/dist/*
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
