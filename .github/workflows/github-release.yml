@@ -90,9 +90,9 @@ jobs:
               if len(summary) > 72:
                   summary = summary[:69].rstrip() + "..."
 
-          title = title_override or f"Introducing Haxaml {tag}: {summary}"
+          title = title_override or f"Haxaml {tag}: {summary}"
           body = body_override or (
-              f"Introducing Haxaml {tag}: {summary}.\n\n"
+              f"Haxaml {tag}: {summary}.\n\n"
               f"{section or 'See the repository history for the full change set.'}\n\n"
               "_Release notes generated from CHANGELOG.md._"
           )
