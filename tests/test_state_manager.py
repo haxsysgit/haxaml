@@ -45,6 +45,7 @@ class TestStateReadWrite:
         state = sm.read()
         assert state["current_phase"] == "Phase 1"
         assert state["active_task"]["name"] == "test task"
+        assert not (tmp_path / "acts.lock").exists()
 
     def test_write_state(self, tmp_path):
         path = _make_state(tmp_path)
@@ -91,6 +92,7 @@ class TestRunRecording:
         assert len(state["runs"]) == 1
         assert state["runs"][0]["task"] == "build feature"
         assert state["runs"][0]["result"] == "success"
+        assert not (tmp_path / "acts.lock").exists()
 
     def test_record_multiple_runs(self, tmp_path):
         path = _make_state(tmp_path)
@@ -249,6 +251,40 @@ class TestCompaction:
         assert result["archived"]["runs"] == 5
         assert len(after["runs"]) == len(before["runs"]) == 8
         assert after.get("archive", {}).get("archived_counts", {}).get("runs", 0) == 0
+
+    def test_archive_on_record_can_trigger_from_size_pressure(self, tmp_path):
+        data = {
+            "current_phase": "Phase 1",
+            "active_task": {"name": "test task", "description": "testing"},
+            "completed_tasks": [],
+            "blocked_tasks": [],
+            "decisions": [],
+            "unresolved_dependencies": [],
+            "runs": [{"id": f"run-{i}", "task": f"task {i}", "result": "success", "changes": "x" * 500} for i in range(8)],
+            "sessions": [],
+            "verifications": [],
+            "archive": {
+                "path": str(tmp_path / ".haxaml" / "archive" / "acts-history.yaml"),
+                "archive_mode": "manual",
+                "last_archived_at": "",
+                "archived_counts": {"runs": 0, "sessions": 0, "verifications": 0},
+                "hot_limits": {"runs": 3, "sessions": 3, "verifications": 3},
+            },
+        }
+        path = _make_state(tmp_path, data)
+        rules_dir = tmp_path / ".haxaml"
+        rules_dir.mkdir(exist_ok=True)
+        (rules_dir / "rules.yaml").write_text(
+            "memory_policy:\n  archive_mode: manual\n  max_hot_runs: 3\n  max_hot_sessions: 3\n  max_hot_verifications: 3\n  max_acts_bytes: 512\n",
+            encoding="utf-8",
+        )
+        sm = StateManager(path)
+
+        result = sm.archive_on_record()
+
+        assert result["trigger"] == "size"
+        assert result["archived"]["runs"] == 5
+        assert len(sm.read()["runs"]) == 3
 
     def test_compact_preserves_full_archived_record(self, tmp_path):
         path = _make_state(tmp_path)

@@ -77,13 +77,15 @@ uvx haxaml-mcp
 I want Haxaml to be hard to use badly, so setup is now the single onboarding integration point.
 
 - `haxaml setup` is interactive by default in a real TTY, but stays machine-friendly in non-interactive or `--format json` flows.
-- The setup wizard is provider-aware: it treats strong target evidence as advisory input, shows evidence paths, pre-fills from explicit CLI flags, and avoids guessing from shared weak signals like `AGENTS.md`.
-- In a fresh repo it creates `.haxaml/` and then writes the selected target's native instructions plus any matching skill, agent, config, or workflow adapters you asked for. Shared files like `AGENTS.md` are only written for targets that actually use them.
-- In an existing repo it adopts native files instead of replacing them. Haxaml appends managed pointer blocks where safe, keeps the full governed adapter in `.haxaml/setup/targets/`, and records adoption state in `.haxaml/adoption/`.
+- The setup contract is provider-aware: strong target evidence should guide defaults, weak shared signals like `AGENTS.md` should stay advisory, and the final output should show exact targets, paths, and previews before writing.
+- In a fresh repo it creates `.haxaml/` and then writes the selected target's native instructions plus any matching skill, agent, config, or workflow adapters you asked for.
+- In an existing repo it should adopt native files instead of replacing them. Haxaml appends managed pointer blocks where safe, keeps the full governed adapter in `.haxaml/setup/targets/`, and records adoption state in `.haxaml/adoption/`.
 - Known MCP config shapes merge only the Haxaml-owned entry or table (`mcpServers.haxaml` or `[mcp_servers.haxaml]`) and preserve unrelated config.
 - `haxaml setup --dry-run` now shows exact paths plus concise previews instead of only file counts.
 - `haxaml setup print` still shows the full rendered contents before writing.
 - `haxaml setup doctor` checks for missing managed files, drift, and manual follow-up.
+
+The 1.0 hardening track treats setup target clarity and rerun idempotency as blockers. Setup must never silently downgrade a selected provider to `generic`, and rerunning setup over active FRAME state must be safe by default.
 
 Managed upgrades use the installed `haxaml` CLI. `haxaml upgrade` refreshes core plus MCP by default, and `haxaml upgrade --include-ui` adds the dashboard package when you use the full suite.
 
@@ -110,5 +112,6 @@ haxaml dashboard
 - [learn/FRAME.md](./learn/FRAME.md): the underlying memory model.
 - [0.7.x_Roadmap.md](./0.7.x_Roadmap.md): details on our current focus for onboarding and target support.
 - [v1.0_Roadmap.md](./v1.0_Roadmap.md): the path to a stable core.
+- [docs/reports/haxaml-critical-bug-audit.md](./docs/reports/haxaml-critical-bug-audit.md): current critical bug audit and hardening plan.
 - [docs/architecture.md](./docs/architecture.md): how the modules are split.
 - [CONTRIBUTING.md](./CONTRIBUTING.md): how to help build the protocol.

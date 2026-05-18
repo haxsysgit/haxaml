@@ -41,6 +41,7 @@ def test_init_scaffolds_full_frame():
             rules = yaml.safe_load(f)
         discipline = rules.get("while_coding", {}).get("discipline", [])
         assert COMMIT_STYLE_DISCIPLINE in discipline
+        assert rules["memory_policy"]["archive_mode"] == "on_record"
 
 
 def test_export_supports_current_native_agent_files():

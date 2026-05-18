@@ -126,7 +126,7 @@ context_policy:
   max_chars_per_item: 240
 
 memory_policy:
-  archive_mode: manual
+  archive_mode: on_record
   max_hot_runs: 5
   max_hot_sessions: 5
   max_hot_verifications: 5

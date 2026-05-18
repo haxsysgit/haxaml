@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Changed new FRAME scaffolds to default `memory_policy.archive_mode` to `on_record` so old Acts state compacts automatically during governed record flows.
+- Added a size-pressure archive trigger for older projects that still have `archive_mode: manual`.
+- Moved state lock files out of project directories so Haxaml no longer creates visible zero-byte `acts.lock` sidecars beside `acts.yaml`.
+- Added audit reports for state/archive bloat, setup/idempotency risk, lifecycle gate weakness, and test strategy gaps.
+- Updated the 1.0 roadmap and checklist to treat hot Acts budget, setup idempotency, target-selection correctness, and hard prebuild gates as release blockers.
+
 ## 0.7.4 - 2026-05-15
 
 - Made `haxaml setup` interactive by default in a real TTY while keeping `--non-interactive` and `--format json` machine-friendly.

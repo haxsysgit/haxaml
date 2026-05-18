@@ -25,7 +25,7 @@ from haxaml.yaml_utils import dump_yaml, load_yaml
 
 ARCHIVE_VERSION = "0.6.7"
 DEFAULT_MEMORY_POLICY = {
-    "archive_mode": "manual",
+    "archive_mode": "on_record",
     "max_hot_runs": 5,
     "max_hot_sessions": 5,
     "max_hot_verifications": 5,

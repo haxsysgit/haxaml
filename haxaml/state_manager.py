@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import os
 import tempfile
 import uuid
@@ -270,11 +271,15 @@ class StateManager:
         with self._lock(shared=False):
             state = load_yaml(str(self.path))
             policy = self.memory_policy()
-            if policy.get("archive_mode") != "on_record":
+            archive_mode = policy.get("archive_mode", "manual")
+            max_acts_bytes = int(policy.get("max_acts_bytes", 16000) or 16000)
+            size_triggered = self.path.exists() and self.path.stat().st_size > max_acts_bytes
+            if archive_mode != "on_record" and not size_triggered:
                 self._ensure_archive_state(state, archive_mode=policy.get("archive_mode", "manual"))
                 self._atomic_write(state)
                 return {
                     "archive_mode": policy.get("archive_mode", "manual"),
+                    "trigger": "manual",
                     "archived": {"runs": 0, "sessions": 0, "verifications": 0},
                     "hot": {
                         "runs": len(state.get("runs", []) or []),
@@ -284,12 +289,14 @@ class StateManager:
                     "dry_run": False,
                 }
             limits = hot_limits_from_policy(policy)
-            return self._archive_cold_history(
+            result = self._archive_cold_history(
                 state,
                 limits=limits,
-                archive_mode="on_record",
+                archive_mode=archive_mode,
                 dry_run=False,
             )
+            result["trigger"] = "size" if size_triggered and archive_mode != "on_record" else "on_record"
+            return result
 
     def get_stats(self) -> dict:
         """Get state statistics for diagnostics."""
@@ -329,7 +336,10 @@ class StateManager:
     @contextmanager
     def _lock(self, shared: bool = True):
         """Advisory file lock using fcntl."""
-        lock_path = self.path.with_suffix(".lock")
+        lock_dir = Path(tempfile.gettempdir()) / "haxaml-locks"
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        lock_key = hashlib.sha256(str(self.path).encode("utf-8")).hexdigest()[:24]
+        lock_path = lock_dir / f"{lock_key}.lock"
         lock_fd = open(lock_path, "w")
         try:
             if shared:
