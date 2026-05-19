@@ -123,4 +123,5 @@ The important loop is simple: `expect` defines the planned path and finish line,
 - [docs/architecture.md](./docs/architecture.md): how the modules are split.
 - [docs/mcp-tool-reference.md](./docs/mcp-tool-reference.md): compact MCP tool contract reference.
 - [docs/reports/](./docs/reports): dated audit evidence and hardening notes.
+- [docs/reports/haxaml-0.7x-closeout.md](./docs/reports/haxaml-0.7x-closeout.md): the `0.7.x` close-out review and `0.8.0` handoff.
 - [CONTRIBUTING.md](./CONTRIBUTING.md): how to help build the protocol.

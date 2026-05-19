@@ -10,16 +10,27 @@ def test_roadmaps_and_changelog_align_on_setup_release_story():
     roadmap_07 = (REPO_ROOT / "0.7.x_Roadmap.md").read_text(encoding="utf-8")
     roadmap_v1 = (REPO_ROOT / "v1.0_Roadmap.md").read_text(encoding="utf-8")
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    closeout = (REPO_ROOT / "docs" / "reports" / "haxaml-0.7x-closeout.md").read_text(encoding="utf-8")
 
     assert "## `0.7.4` - Interactive Setup And Skill Overhaul" in roadmap_07
     assert "## `0.7.5` - Materials, Context Discipline, And Handoff Quality" in roadmap_07
     assert "## `0.7.6` - Setup TUI Correction And Release Hardening" in roadmap_07
+    assert "## `0.7.7` - `0.7.x` Close-Out, Retrospective, And `0.8` Handoff" in roadmap_07
+    assert "docs/reports/haxaml-0.7x-closeout.md" in roadmap_07
     assert "`0.7.4`: interactive setup, provider-aware skills, safe config merges, and preview-first onboarding output" in roadmap_v1
     assert "`0.7.6`: real setup TUI correction, setup trust cleanup, and release-pipeline hardening." in roadmap_v1
+    assert "`0.7.7`: `0.7.x` close-out, whole-line retrospective, and explicit handoff into `0.8.0`." in roadmap_v1
+    assert "docs/reports/haxaml-0.7x-closeout.md" in roadmap_v1
     assert "## 0.7.4 - 2026-05-15" in changelog
+    assert "## 0.7.7 - 2026-05-19" in changelog
     assert "## 0.7.6 - 2026-05-19" in changelog
+    assert "Closed the `0.7.x` line as a real handoff" in changelog
     assert "interactive by default in a real TTY" in changelog
     assert "grouped scaffold summary after apply" in changelog
+    assert "## What `0.7.x` Finished" in closeout
+    assert "## Rough Edges Deferred To `0.8.0`" in closeout
+    assert "## `0.8.0` Handoff" in closeout
+    assert "tag-triggered publishing can no-op cleanly" in closeout
 
 
 def test_operator_docs_and_example_flow_match_current_governed_lifecycle():

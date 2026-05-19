@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.7.7 - 2026-05-19
+
+- Closed the `0.7.x` line as a real handoff instead of letting it drift: setup, state, workflow accommodation, and release plumbing now have one clear wrap-up story before `0.8.0`.
+- Added the `0.7.7` roadmap plan as the full `0.7.x` retrospective pass, with the finished trust work separated from the protocol and enforcement work that belongs to `0.8`.
+- Patched tag-triggered PyPI publishing so release workflows check whether each exact package version already exists and skip duplicate uploads instead of failing halfway through a re-tagged release.
+- Bumped `haxaml`, `haxaml-mcp`, and `haxaml-ui` together to `0.7.7`.
+
 ## 0.7.6 - 2026-05-19
 
 - Made `haxaml setup` stop acting like a glorified questionnaire. The TTY path now uses a scaffold-style prompt flow with cleaner provider ordering, better spacing, a compact review card, and a grouped scaffold summary after apply instead of dumping raw prompt lines and giant generated previews back at you.

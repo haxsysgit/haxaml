@@ -56,3 +56,13 @@ def test_get_version_falls_back_to_installed_metadata_when_no_local_pyproject(mo
     monkeypatch.setattr(versioning, "PROJECT_PYPROJECT", Path("/tmp/does-not-exist-pyproject.toml"))
     monkeypatch.setattr(versioning, "pkg_version", lambda pkg: "2.3.4" if pkg == PACKAGE_NAME else "0.0.0")
     assert versioning.get_version() == "2.3.4"
+
+
+def test_publish_workflow_skips_existing_pypi_versions():
+    workflow = Path(".github/workflows/publish.yml").read_text(encoding="utf-8")
+
+    assert "Check PyPI for existing package versions" in workflow
+    assert "https://pypi.org/pypi/{package_name}/{version}/json" in workflow
+    assert "steps.pypi.outputs.mcp_exists != 'true'" in workflow
+    assert "steps.pypi.outputs.ui_exists != 'true'" in workflow
+    assert "steps.pypi.outputs.core_exists != 'true'" in workflow
