@@ -162,9 +162,9 @@ fi
 
 case "$TARGET" in
   all)
-    publish_core
     publish_mcp
     publish_ui
+    publish_core
     ;;
   core) publish_core ;;
   mcp) publish_mcp ;;

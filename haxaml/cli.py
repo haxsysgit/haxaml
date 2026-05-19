@@ -123,6 +123,7 @@ def setup(ctx, project_dir, scope, target_id, target_ids, mode, only, with_workf
     """Install Haxaml into fresh or existing agent-specific integration points."""
     from haxaml.setup import cli as setup_commands
 
+    used_interactive_wizard = False
     if ctx.invoked_subcommand is not None:
         ctx.obj = {
             "project_dir": project_dir,
@@ -176,6 +177,7 @@ def setup(ctx, project_dir, scope, target_id, target_ids, mode, only, with_workf
         if resolved is None:
             click.echo("Setup cancelled.")
             return
+        used_interactive_wizard = True
         scope = resolved.scope
         mode = resolved.mode
         target_id = "auto"
@@ -196,6 +198,13 @@ def setup(ctx, project_dir, scope, target_id, target_ids, mode, only, with_workf
         output_format=output_format,
         color=sys.stdout.isatty(),
     )
+    if used_interactive_wizard and output_format == "text":
+        result_dict = _result_dict(result)
+        data = result_dict.get("data") if result_dict and isinstance(result_dict.get("data"), dict) else None
+        if data is not None:
+            if setup_commands.print_interactive_summary(data, dry_run=dry_run):
+                return
+            data["message"] = setup_commands.interactive_setup_message(data, dry_run=dry_run)
     _echo_tool_result(result)
 
 

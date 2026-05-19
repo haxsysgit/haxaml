@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "haxaml"
-version = "0.7.5"
+version = "0.7.6"
 description = "Prebuild and governance for AI coding agents."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,9 +31,11 @@ classifiers = [
 ]
 dependencies = [
   "click>=8.1",
-  "InquirerPy>=0.3.4",
   "jsonschema>=4.20",
   "mcp>=1.0",
+  "prompt_toolkit>=3.0",
+  "questionary>=2.0",
+  "rich>=13.7",
   "tomlkit>=0.13.2",
   "pyyaml>=6.0"
 ]
@@ -43,11 +45,11 @@ bench = [
   "tiktoken>=0.5"
 ]
 ui = [
-  "haxaml-ui==0.7.5"
+  "haxaml-ui==0.7.6"
 ]
 full = [
-  "haxaml-mcp==0.7.5",
-  "haxaml-ui==0.7.5"
+  "haxaml-mcp==0.7.6",
+  "haxaml-ui==0.7.6"
 ]
 dev = [
   "build>=1.2",
@@ -57,8 +59,8 @@ dev = [
 ]
 all = [
   "build>=1.2",
-  "haxaml-mcp==0.7.5",
-  "haxaml-ui==0.7.5",
+  "haxaml-mcp==0.7.6",
+  "haxaml-ui==0.7.6",
   "mcp>=1.0",
   "pytest>=8.0",
   "tiktoken>=0.5",

@@ -30,7 +30,7 @@ haxaml/
     planner.py               # fresh/adopted planning and manifest generation
     renderer.py              # instructions/skills/adapter-file/config renderers
     config_merge.py          # narrow JSON/TOML merge helpers for Haxaml-owned config blocks
-    interactive.py           # TTY setup wizard and prompt orchestration
+    interactive.py           # scaffold-style setup prompt flow and orchestration
     cli.py                   # setup-specific CLI transport wrappers
     service.py               # transport-neutral setup engine used by CLI and MCP
     writer.py                # safe managed writes and pointer insertion

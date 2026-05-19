@@ -16,6 +16,10 @@ from haxaml.setup.planner import PlannedFile, SetupPlan
 _HTML_FILE_MARKER = "<!-- HAXAML:FILE "
 _LINE_FILE_MARKERS = ("# HAXAML:FILE ", "// HAXAML:FILE ")
 _BLOCK_RE = re.compile(r"<!-- HAXAML:MANAGED START .*?<!-- HAXAML:MANAGED END -->\n?", re.DOTALL)
+_SETUP_METADATA_PREFIXES = (
+    ".haxaml/setup/",
+    ".haxaml/adoption/",
+)
 
 
 def has_managed_file_marker(text: str) -> bool:
@@ -79,6 +83,10 @@ def _write_file(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _is_setup_metadata_file(item: PlannedFile) -> bool:
+    return any(item.path.startswith(prefix) for prefix in _SETUP_METADATA_PREFIXES)
+
+
 def _apply_item(project_dir: Path, item: PlannedFile, force: bool) -> tuple[str, str]:
     path = Path(item.path) if item.scope == "user" else project_dir / item.path
     if item.management == "merge":
@@ -110,7 +118,11 @@ def _apply_item(project_dir: Path, item: PlannedFile, force: bool) -> tuple[str,
 
     if path.exists():
         existing = path.read_text(encoding="utf-8", errors="ignore")
-        if not force and not (has_managed_file_marker(existing) or _has_managed_skill_frontmatter(existing)):
+        if (
+            not force
+            and not _is_setup_metadata_file(item)
+            and not (has_managed_file_marker(existing) or _has_managed_skill_frontmatter(existing))
+        ):
             return "skipped", item.path
         action = "updated"
     else:

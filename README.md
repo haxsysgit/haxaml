@@ -79,7 +79,7 @@ uvx haxaml-mcp
 
 I want Haxaml to be hard to use badly, so setup is now the single onboarding integration point.
 
-- `haxaml setup` is interactive by default in a real TTY, but stays machine-friendly in non-interactive or `--format json` flows.
+- `haxaml setup` now runs as a minimal scaffold-style terminal flow by default in a real TTY, but stays machine-friendly in non-interactive or `--format json` flows.
 - The setup contract is provider-aware: strong target evidence should guide defaults, weak shared signals like `AGENTS.md` should stay advisory, and the final output should show exact targets, paths, and previews before writing.
 - In a fresh repo it creates `.haxaml/` and then writes the selected target's native instructions plus any matching skill, agent, config, or workflow adapters you asked for.
 - In an existing repo it should adopt native files instead of replacing them. Haxaml appends managed pointer blocks where safe, keeps the full governed adapter in `.haxaml/setup/targets/`, and records adoption state in `.haxaml/adoption/`.

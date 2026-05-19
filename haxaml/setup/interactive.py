@@ -9,7 +9,7 @@ from typing import Any, Protocol
 from haxaml.setup.adoption import build_adoption_inventory
 from haxaml.setup.planner import SETUP_KINDS
 from haxaml.setup.registry import get_target, list_targets
-from haxaml.setup.service import plan_setup, setup_message
+from haxaml.setup.service import plan_setup
 from haxaml.setup.workflow import supports_workflow
 
 
@@ -17,7 +17,7 @@ CAPABILITY_KINDS = tuple(kind for kind in SETUP_KINDS if kind != "workflow")
 
 
 class WizardBackend(Protocol):
-    def select(self, *, message: str, choices: list[dict[str, object]], default: str | None = None) -> str: ...
+    def select(self, *, message: str, choices: list[dict[str, object]], default: str | None = None) -> str | None: ...
 
     def checkbox(
         self,
@@ -25,45 +25,153 @@ class WizardBackend(Protocol):
         message: str,
         choices: list[dict[str, object]],
         defaults: list[str] | None = None,
-    ) -> list[str]: ...
+    ) -> list[str] | None: ...
 
     def confirm(self, *, message: str, default: bool = True) -> bool: ...
 
 
-class InquirerPyBackend:
-    """Thin adapter over InquirerPy for the setup wizard."""
+_TARGET_PROMPT_ORDER = {
+    "claude": 0,
+    "codex": 1,
+    "gemini": 2,
+    "copilot": 3,
+    "cursor": 4,
+    "windsurf": 5,
+    "opencode": 6,
+    "junie": 7,
+    "continue": 8,
+    "cline": 9,
+    "generic": 99,
+}
+
+
+class QuestionaryBackend:
+    """Minimal scaffold-style backend for the setup wizard."""
+
+    _TITLE_ART_LINES = (
+        "██╗  ██╗ █████╗ ██╗  ██╗ █████╗ ███╗   ███╗██╗     ",
+        "██║  ██║██╔══██╗╚██╗██╔╝██╔══██╗████╗ ████║██║     ",
+        "███████║███████║ ╚███╔╝ ███████║██╔████╔██║██║     ",
+        "██╔══██║██╔══██║ ██╔██╗ ██╔══██║██║╚██╔╝██║██║     ",
+        "██║  ██║██║  ██║██╔╝ ██╗██║  ██║██║ ╚═╝ ██║███████╗",
+        "╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝",
+    )
 
     def __init__(self) -> None:
         try:
-            from InquirerPy import inquirer
-            from InquirerPy.base import Choice
+            import questionary
+            from prompt_toolkit.styles import Style
+            from rich import box
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.text import Text
         except ModuleNotFoundError as exc:
             raise RuntimeError(
-                "Interactive setup requires InquirerPy. Install or upgrade Haxaml with the interactive dependency set."
+                "Interactive setup requires questionary and rich. Reinstall or upgrade Haxaml so the setup wizard runtime is available."
             ) from exc
-        self._inquirer = inquirer
-        self._choice = Choice
+        self._questionary = questionary
+        self._questionary.prompts.common.INDICATOR_SELECTED = "◼"
+        self._questionary.prompts.common.INDICATOR_UNSELECTED = "◻"
+        self._choice = questionary.Choice
+        self._console = Console()
+        self._box = box
+        self._panel = Panel
+        self._text = Text
+        self._style = Style.from_dict(
+            {
+                "qmark": "fg:#22d3ee bold noreverse noinherit",
+                "question": "fg:#f5f7fb bold noreverse noinherit",
+                "answer": "fg:#8df2cf bold",
+                "pointer": "fg:#93c5fd noreverse noinherit",
+                "highlighted": "fg:#93c5fd bold noreverse noinherit",
+                "selected": "fg:#34d399 bold noreverse noinherit",
+                "instruction": "fg:#94a3b8 noreverse noinherit",
+                "text": "fg:#dce7f3 noreverse noinherit",
+                "separator": "fg:#64748b noreverse noinherit",
+            }
+        )
+        self._printed_header = False
 
-    def _choice_items(self, choices: list[dict[str, object]]) -> list[object]:
+    def _title_art(self) -> object:
+        gradient = ("#7dd3fc", "#60a5fa", "#38bdf8", "#22d3ee", "#2dd4bf", "#34d399")
+        art = self._text()
+        for index, line in enumerate(self._TITLE_ART_LINES):
+            art.append(line, style=f"bold {gradient[index % len(gradient)]}")
+            if index < len(self._TITLE_ART_LINES) - 1:
+                art.append("\n")
+        return art
+
+    def _ensure_header(self) -> None:
+        if self._printed_header:
+            return
+        self._console.print(self._title_art())
+        heading = self._text()
+        heading.append("┌  ", style="#60a5fa")
+        heading.append("Haxaml Setup", style="bold #f8fafc")
+        heading.append(" - ", style="#64748b")
+        heading.append("governed agent installs", style="bold #f59e0b")
+        self._console.print(heading)
+        self._console.print(self._text("│", style="#64748b"))
+        self._printed_header = True
+
+    def _prompt_spacing(self) -> None:
+        self._console.print(self._text("│", style="#64748b"))
+        self._console.print(self._text("│", style="#64748b"))
+
+    def show_block(self, title: str, body: str) -> None:
+        self._ensure_header()
+        self._console.print()
+        block = self._text()
+        for index, line in enumerate(body.splitlines()):
+            block.append(line or " ", style="#dce7f3")
+            if index < len(body.splitlines()) - 1:
+                block.append("\n")
+        self._console.print(
+            self._panel.fit(
+                block,
+                title=f"[bold #22d3ee]{title}[/bold #22d3ee]",
+                border_style="#475569",
+                box=self._box.ROUNDED,
+                padding=(1, 2),
+            )
+        )
+        self._console.print()
+
+    def _select_choices(self, choices: list[dict[str, object]]) -> list[dict[str, object]]:
+        return [{"name": str(choice["name"]), "value": str(choice["value"])} for choice in choices]
+
+    def _checkbox_choices(
+        self,
+        choices: list[dict[str, object]],
+        *,
+        defaults: list[str] | None = None,
+    ) -> list[object]:
+        default_values = {str(item) for item in (defaults or [])}
         return [
             self._choice(
+                title=str(choice["name"]),
                 value=str(choice["value"]),
-                name=str(choice["name"]),
-                enabled=bool(choice.get("enabled", False)),
+                checked=str(choice["value"]) in default_values,
             )
             for choice in choices
         ]
 
-    def select(self, *, message: str, choices: list[dict[str, object]], default: str | None = None) -> str:
-        return str(
-            self._inquirer.select(
-                message=message,
-                choices=self._choice_items(choices),
-                default=default,
-                instruction="Use arrow keys and enter.",
-                cycle=False,
-            ).execute()
-        )
+    def select(self, *, message: str, choices: list[dict[str, object]], default: str | None = None) -> str | None:
+        self._ensure_header()
+        try:
+            result = self._questionary.select(
+                message,
+                choices=self._select_choices(choices),
+                qmark="◇",
+                pointer=None,
+                instruction=None,
+                style=self._style,
+            ).ask()
+        except KeyboardInterrupt:
+            return None
+        if result is not None:
+            self._prompt_spacing()
+        return None if result is None else str(result)
 
     def checkbox(
         self,
@@ -71,29 +179,37 @@ class InquirerPyBackend:
         message: str,
         choices: list[dict[str, object]],
         defaults: list[str] | None = None,
-    ) -> list[str]:
-        default_set = set(defaults or [])
-        enabled_choices = []
-        for choice in choices:
-            enriched = dict(choice)
-            enriched["enabled"] = str(choice["value"]) in default_set or bool(choice.get("enabled", False))
-            enabled_choices.append(enriched)
-        result = self._inquirer.checkbox(
-            message=message,
-            choices=self._choice_items(enabled_choices),
-            instruction="Use arrow keys, space to toggle, and enter to confirm.",
-            cycle=False,
-        ).execute()
+    ) -> list[str] | None:
+        self._ensure_header()
+        try:
+            result = self._questionary.checkbox(
+                message,
+                choices=self._checkbox_choices(choices, defaults=defaults),
+                qmark="◆",
+                pointer=None,
+                instruction="(↑/↓ to navigate, space to select, a to toggle all, enter to confirm)",
+                style=self._style,
+            ).ask()
+        except KeyboardInterrupt:
+            return None
+        if result is None:
+            return None
+        self._prompt_spacing()
         return [str(item) for item in result]
 
     def confirm(self, *, message: str, default: bool = True) -> bool:
-        return bool(
-            self._inquirer.confirm(
-                message=message,
+        self._ensure_header()
+        try:
+            result = self._questionary.confirm(
+                message,
                 default=default,
-                instruction="Press enter to confirm.",
-            ).execute()
-        )
+                qmark="◇",
+                style=self._style,
+            ).ask()
+        except KeyboardInterrupt:
+            return False
+        self._prompt_spacing()
+        return bool(result)
 
 
 @dataclass(frozen=True)
@@ -128,16 +244,12 @@ def _recommended_mode(scope: str, strong_targets: list[str], weak_targets: list[
 
 def _target_choices(candidate_targets: list[dict[str, object]]) -> list[dict[str, object]]:
     candidate_map = {str(item["target"]): item for item in candidate_targets}
-    choices: list[dict[str, object]] = [
-        {
-            "value": "generic",
-            "name": "Generic AGENTS / shared skill",
-            "enabled": False,
-        }
-    ]
-    for target in list_targets():
-        if target.target_id == "generic":
-            continue
+    choices: list[dict[str, object]] = []
+    ordered_targets = sorted(
+        list_targets(),
+        key=lambda target: (_TARGET_PROMPT_ORDER.get(target.target_id, 50), target.display_name.lower()),
+    )
+    for target in ordered_targets:
         candidate = candidate_map.get(target.target_id, {})
         strong = [str(path) for path in candidate.get("strong_paths", []) or []]
         weak = [str(path) for path in candidate.get("weak_paths", []) or []]
@@ -147,10 +259,11 @@ def _target_choices(candidate_targets: list[dict[str, object]]) -> list[dict[str
         if weak:
             evidence_parts.append(f"weak: {', '.join(weak)}")
         suffix = f" ({'; '.join(evidence_parts)})" if evidence_parts else ""
+        base_name = "Generic AGENTS / shared skill" if target.target_id == "generic" else target.display_name
         choices.append(
             {
                 "value": target.target_id,
-                "name": f"{target.display_name}{suffix}",
+                "name": f"{base_name}{suffix}",
                 "enabled": bool(strong),
             }
         )
@@ -173,6 +286,45 @@ def _capability_choices(selected_targets: list[str], scope: str) -> list[dict[st
     return choices
 
 
+def _wizard_review_message(
+    *,
+    scope: str,
+    mode: str,
+    selected_targets: list[str],
+    selected_only: list[str],
+    selected_workflow: bool,
+    preview_plan: Any,
+    dry_run: bool,
+) -> str:
+    planned_files = [item for item in preview_plan.planned_files]
+    create_count = sum(1 for item in planned_files if item.action == "create")
+    update_count = sum(1 for item in planned_files if item.action in {"update", "append_pointer"})
+    merge_count = sum(1 for item in planned_files if item.action == "merge")
+    skip_count = sum(1 for item in planned_files if item.action == "skip")
+    lines = [
+        f"Mode: {mode}",
+        f"Scope: {scope}",
+        f"Targets: {', '.join(selected_targets) if selected_targets else '(none)'}",
+        f"Capabilities: {', '.join(selected_only) if selected_only else '(none)'}",
+        f"Workflow adapters: {'yes' if selected_workflow else 'no'}",
+        "",
+        "Planned actions:",
+        f"- create: {create_count}",
+        f"- update: {update_count}",
+        f"- merge: {merge_count}",
+        f"- skip: {skip_count}",
+        f"- manual follow-up: {len(preview_plan.manual_actions)}",
+    ]
+    if preview_plan.strong_detected_targets:
+        lines.append(f"Strong evidence: {', '.join(preview_plan.strong_detected_targets)}")
+    if preview_plan.weak_detected_targets:
+        lines.append(f"Weak evidence: {', '.join(preview_plan.weak_detected_targets)}")
+    if preview_plan.warnings:
+        lines.extend(["", "Warnings:"])
+        lines.extend(f"- {item}" for item in preview_plan.warnings[:4])
+    return "\n".join(lines)
+
+
 def run_setup_wizard(
     *,
     project_dir: str | Path,
@@ -187,7 +339,7 @@ def run_setup_wizard(
     backend: WizardBackend | None = None,
 ) -> SetupWizardResult | None:
     """Run the interactive setup wizard and return resolved CLI-equivalent args."""
-    backend = backend or InquirerPyBackend()
+    backend = backend or QuestionaryBackend()
     prefilled = prefilled or set()
     project = Path(project_dir).resolve()
 
@@ -201,6 +353,8 @@ def run_setup_wizard(
             ],
             default=scope,
         )
+        if selected_scope is None:
+            return None
 
     candidate_targets: list[dict[str, object]] = []
     strong_targets: list[str] = []
@@ -222,6 +376,8 @@ def run_setup_wizard(
             ],
             default=selected_mode,
         )
+        if selected_mode is None:
+            return None
 
     selected_targets = [item for item in (targets or []) if str(item).strip()]
     if not selected_targets and target != "auto":
@@ -238,6 +394,8 @@ def run_setup_wizard(
             choices=target_choices,
             defaults=defaults,
         )
+        if selected_targets is None:
+            return None
         if not selected_targets:
             selected_targets = ["generic"] if selected_scope == "project" else ["codex"]
 
@@ -258,6 +416,8 @@ def run_setup_wizard(
             choices=capability_choices,
             defaults=selected_only or defaults,
         )
+        if selected_only is None:
+            return None
         if not selected_only:
             selected_only = defaults
 
@@ -278,9 +438,19 @@ def run_setup_wizard(
         only=selected_only,
         with_workflow=selected_workflow,
     )
-    confirm_message = setup_message(preview_plan)
+    confirm_message = _wizard_review_message(
+        scope=selected_scope,
+        mode=selected_mode,
+        selected_targets=selected_targets,
+        selected_only=selected_only,
+        selected_workflow=selected_workflow,
+        preview_plan=preview_plan,
+        dry_run=dry_run,
+    )
+    if hasattr(backend, "show_block"):
+        backend.show_block("Review setup plan", confirm_message)
     if not backend.confirm(
-        message=f"{confirm_message}\n\n{'Run dry-run with this plan?' if dry_run else 'Apply this setup?'}",
+        message="Apply this setup now?" if not dry_run else "Run this dry run?",
         default=True,
     ):
         return None

@@ -10,6 +10,7 @@ import yaml
 
 from haxaml.cli import cli
 from haxaml.export_engine import AGENT_CONFIGS
+from haxaml.setup.cli import interactive_setup_message
 from haxaml.setup import WORKFLOW_TARGET_IDS
 from haxaml.setup.interactive import run_setup_wizard
 from haxaml.setup.registry import get_target, list_targets
@@ -245,6 +246,24 @@ def test_setup_rerun_preserves_populated_frame_files_and_repairs_missing():
         preserved = yaml.safe_load(open(facts_path).read())
         assert preserved["identity"]["name"] == "user-populated"
         assert os.path.exists(rules_path)
+
+
+def test_setup_rerun_refreshes_manifest_when_explicit_targets_change():
+    runner = CliRunner()
+
+    with runner.isolated_filesystem():
+        first = runner.invoke(cli, ["setup"])
+        assert first.exit_code == 0, first.output
+
+        second = runner.invoke(cli, ["setup", "--targets", "codex", "--targets", "claude"])
+        assert second.exit_code == 0, second.output
+
+        with open(".haxaml/setup/manifest.yaml", "r") as f:
+            manifest = yaml.safe_load(f)
+
+        assert manifest["requested_targets"] == ["codex", "claude"]
+        assert manifest["selected_targets"] == ["codex", "claude"]
+        assert manifest["selection_source"] == "explicit_targets"
 
 
 def test_setup_auto_with_single_strong_candidate_adopts_that_target():
@@ -545,6 +564,7 @@ def test_setup_wizard_preselects_strong_targets_and_respects_prefilled_flags():
             self.select_calls = []
             self.checkbox_calls = []
             self.confirm_calls = []
+            self.blocks = []
             self._select_results = ["adopted"]
             self._checkbox_results = [["codex"], ["frame", "instructions", "skills", "mcp"]]
 
@@ -559,6 +579,9 @@ def test_setup_wizard_preselects_strong_targets_and_respects_prefilled_flags():
         def confirm(self, *, message, default=True):
             self.confirm_calls.append({"message": message, "default": default})
             return True
+
+        def show_block(self, title, body):
+            self.blocks.append({"title": title, "body": body})
 
     runner = CliRunner()
     backend = FakeBackend()
@@ -586,10 +609,69 @@ def test_setup_wizard_preselects_strong_targets_and_respects_prefilled_flags():
         assert result.targets == ["codex"]
         assert len(backend.select_calls) == 1
         target_call = backend.checkbox_calls[0]
+        target_values = [choice["value"] for choice in target_call["choices"]]
+        assert target_values[:4] == ["claude", "codex", "gemini", "copilot"]
+        assert target_values[-1] == "generic"
         codex_choice = next(choice for choice in target_call["choices"] if choice["value"] == "codex")
         assert ".codex/config.toml" in codex_choice["name"]
         assert codex_choice["enabled"] is True
         assert len(backend.confirm_calls) == 1
+        assert len(backend.blocks) == 1
+        review_message = backend.blocks[0]["body"]
+        assert "Planned actions:" in review_message
+        assert backend.confirm_calls[0]["message"] == "Run this dry run?"
+
+
+def test_setup_wizard_cancelled_selection_stops_cleanly():
+    class FakeBackend:
+        def select(self, *, message, choices, default=None):
+            return None
+
+        def checkbox(self, *, message, choices, defaults=None):
+            raise AssertionError("checkbox should not run after cancellation")
+
+        def confirm(self, *, message, default=True):
+            raise AssertionError("confirm should not run after cancellation")
+
+    result = run_setup_wizard(
+        project_dir=".",
+        scope="project",
+        target="auto",
+        mode="auto",
+        only=None,
+        with_workflow=False,
+        backend=FakeBackend(),
+    )
+
+    assert result is None
+
+
+def test_interactive_setup_message_groups_paths_by_kind():
+    data = {
+        "mode": "adopted",
+        "scope": "project",
+        "selected_targets": ["codex", "claude"],
+        "selection_source": "explicit_targets",
+        "next_steps": ["Run `haxaml setup doctor` to inspect managed setup state."],
+        "apply_result": {
+            "items": [
+                {"kind": "skills", "path": ".agents/skills/haxaml/SKILL.md", "status": "created"},
+                {"kind": "mcp", "path": ".codex/config.toml", "status": "merged"},
+                {"kind": "instructions", "path": "CLAUDE.md", "status": "created"},
+                {"kind": "frame", "path": ".haxaml/facts.yaml", "status": "skipped"},
+            ]
+        },
+    }
+
+    message = interactive_setup_message(data)
+
+    assert "Setup summary" in message
+    assert "skills →" in message
+    assert ".agents/skills/haxaml/SKILL.md" in message
+    assert "mcp →" in message
+    assert ".codex/config.toml (merged)" in message
+    assert "preserved frame →" in message
+    assert ".haxaml/facts.yaml" in message
 
 
 def test_setup_doctor_reports_missing_managed_file():

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.7.6 - 2026-05-19
+
+- Made `haxaml setup` stop acting like a glorified questionnaire. The TTY path now uses a scaffold-style prompt flow with cleaner provider ordering, better spacing, a compact review card, and a grouped scaffold summary after apply instead of dumping raw prompt lines and giant generated previews back at you.
+- Removed the InquirerPy dependency and moved setup to a questionary-based interactive runtime so the wizard feels closer to a real scaffold CLI than a raw prompt chain.
+- Fixed setup cancel behavior so backing out of a dialog cleanly cancels the run instead of turning canceled values into weird string state.
+- Tightened release plumbing for the `0.7.x` line: tag-push publishes now run version validation too, manual publish docs match actual behavior better, and adapter packages publish before core so exact extra pins have a smaller broken window.
+- Bumped `haxaml`, `haxaml-mcp`, and `haxaml-ui` together to `0.7.6`.
+
 ## 0.7.5 - 2026-05-18
 
 - Made setup reruns feel way less sketchy: explicit `--targets` now wins cleanly, provider-specific outputs stop getting shadowed by generic ones, and setup review output now shows grouped actions, selection source, next steps, and write policy in plain terms.
