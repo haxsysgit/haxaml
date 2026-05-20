@@ -22,8 +22,6 @@ It uses a model I call **FRAME** to split project understanding into five parts:
 
 The goal is to move the "brain" of the project out of the AI provider's temporary memory and into the repository itself. When you switch between Claude Code, Cursor, Windsurf, or any other tool, the next agent should be able to read the diary, the map, and the expected runbook and continue from real project state without rereading the whole codebase.
 
-The canonical product and feature direction lives in [goals.md](./goals.md). This README stays as the main public entrypoint in the original product voice.
-
 ## The Agent Diary Philosophy
 
 I want to move away from agents that act like code generators with intelligence and toward agents that act like seasoned builders. A real professional does not start by hammering nails: they study the site and verify the materials before the first tool is ever lifted. Haxaml provides the structure they need to maintain that discipline:
@@ -118,10 +116,5 @@ The important loop is simple: `expect` defines the planned path and finish line,
 - [learn/FRAME.md](./learn/FRAME.md): the underlying memory model.
 - [learn/haxaml.md](./learn/haxaml.md): how Haxaml turns FRAME into a working governed system.
 - [learn/haxaml-mcp.md](./learn/haxaml-mcp.md): the operator-facing MCP guide.
-- [0.7.x_Roadmap.md](./0.7.x_Roadmap.md): details on current onboarding and workflow accommodation work.
-- [v1.0_Roadmap.md](./v1.0_Roadmap.md): the path to a stable core.
 - [docs/architecture.md](./docs/architecture.md): how the modules are split.
-- [docs/mcp-tool-reference.md](./docs/mcp-tool-reference.md): compact MCP tool contract reference.
-- [docs/reports/](./docs/reports): dated audit evidence and hardening notes.
-- [docs/reports/haxaml-0.7x-closeout.md](./docs/reports/haxaml-0.7x-closeout.md): the `0.7.x` close-out review and `0.8.0` handoff.
 - [CONTRIBUTING.md](./CONTRIBUTING.md): how to help build the protocol.
