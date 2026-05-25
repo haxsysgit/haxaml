@@ -37,6 +37,7 @@ class StateManager:
     def __init__(self, state_path: str):
         self.path = Path(state_path).resolve()
         self.project_dir = self.path.parent.parent if self.path.parent.name == ".haxaml" else self.path.parent
+        self.runtime_path = self.path.parent / "runtime" / "acts-state.yaml"
         self.archive = ActsArchive(self.project_dir)
         if not self.path.exists():
             raise StateError(f"Acts file not found: {self.path}")
@@ -44,7 +45,7 @@ class StateManager:
     def read(self) -> dict:
         """Read state with shared lock."""
         with self._lock(shared=True):
-            return load_yaml(str(self.path))
+            return self._read_unlocked()
 
     def write(self, state: dict) -> None:
         """Write state atomically with exclusive lock."""
@@ -89,7 +90,7 @@ class StateManager:
         }
 
         with self._lock(shared=False):
-            state = load_yaml(str(self.path))
+            state = self._read_unlocked()
             runs = state.get("runs", [])
             if not isinstance(runs, list):
                 runs = []
@@ -135,7 +136,7 @@ class StateManager:
         }
 
         with self._lock(shared=False):
-            state = load_yaml(str(self.path))
+            state = self._read_unlocked()
             active = state.get("active_task", {})
             if not active or not active.get("name") or active.get("name") == "none":
                 raise StateError("No active task to complete")
@@ -171,7 +172,7 @@ class StateManager:
             raise StateError(f"Invalid result: {result}")
 
         with self._lock(shared=False):
-            state = load_yaml(str(self.path))
+            state = self._read_unlocked()
             active = state.get("active_task", {})
             if not active or not active.get("name") or active.get("name") == "none":
                 raise StateError("No active task to complete")
@@ -196,7 +197,7 @@ class StateManager:
     def set_active_task(self, name: str, description: str = "", assignee: str = "builder") -> None:
         """Set a new active task."""
         with self._lock(shared=False):
-            state = load_yaml(str(self.path))
+            state = self._read_unlocked()
             state["active_task"] = {
                 "name": name,
                 "description": description,
@@ -217,7 +218,7 @@ class StateManager:
     ) -> None:
         """Record a durable project decision."""
         with self._lock(shared=False):
-            state = load_yaml(str(self.path))
+            state = self._read_unlocked()
             decisions = state.get("decisions", [])
             if not isinstance(decisions, list):
                 decisions = []
@@ -239,7 +240,7 @@ class StateManager:
     def add_blocker(self, name: str, reason: str, depends_on: str = "") -> None:
         """Add a blocked task."""
         with self._lock(shared=False):
-            state = load_yaml(str(self.path))
+            state = self._read_unlocked()
             blocked = state.get("blocked_tasks", [])
             if not isinstance(blocked, list):
                 blocked = []
@@ -262,7 +263,7 @@ class StateManager:
     def compact(self, keep_recent: int = 5, dry_run: bool = False) -> dict:
         """Archive cold runs, sessions, and verifications into acts-history.yaml."""
         with self._lock(shared=False):
-            state = load_yaml(str(self.path))
+            state = self._read_unlocked()
             policy = self.memory_policy()
             limits = hot_limits_from_policy(policy, keep_recent=keep_recent)
             return self._archive_cold_history(
@@ -275,11 +276,11 @@ class StateManager:
     def archive_on_record(self) -> dict:
         """Archive cold history after a record when policy enables it."""
         with self._lock(shared=False):
-            state = load_yaml(str(self.path))
+            state = self._read_unlocked()
             policy = self.memory_policy()
             archive_mode = policy.get("archive_mode", "manual")
             max_acts_bytes = int(policy.get("max_acts_bytes", 16000) or 16000)
-            size_triggered = self.path.exists() and self.path.stat().st_size > max_acts_bytes
+            size_triggered = len(yaml.dump(state, default_flow_style=False, sort_keys=False).encode("utf-8")) > max_acts_bytes
             if archive_mode != "on_record" and not size_triggered:
                 self._ensure_archive_state(state, archive_mode=policy.get("archive_mode", "manual"))
                 self._atomic_write(state)
@@ -368,17 +369,49 @@ class StateManager:
             lock_fd.close()
 
     def _atomic_write(self, state: dict) -> None:
-        """Write state to temp file then rename for atomicity."""
-        dir_path = self.path.parent
+        """Write FRAME frontmatter and tool runtime state separately."""
+        self._atomic_write_yaml(self.path, self._frame_payload(state))
+        runtime = self._runtime_payload(state)
+        if runtime:
+            self._atomic_write_yaml(self.runtime_path, runtime)
+        elif self.runtime_path.exists():
+            self.runtime_path.unlink()
+
+    def _read_unlocked(self) -> dict[str, Any]:
+        """Read strict acts frontmatter plus Haxaml-owned runtime state."""
+        frame_state = load_yaml(str(self.path))
+        runtime_state = load_yaml(str(self.runtime_path)) if self.runtime_path.exists() else {}
+        if not isinstance(frame_state, dict):
+            frame_state = {}
+        if not isinstance(runtime_state, dict):
+            runtime_state = {}
+        merged = dict(runtime_state)
+        if "frame" in frame_state:
+            merged["frame"] = frame_state["frame"]
+        return merged
+
+    def _frame_payload(self, state: dict[str, Any]) -> dict[str, Any]:
+        return {"frame": state.get("frame")}
+
+    def _runtime_payload(self, state: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: value
+            for key, value in state.items()
+            if key != "frame"
+        }
+
+    def _atomic_write_yaml(self, path: Path, payload: dict[str, Any]) -> None:
+        """Write YAML to temp file then rename for atomicity."""
+        path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_path = tempfile.mkstemp(
             suffix=".yaml",
             prefix=".state_",
-            dir=str(dir_path),
+            dir=str(path.parent),
         )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                yaml.dump(state, handle, default_flow_style=False, sort_keys=False)
-            os.replace(tmp_path, str(self.path))
+                yaml.dump(payload, handle, default_flow_style=False, sort_keys=False)
+            os.replace(tmp_path, str(path))
         except Exception:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
@@ -704,14 +737,18 @@ class StateManager:
         }
 
     def _validate_dict(self, state: dict) -> list[str]:
-        """Validate state dict against schema without writing."""
+        """Validate the static acts frontmatter before writing runtime state.
+
+        The 0.8.0 FRAME schema is frontmatter-only. Haxaml runtime fields
+        live beside FRAME, not inside the strict FRAME document.
+        """
         from jsonschema import Draft202012Validator
         from haxaml.validator import load_schema
 
         schema = load_schema("acts.schema.yaml")
         validator = Draft202012Validator(schema)
         errors = []
-        for error in validator.iter_errors(state):
+        for error in validator.iter_errors({"frame": state.get("frame")}):
             path = ".".join(str(p) for p in error.absolute_path) or "(root)"
             errors.append(f"[{path}] {error.message}")
         return errors

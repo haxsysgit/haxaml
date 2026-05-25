@@ -387,8 +387,8 @@ def map_complexity_issues(
         errors.append("map.yaml is required by module/cross-impact complexity but is missing")
 
     if assessment.declared_map_required is None:
-        warnings.append("expect.planning.map_required is unset; set it explicitly")
-    elif not assessment.declared_map_required and assessment.required:
+        return errors, warnings
+    if not assessment.declared_map_required and assessment.required:
         errors.append(
             "expect.planning.map_required=false but complexity check requires map.yaml"
         )

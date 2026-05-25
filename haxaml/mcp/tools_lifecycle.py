@@ -1361,7 +1361,22 @@ def haxaml_expect_sync(
     expect = load_yaml(str(expect_path))
     runbook = expect.get("runbook", [])
     if not isinstance(runbook, list) or not runbook:
-        return _err("haxaml_expect_sync", "invalid_expect_runbook", "expect.yaml runbook is missing or empty.")
+        default_run = int(sync_state.get("pending_run_number", 0) or 0) or 1
+        phase = "Phase 1"
+        runbook = [_new_default_runbook_item(default_run, phase=phase, depends_on=0)]
+        expect["runbook"] = runbook
+        phases = expect.get("phases", [])
+        if not isinstance(phases, list) or not phases:
+            expect["phases"] = [
+                {
+                    "name": phase,
+                    "status": "active",
+                    "run_range": f"{default_run}-{default_run}",
+                    "target_runs": 1,
+                    "description": "Runtime-created phase for the first governed sync.",
+                    "done_when": "The synced run is verified and recorded.",
+                }
+            ]
 
     target_run = int(run) if isinstance(run, int) else 0
     if target_run <= 0:

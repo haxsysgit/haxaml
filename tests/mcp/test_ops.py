@@ -15,6 +15,7 @@ from haxaml.mcp_server import (
     haxaml_upgrade,
 )
 
+from .helpers import frame as _frame
 from .helpers import msg as _msg
 
 
@@ -202,6 +203,7 @@ class TestReconcile:
 
     def test_returns_blocking_conflicts_when_map_present_and_misaligned(self, governed_project):
         map_data = {
+            "frame": _frame("map", "repo_context_map"),
             "modules": [
                 {"name": "auth", "purpose": "Auth", "files": ["src/auth/"]},
                 {"name": "api", "purpose": "API", "files": ["src/api/"]},
@@ -243,6 +245,7 @@ class TestReconcile:
 
     def test_deterministic_summary_for_equivalent_state(self, governed_project):
         map_data = {
+            "frame": _frame("map", "repo_context_map"),
             "modules": [
                 {"name": "auth", "purpose": "Auth", "files": ["src/auth/"]},
                 {"name": "api", "purpose": "API", "files": ["src/api/"]},
@@ -294,6 +297,7 @@ class TestImpact:
 
     def test_module_found(self, governed_project):
         map_data = {
+            "frame": _frame("map", "repo_context_map"),
             "modules": [
                 {"name": "auth", "purpose": "Authentication", "files": ["src/auth/"]},
                 {"name": "api", "purpose": "API routes", "files": ["src/api/"]},
@@ -320,6 +324,7 @@ class TestImpact:
 
     def test_module_not_found(self, governed_project):
         map_data = {
+            "frame": _frame("map", "repo_context_map"),
             "modules": [{"name": "auth", "purpose": "Auth", "files": []}],
             "dependencies": [],
             "impact": [],

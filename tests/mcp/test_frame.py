@@ -14,6 +14,7 @@ from haxaml.mcp_server import (
     haxaml_validate,
 )
 
+from .helpers import frame as _frame
 from .helpers import msg as _msg
 
 
@@ -108,6 +109,7 @@ class TestValidate:
 
     def test_fails_on_blocking_derivation_conflicts(self, governed_project):
         map_data = {
+            "frame": _frame("map", "repo_context_map"),
             "modules": [
                 {"name": "auth", "purpose": "Auth", "files": ["src/auth/"]},
                 {"name": "api", "purpose": "API", "files": ["src/api/"]},

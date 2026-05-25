@@ -1,139 +1,42 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
-title: "Haxaml Map Schema"
-description: "Schema for map.yaml — module structure, ownership, dependencies, and impact declarations."
+title: "FRAME Map"
+description: "FRAME map frontmatter. Only fields defined by this schema are valid in this slice."
 type: object
+additionalProperties: false
 
 required:
-  - modules
+  - frame
 
 properties:
-  modules:
-    type: array
-    minItems: 1
-    description: "List of project modules with ownership and purpose."
-    items:
-      type: object
-      required:
-        - name
-        - purpose
-        - files
-      properties:
-        name:
-          type: string
-          description: "Module name (e.g., 'api', 'services', 'db')."
-        purpose:
-          type: string
-          description: "What this module is responsible for."
-        files:
-          type: array
-          minItems: 1
-          items:
-            type: string
-          description: "File paths or glob patterns owned by this module."
-        touches:
-          type: array
-          items:
-            type: string
-          description: "Other modules this module interacts with."
-        owner:
-          type: string
-          description: "Team or person responsible for this module."
-        notes:
-          type: string
-          description: "Additional context about the module."
-
-  dependencies:
-    type: array
-    description: "Module-to-module dependency declarations."
-    items:
-      type: object
-      required:
-        - from
-        - to
-      properties:
-        from:
-          type: string
-          description: "Source module name."
-        to:
-          type: string
-          description: "Target module name."
-        reason:
-          type: string
-          description: "Why this dependency exists."
-
-  impact:
-    type: array
-    description: "Impact declarations — if X changes, check Y."
-    items:
-      type: object
-      required:
-        - when
-        - check
-      properties:
-        when:
-          type: string
-          description: "What triggers the impact check (module or file pattern)."
-        check:
-          type: array
-          minItems: 1
-          items:
-            type: string
-          description: "What to verify when the trigger changes."
-        reason:
-          type: string
-          description: "Why this impact declaration exists."
-
-  boundaries:
-    type: array
-    description: "Per-module boundary rules."
-    items:
-      type: object
-      required:
-        - module
-        - rules
-      properties:
-        module:
-          type: string
-          description: "Module this boundary applies to."
-        rules:
-          type: array
-          minItems: 1
-          items:
-            type: string
-          description: "Boundary rules for this module."
-
-  external:
-    type: array
-    description: "External integrations, APIs, and services."
-    items:
-      type: object
-      required:
-        - name
-        - type
-      properties:
-        name:
-          type: string
-          description: "Name of the external service or API."
-        type:
-          type: string
-          enum:
-            - api
-            - service
-            - database
-            - message_queue
-            - storage
-            - other
-          description: "Type of external integration."
-        url:
-          type: string
-          description: "URL or connection string."
-        used_by:
-          type: array
-          items:
-            type: string
-          description: "Which modules use this integration."
-        notes:
-          type: string
-          description: "Additional context."
-
-additionalProperties: false
+  frame:
+    type: object
+    description: "FRAME frontmatter. Lets humans and tools identify this file before reading the body."
+    additionalProperties: false
+    required: [file, schema_version, role, status]
+    properties:
+      file:
+        type: string
+        const: map
+        description: "The FRAME file name. Prevents a tool from treating one FRAME file as another."
+      schema_version:
+        type: string
+        const: "0.8.0"
+        description: "The schema contract this file claims to follow."
+      role:
+        type: string
+        const: repo_context_map
+        description: "The job of map.yaml: short repo summaries that tell tools where to inspect first."
+      status:
+        type: string
+        enum: [draft, active, deprecated]
+        description: "Whether this file is still being shaped, trusted as active, or kept only for old projects."
+      last_reviewed:
+        type: ["string", "null"]
+        format: date
+        description: "Optional date when a human or tool last checked this file for stale path summaries."
+      updated_by:
+        type: ["string", "null"]
+        description: "Optional human, agent, or tool that last changed this file."
+      update_reason:
+        type: ["string", "null"]
+        description: "Optional short reason for the last change."

@@ -1,214 +1,47 @@
 # expect.yaml JSON Schema — Expected Runs (FRAME model: E)
 # The forward-looking file: phases, runbook, task sequence, milestones.
-# Version: 0.2.0
+# Version: 0.8.0
 
 $schema: "https://json-schema.org/draft/2020-12/schema"
-title: "Haxaml Expect"
-description: "Expected execution path — phases, runbook, task sequence, milestones, priorities."
+title: "FRAME Expect"
+description: "FRAME expect frontmatter. Only fields defined by this schema are valid in this slice."
 type: object
+additionalProperties: false
 
 required:
-  - phases
+  - frame
 
 properties:
 
-  planning:
+  frame:
     type: object
-    description: "Project sizing and execution guidance derived by the AI agent from the user's end goal."
+    description: "FRAME frontmatter. Lets humans and tools identify this file before reading the body."
+    additionalProperties: false
+    required: [file, schema_version, role, status]
     properties:
-      goal:
+      file:
         type: string
-        description: "The end state this plan is designed to reach."
-      strategy:
+        const: expect
+        description: "The FRAME file name. Prevents a tool from treating one FRAME file as another."
+      schema_version:
         type: string
-        description: "How the run sequence moves from foundations to the final project goal."
-      estimated_runs:
-        type: integer
-        minimum: 1
-        description: "Predicted number of governed runs needed to reach the current goal."
-      project_size:
+        const: "0.8.0"
+        description: "The schema contract this file claims to follow."
+      role:
         type: string
-        enum: [small, medium, large]
-        description: "Size classification based on expected runs, module count, and boundary complexity."
-      map_required:
-        type: boolean
-        description: "Whether map.yaml should exist for this project."
-      map_reason:
+        const: planned_direction
+        description: "The job of expect.yaml: planned direction and done checks, not a rigid schedule."
+      status:
         type: string
-        description: "Why map.yaml is or is not required."
-
-  phases:
-    type: array
-    description: "Ordered project phases."
-    minItems: 1
-    items:
-      type: object
-      required: [name, status]
-      properties:
-        name:
-          type: string
-        status:
-          type: string
-          enum: [planned, active, done]
-        run_range:
-          type: string
-          description: "Human-readable run range covered by this phase, e.g. '1-3'."
-        target_runs:
-          type: integer
-          minimum: 1
-          description: "Expected number of runs in this phase."
-        description:
-          type: string
-        done_when:
-          type: string
-          description: "Definition of done for this phase."
-        depends_on:
-          type: array
-          items:
-            type: string
-
-  runbook:
-    type: array
-    description: "Ordered governed runs needed to reach the project goal."
-    items:
-      type: object
-      required: [run, goal, outcome, status, done_when]
-      properties:
-        run:
-          type: integer
-          minimum: 1
-          description: "Run number in the expected sequence."
-        phase:
-          type: string
-          description: "Phase this run belongs to."
-        status:
-          type: string
-          enum: [planned, active, done, skipped, blocked]
-        goal:
-          type: string
-          description: "What this run is meant to achieve."
-        outcome:
-          type: string
-          description: "Concrete project state expected after this run."
-        depends_on:
-          type: array
-          items:
-            type: integer
-          description: "Run numbers that must complete first."
-        touches:
-          type: array
-          items:
-            type: string
-          description: "Expected modules, boundaries, or file areas touched by this run."
-        requires:
-          type: array
-          items:
-            type: string
-          description: "Materials the agent must assemble before the run, e.g. DB URI, API key, MCP server, package choice."
-        uses_map:
-          type: boolean
-          description: "Whether the agent should consult map.yaml for this run."
-        verify:
-          type: array
-          items:
-            type: string
-          description: "Checks that prove the run succeeded."
-        done_when:
-          type: string
-          description: "Definition of done for this run."
-        risks:
-          type: array
-          items:
-            type: string
-          description: "Known risks or boundaries to watch."
-
-  map_policy:
-    type: object
-    description: "Guidance for when map.yaml becomes required."
-    properties:
-      small_project_max_runs:
-        type: integer
-        minimum: 1
-      medium_project_max_runs:
-        type: integer
-        minimum: 1
-      module_threshold:
-        type: integer
-        minimum: 1
-      cross_impact_touch_threshold:
-        type: integer
-        minimum: 1
-      cross_impact_run_threshold:
-        type: integer
-        minimum: 1
-      dependency_fanout_threshold:
-        type: integer
-        minimum: 1
-      impact_check_threshold:
-        type: integer
-        minimum: 1
-      shared_integration_module_threshold:
-        type: integer
-        minimum: 1
-      require_map_when:
-        type: array
-        items:
-          type: string
-      agent_instruction:
-        type: string
-        description: "Instruction for agents when map_required is true or runbook.uses_map is true."
-
-  upcoming:
-    type: array
-    description: "Prioritized list of next tasks."
-    items:
-      type: object
-      required: [task, priority]
-      properties:
-        task:
-          type: string
-        priority:
-          type: string
-          enum: [critical, high, medium, low]
-        description:
-          type: string
-        phase:
-          type: string
-          description: "Which phase this task belongs to."
-        depends_on:
-          type: array
-          items:
-            type: string
-
-  milestones:
-    type: array
-    description: "Key milestones and their status."
-    items:
-      type: object
-      required: [name, status]
-      properties:
-        name:
-          type: string
-        status:
-          type: string
-          enum: [pending, reached]
-        target_date:
-          type: string
-        criteria:
-          type: string
-          description: "How we know this milestone is reached."
-
-  open_questions:
-    type: array
-    description: "Questions that need answers before proceeding."
-    items:
-      type: object
-      required: [question]
-      properties:
-        question:
-          type: string
-        blocking:
-          type: boolean
-          default: false
-        phase:
-          type: string
+        enum: [draft, active, deprecated]
+        description: "Whether this file is still being shaped, trusted as active, or kept only for old projects."
+      last_reviewed:
+        type: ["string", "null"]
+        format: date
+        description: "Optional date when a human or tool last checked this file for stale planned work."
+      updated_by:
+        type: ["string", "null"]
+        description: "Optional human, agent, or tool that last changed this file."
+      update_reason:
+        type: ["string", "null"]
+        description: "Optional short reason for the last change."

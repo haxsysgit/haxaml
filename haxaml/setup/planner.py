@@ -415,7 +415,7 @@ def build_setup_plan(
     files: dict[str, PlannedFile] = {}
 
     if scope == "project" and "frame" in kinds:
-        for filename, content in render_frame_templates(mode=resolved_mode, include_origin=True).items():
+        for filename, content in render_frame_templates().items():
             path = root / ".haxaml" / filename
             docs = "https://github.com/haxsysgit/haxaml/blob/main/learn/FRAME.md"
             _add_file(

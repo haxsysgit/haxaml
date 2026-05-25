@@ -18,6 +18,7 @@ from haxaml.mcp_server import (
     haxaml_validate,
 )
 
+from .helpers import frame as _frame
 from .helpers import msg as _msg
 
 
@@ -509,6 +510,7 @@ class TestLifecycle:
 
     def test_session_record_blocks_success_when_derivation_conflicts_exist(self, governed_project):
         map_data = {
+            "frame": _frame("map", "repo_context_map"),
             "modules": [
                 {"name": "auth", "purpose": "Auth", "files": ["src/auth/"]},
                 {"name": "api", "purpose": "API", "files": ["src/api/"]},
@@ -875,6 +877,7 @@ class TestLifecycle:
 
     def test_session_record_failed_requires_explicit_conflict_reason(self, governed_project):
         map_data = {
+            "frame": _frame("map", "repo_context_map"),
             "modules": [
                 {"name": "auth", "purpose": "Auth", "files": ["src/auth/"]},
                 {"name": "api", "purpose": "API", "files": ["src/api/"]},

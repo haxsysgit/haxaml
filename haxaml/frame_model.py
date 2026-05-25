@@ -97,7 +97,33 @@ class FrameModel:
             "has_expect": self.has_expect(),
             "missing_files": list(self.missing_files),
             "load_errors": list(self.load_errors),
+            "frontmatter": self.frontmatter_summary(),
         }
+
+    def frontmatter(self, name: str) -> dict[str, Any]:
+        """Return the shared FRAME frontmatter for one file."""
+        data = self.frame_file(name) or {}
+        frame = data.get("frame") if isinstance(data, dict) else None
+        return frame if isinstance(frame, dict) else {}
+
+    def frontmatter_summary(self) -> dict[str, dict[str, Any]]:
+        """Return just the shared FRAME headers across all loaded files.
+
+        This is the 0.8.0 handshake layer: tools can inspect roles, versions,
+        and status without loading or trusting the full body.
+        """
+        summary: dict[str, dict[str, Any]] = {}
+        for name in ("facts", "rules", "acts", "map", "expect"):
+            frame = self.frontmatter(name)
+            if frame:
+                summary[name] = {
+                    "file": frame.get("file", ""),
+                    "schema_version": frame.get("schema_version", ""),
+                    "role": frame.get("role", ""),
+                    "status": frame.get("status", ""),
+                    "last_reviewed": frame.get("last_reviewed"),
+                }
+        return summary
 
     def minimal_signal(self) -> dict[str, Any]:
         """Return the smallest useful project signal for onboarding payloads.
@@ -125,6 +151,7 @@ class FrameModel:
                 "map": self.has_map(),
                 "expect": self.has_expect(),
             },
+            "frontmatter": self.frontmatter_summary(),
         }
 
     def frame_file(self, name: str) -> dict[str, Any] | None:

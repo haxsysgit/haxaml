@@ -1,191 +1,47 @@
 # facts.yaml JSON Schema — Project Facts (FRAME model: F)
-# The source of truth about what the project IS.
-# Version: 0.2.0
+# The stable base truth about what the project is.
+# Version: 0.8.0
 
 $schema: "https://json-schema.org/draft/2020-12/schema"
-title: "Haxaml Facts"
-description: "The project facts — identity, stack, architecture, constraints, features."
+title: "FRAME Facts"
+description: "FRAME facts frontmatter. Only fields defined by this schema are valid in this slice."
 type: object
+additionalProperties: false
 
 required:
-  - identity
-  - goal
-  - stack
-  - architecture
-  - database
-  - constraints
-  - success_criteria
+  - frame
 
 properties:
 
-  identity:
+  frame:
     type: object
-    description: "Who and what this project is."
-    required: [name, version]
+    description: "FRAME frontmatter. Lets humans and tools identify this file before reading the body."
+    additionalProperties: false
+    required: [file, schema_version, role, status]
     properties:
-      name:
+      file:
         type: string
-        description: "Project name. Must be explicit."
-      version:
+        const: facts
+        description: "The FRAME file name. Prevents a tool from treating one FRAME file as another."
+      schema_version:
         type: string
-        description: "Current version."
-      description:
+        const: "0.8.0"
+        description: "The schema contract this file claims to follow."
+      role:
         type: string
-        description: "One-line description of the product."
-
-  goal:
-    type: object
-    description: "What the project exists to do."
-    required: [purpose]
-    properties:
-      purpose:
+        const: stable_project_truth
+        description: "The job of facts.yaml: stable project truth, not activity history or planned work."
+      status:
         type: string
-        description: "The core reason this product exists."
-      scope:
-        type: string
-        description: "What is in scope for the current build."
-      out_of_scope:
-        type: array
-        items:
-          type: string
-        description: "Explicitly excluded items."
-
-  stack:
-    type: object
-    description: "Technology choices. Must be explicit, never assumed."
-    required: [language]
-    properties:
-      language:
-        type: string
-      backend:
-        type: string
-      frontend:
-        type: string
-      runtime:
-        type: string
-      package_manager:
-        type: string
-
-  architecture:
-    type: object
-    description: "How the system is structured."
-    required: [pattern, reasoning]
-    properties:
-      pattern:
-        type: string
-        description: "e.g. layered, microservices, monolith, hexagonal"
-      reasoning:
-        type: string
-        description: "Why this pattern was chosen."
-      boundaries:
-        type: array
-        items:
-          type: string
-        description: "Named system boundaries / modules."
-
-  database:
-    type: object
-    description: "Real database choice. No placeholders."
-    required: [type, connection]
-    properties:
-      type:
-        type: string
-        description: "e.g. postgres, mongodb, sqlite, none"
-      connection:
-        type: string
-        description: "URI, method, or 'none' if no DB needed."
-      migrations:
-        type: string
-        description: "Migration strategy if applicable."
-
-  tools:
-    type: object
-    description: "External tools and integrations."
-    properties:
-      mcp:
-        type: array
-        items:
-          type: string
-      testing:
-        type: string
-      browser:
-        type: string
-      ci:
-        type: string
-      other:
-        type: array
-        items:
-          type: string
-
-  services:
-    type: array
-    description: "External APIs and services the project depends on."
-    items:
-      type: object
-      required: [name, purpose]
-      properties:
-        name:
-          type: string
-        purpose:
-          type: string
-        auth_method:
-          type: string
-        status:
-          type: string
-          enum: [configured, pending, blocked]
-
-  constraints:
-    type: array
-    description: "Hard rules the project must follow."
-    items:
-      type: string
-    minItems: 1
-
-  success_criteria:
-    type: array
-    description: "How we know the project works."
-    items:
-      type: string
-    minItems: 1
-
-  roles:
-    type: array
-    items:
-      type: object
-      properties:
-        name:
-          type: string
-        responsibility:
-          type: string
-
-  features:
-    type: array
-    items:
-      type: object
-      required: [name, status]
-      properties:
-        name:
-          type: string
-        description:
-          type: string
-        status:
-          type: string
-          enum: [planned, in_progress, done, blocked]
-        priority:
-          type: string
-          enum: [critical, high, medium, low]
-
-  unresolved:
-    type: array
-    description: "Explicitly tracked unknowns."
-    items:
-      type: object
-      required: [item, reason]
-      properties:
-        item:
-          type: string
-        reason:
-          type: string
-        blocking:
-          type: boolean
-          default: false
+        enum: [draft, active, deprecated]
+        description: "Whether this file is still being shaped, trusted as active, or kept only for old projects."
+      last_reviewed:
+        type: ["string", "null"]
+        format: date
+        description: "Optional date when a human or tool last checked this file for stale truth."
+      updated_by:
+        type: ["string", "null"]
+        description: "Optional human, agent, or tool that last changed this file."
+      update_reason:
+        type: ["string", "null"]
+        description: "Optional short reason for the last change."

@@ -10,10 +10,23 @@ from haxaml.acts_archive import ActsArchive
 from haxaml.state_manager import StateManager, StateError
 
 
+def _frame() -> dict:
+    return {
+        "file": "acts",
+        "schema_version": "0.8.0",
+        "role": "checked_activity_record",
+        "status": "draft",
+        "last_reviewed": None,
+        "updated_by": None,
+        "update_reason": None,
+    }
+
+
 def _make_state(tmp_path, data=None):
-    """Create an acts.yaml in tmp_path and return its path."""
+    """Create strict acts frontmatter plus Haxaml runtime state."""
     if data is None:
         data = {
+            "frame": _frame(),
             "current_phase": "Phase 1",
             "active_task": {"name": "test task", "description": "testing"},
             "completed_tasks": [],
@@ -31,9 +44,17 @@ def _make_state(tmp_path, data=None):
                 "hot_limits": {"runs": 5, "sessions": 5, "verifications": 5},
             },
         }
-    path = str(tmp_path / "acts.yaml")
-    with open(path, "w") as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+    elif isinstance(data, dict) and "frame" not in data:
+        data = {"frame": _frame(), **data}
+    path_obj = tmp_path / "acts.yaml"
+    runtime_path = tmp_path / "runtime" / "acts-state.yaml"
+    runtime_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path_obj, "w") as f:
+        yaml.dump({"frame": data["frame"]}, f, default_flow_style=False, sort_keys=False)
+    runtime = {key: value for key, value in data.items() if key != "frame"}
+    with open(runtime_path, "w") as f:
+        yaml.dump(runtime, f, default_flow_style=False, sort_keys=False)
+    path = str(path_obj)
     return path
 
 

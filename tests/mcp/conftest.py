@@ -14,6 +14,18 @@ def _msg(result):
     return str(result)
 
 
+def _frame(file: str, role: str) -> dict:
+    return {
+        "file": file,
+        "schema_version": "0.8.0",
+        "role": role,
+        "status": "draft",
+        "last_reviewed": None,
+        "updated_by": None,
+        "update_reason": None,
+    }
+
+
 @pytest.fixture
 def fresh_project(tmp_path: Path) -> Path:
     """Create a fresh project with initialized FRAME files."""
@@ -29,6 +41,7 @@ def fresh_project(tmp_path: Path) -> Path:
 def governed_project(fresh_project: Path) -> Path:
     """A project with FRAME files filled in with valid content."""
     facts = {
+        "frame": _frame("facts", "stable_project_truth"),
         "identity": {"name": "test-project", "version": "0.1.0", "description": "A test project"},
         "goal": {"purpose": "Testing", "scope": "Unit tests", "out_of_scope": []},
         "stack": {
@@ -49,6 +62,7 @@ def governed_project(fresh_project: Path) -> Path:
         "unresolved": [],
     }
     rules = {
+        "frame": _frame("rules", "project_constraints"),
         "governance": {"system": "haxaml", "version": "0.1.0"},
         "before_task": {"read_first": [".haxaml/facts.yaml"], "then_read": [], "check": ["Confirm task"]},
         "boundaries": {"modules": {}, "rules": ["Stay in scope"]},
@@ -58,6 +72,7 @@ def governed_project(fresh_project: Path) -> Path:
         "escalation": {"act_independently": ["Small fixes"], "ask_first": ["Arch changes"]},
     }
     acts = {
+        "frame": _frame("acts", "checked_activity_record"),
         "current_phase": "Phase 1",
         "active_task": {"name": "none"},
         "completed_tasks": [],
@@ -76,6 +91,7 @@ def governed_project(fresh_project: Path) -> Path:
         },
     }
     expect = {
+        "frame": _frame("expect", "planned_direction"),
         "planning": {
             "goal": "Build test project",
             "strategy": "Incremental",

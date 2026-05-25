@@ -15,20 +15,17 @@ from haxaml.setup import WORKFLOW_TARGET_IDS
 from haxaml.setup.interactive import run_setup_wizard
 from haxaml.setup.registry import get_target, list_targets
 
-COMMIT_STYLE_DISCIPLINE = "Do not use commit prefixes like fix:, feat:, refactor:, chore:, or docs:."
-
-
-def test_init_scaffolds_full_frame():
+def test_init_scaffolds_frontmatter_frame():
     runner = CliRunner()
 
     with runner.isolated_filesystem():
         result = runner.invoke(cli, ["init", "."])
 
         assert result.exit_code == 0, result.output
-        assert ".haxaml/facts.yaml — fill in project truth" in result.output
-        assert ".haxaml/rules.yaml — define agent rules" in result.output
-        assert ".haxaml/acts.yaml — diary starts here" in result.output
-        assert ".haxaml/expect.yaml — plan your runs" in result.output
+        assert ".haxaml/facts.yaml — FRAME frontmatter for project truth" in result.output
+        assert ".haxaml/rules.yaml — FRAME frontmatter for constraints" in result.output
+        assert ".haxaml/acts.yaml — FRAME frontmatter for activity records" in result.output
+        assert ".haxaml/expect.yaml — FRAME frontmatter for planned direction" in result.output
 
         validate = runner.invoke(cli, ["validate", "--dir", "."])
 
@@ -40,9 +37,7 @@ def test_init_scaffolds_full_frame():
 
         with open(".haxaml/rules.yaml", "r") as f:
             rules = yaml.safe_load(f)
-        discipline = rules.get("while_coding", {}).get("discipline", [])
-        assert COMMIT_STYLE_DISCIPLINE in discipline
-        assert rules["memory_policy"]["archive_mode"] == "on_record"
+        assert rules["frame"]["role"] == "project_constraints"
 
 
 def test_export_supports_current_native_agent_files():
@@ -235,7 +230,7 @@ def test_setup_rerun_preserves_populated_frame_files_and_repairs_missing():
         facts_path = ".haxaml/facts.yaml"
         rules_path = ".haxaml/rules.yaml"
         facts = yaml.safe_load(open(facts_path).read())
-        facts["identity"]["name"] = "user-populated"
+        facts["frame"]["update_reason"] = "user-populated"
         with open(facts_path, "w") as f:
             yaml.dump(facts, f, default_flow_style=False, sort_keys=False)
         os.remove(rules_path)
@@ -244,7 +239,7 @@ def test_setup_rerun_preserves_populated_frame_files_and_repairs_missing():
 
         assert second.exit_code == 0, second.output
         preserved = yaml.safe_load(open(facts_path).read())
-        assert preserved["identity"]["name"] == "user-populated"
+        assert preserved["frame"]["update_reason"] == "user-populated"
         assert os.path.exists(rules_path)
 
 
@@ -755,7 +750,7 @@ def test_cli_needs_and_impact_commands():
 
         needs = runner.invoke(cli, ["needs", "--dir", "."])
         assert needs.exit_code == 0, needs.output
-        assert "Active run requirements" in needs.output
+        assert "Map complexity snapshot" in needs.output
 
         impact = runner.invoke(cli, ["impact", "auth", "--dir", "."])
         assert impact.exit_code == 0, impact.output

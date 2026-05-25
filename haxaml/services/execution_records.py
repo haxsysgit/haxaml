@@ -73,7 +73,7 @@ def finish_execution_run(
 ) -> RunResult:
     """Record a completed run and update hot/archive state.
 
-    ``compact_threshold`` is kept for compatibility with the old signature even
+    ``compact_threshold`` is kept for older callers even
     though archival policy is now controlled by ``StateManager.archive_on_record``.
     """
 

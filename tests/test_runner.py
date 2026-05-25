@@ -11,6 +11,18 @@ from haxaml.runner import ExecutionRunner, RunResult, PreflightResult
 from haxaml.state_manager import StateManager
 
 
+def _frame(file: str, role: str) -> dict:
+    return {
+        "file": file,
+        "schema_version": "0.8.0",
+        "role": role,
+        "status": "draft",
+        "last_reviewed": None,
+        "updated_by": None,
+        "update_reason": None,
+    }
+
+
 def _make_project(tmp_path, brain=None, state=None, instructions=None):
     """Create a minimal Haxaml project in tmp_path."""
     if brain is None:
@@ -31,9 +43,12 @@ def _make_project(tmp_path, brain=None, state=None, instructions=None):
             "roles": [{"name": "builder", "responsibility": "build"}],
             "features": [{"name": "core", "status": "planned"}],
         }
+    if isinstance(brain, dict) and "frame" not in brain:
+        brain = {"frame": _frame("facts", "stable_project_truth"), **brain}
 
     if state is None:
         state = {
+            "frame": _frame("acts", "checked_activity_record"),
             "current_phase": "Phase 1",
             "active_task": {"name": "initial task"},
             "completed_tasks": [],
@@ -51,8 +66,11 @@ def _make_project(tmp_path, brain=None, state=None, instructions=None):
                 "hot_limits": {"runs": 5, "sessions": 5, "verifications": 5},
             },
         }
+    elif isinstance(state, dict) and "frame" not in state:
+        state = {"frame": _frame("acts", "checked_activity_record"), **state}
 
     rules = {
+        "frame": _frame("rules", "project_constraints"),
         "before_task": {"read_first": [".haxaml/facts.yaml", ".haxaml/rules.yaml", ".haxaml/acts.yaml"]},
         "boundaries": {"rules": ["Keep changes scoped to the active task."]},
         "after_task": {
@@ -63,6 +81,7 @@ def _make_project(tmp_path, brain=None, state=None, instructions=None):
         "forbidden": ["Do not claim success without verification evidence."],
     }
     expect = {
+        "frame": _frame("expect", "planned_direction"),
         "planning": {
             "goal": "Complete one scoped task safely.",
             "strategy": "Small governed runs.",
@@ -148,7 +167,10 @@ class TestPreflight:
         assert result.acts_valid is True
 
     def test_invalid_brain_fails(self, tmp_path):
-        project = _make_project(tmp_path, brain={"invalid": "brain"})
+        project = _make_project(
+            tmp_path,
+            brain={"frame": {**_frame("facts", "stable_project_truth"), "file": "rules"}},
+        )
         runner = ExecutionRunner(project)
         result = runner.preflight()
         assert result.ready is False
@@ -186,6 +208,7 @@ class TestPreflight:
     def test_missing_map_blocks_when_complexity_requires_it(self, tmp_path):
         project = _make_project(tmp_path)
         rules = {
+            "frame": _frame("rules", "project_constraints"),
             "boundaries": {
                 "modules": {
                     "api": {"touches": ["auth", "db"]},
@@ -195,6 +218,7 @@ class TestPreflight:
             }
         }
         expect = {
+            "frame": _frame("expect", "planned_direction"),
             "planning": {
                 "estimated_runs": 6,
                 "project_size": "medium",
@@ -283,7 +307,10 @@ class TestExecutionLoop:
         assert ActsArchive(tmp_path).get_counts()["completed_tasks"] == 12
 
     def test_failed_preflight_blocks_run(self, tmp_path):
-        project = _make_project(tmp_path, brain={"invalid": "brain"})
+        project = _make_project(
+            tmp_path,
+            brain={"frame": {**_frame("facts", "stable_project_truth"), "file": "rules"}},
+        )
         runner = ExecutionRunner(project)
         result = runner.start_run(task="should fail")
         assert result.result == "failed"

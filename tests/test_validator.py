@@ -28,17 +28,23 @@ def _write_yaml(tmp_dir: str, filename: str, data: dict) -> str:
     return path
 
 
+def _frame(file: str, role: str) -> dict:
+    return {
+        "file": file,
+        "schema_version": "0.8.0",
+        "role": role,
+        "status": "draft",
+        "last_reviewed": None,
+        "updated_by": None,
+        "update_reason": None,
+    }
+
+
 class TestFactsValidation:
 
     def test_valid_minimal_facts(self, tmp_path):
         facts = {
-            "identity": {"name": "test", "version": "0.1.0"},
-            "goal": {"purpose": "Test project"},
-            "stack": {"language": "python"},
-            "architecture": {"pattern": "layered", "reasoning": "simplicity"},
-            "database": {"type": "none", "connection": "none"},
-            "constraints": ["no guessing"],
-            "success_criteria": ["it works"],
+            "frame": _frame("facts", "stable_project_truth"),
         }
         path = _write_yaml(str(tmp_path), "facts.yaml", facts)
         errors = validate_facts(path)
@@ -50,43 +56,23 @@ class TestFactsValidation:
         errors = validate_facts(path)
         assert len(errors) > 0
         error_text = " ".join(errors)
-        assert "goal" in error_text or "required" in error_text.lower()
+        assert "frame" in error_text or "Additional properties" in error_text
 
-    def test_missing_identity_version(self, tmp_path):
+    def test_facts_body_is_rejected_until_a_schema_slice_adds_it(self, tmp_path):
         facts = {
-            "identity": {"name": "test"},  # missing version
-            "goal": {"purpose": "Test"},
-            "stack": {"language": "python"},
-            "architecture": {"pattern": "layered", "reasoning": "test"},
-            "database": {"type": "none", "connection": "none"},
-            "constraints": ["rule"],
-            "success_criteria": ["works"],
+            "frame": _frame("facts", "stable_project_truth"),
+            "identity": {"name": "test"},
         }
         path = _write_yaml(str(tmp_path), "facts.yaml", facts)
         errors = validate_facts(path)
-        assert any("version" in e for e in errors)
-
-    def test_empty_constraints_rejected(self, tmp_path):
-        facts = {
-            "identity": {"name": "test", "version": "0.1.0"},
-            "goal": {"purpose": "Test"},
-            "stack": {"language": "python"},
-            "architecture": {"pattern": "layered", "reasoning": "test"},
-            "database": {"type": "none", "connection": "none"},
-            "constraints": [],
-            "success_criteria": ["works"],
-        }
-        path = _write_yaml(str(tmp_path), "facts.yaml", facts)
-        errors = validate_facts(path)
-        assert any("constraints" in e.lower() for e in errors)
+        assert any("Additional properties" in error and "identity" in error for error in errors)
 
 
 class TestActsValidation:
 
     def test_valid_minimal_acts(self, tmp_path):
         acts = {
-            "current_phase": "Phase 1",
-            "active_task": {"name": "test task"},
+            "frame": _frame("acts", "checked_activity_record"),
         }
         path = _write_yaml(str(tmp_path), "acts.yaml", acts)
         errors = validate_acts(path)
@@ -101,81 +87,20 @@ class TestActsValidation:
 
 class TestFactsDoctor:
 
-    def test_detects_missing_recommended_fields(self, tmp_path):
+    def test_no_body_completeness_checks_exist_in_frontmatter_slice(self, tmp_path):
         facts = {
-            "identity": {"name": "test", "version": "0.1.0"},
-            "goal": {"purpose": "Test"},
-            "stack": {"language": "python"},
-            "architecture": {"pattern": "layered", "reasoning": "test"},
-            "database": {"type": "none", "connection": "none"},
-            "constraints": ["rule"],
-            "success_criteria": ["works"],
+            "frame": _frame("facts", "stable_project_truth"),
         }
         path = _write_yaml(str(tmp_path), "facts.yaml", facts)
         missing = detect_missing_facts_fields(path)
-        assert len(missing) > 0
-        fields_text = " ".join(missing)
-        assert "description" in fields_text or "tools" in fields_text
-
-    def test_detects_blocking_unresolved(self, tmp_path):
-        facts = {
-            "identity": {"name": "test", "version": "0.1.0"},
-            "goal": {"purpose": "Test", "scope": "all", "out_of_scope": []},
-            "stack": {"language": "python"},
-            "architecture": {"pattern": "layered", "reasoning": "test"},
-            "database": {"type": "none", "connection": "none"},
-            "constraints": ["rule"],
-            "success_criteria": ["works"],
-            "tools": {"testing": "pytest"},
-            "services": [{"name": "api", "purpose": "test"}],
-            "roles": [{"name": "dev", "responsibility": "build"}],
-            "features": [{"name": "core", "status": "planned"}],
-            "unresolved": [
-                {"item": "DB URI", "reason": "not provided", "blocking": True}
-            ],
-        }
-        path = _write_yaml(str(tmp_path), "facts.yaml", facts)
-        missing = detect_missing_facts_fields(path)
-        assert any("BLOCKING" in m for m in missing)
+        assert missing == []
 
 
 class TestRulesValidation:
 
     def test_rules_agent_profile_valid(self, tmp_path):
         rules = {
-            "before_task": {"read_first": [".haxaml/facts.yaml"]},
-            "boundaries": {"rules": ["Stay within scope"]},
-            "after_task": {"report": ["what changed"], "update": [".haxaml/acts.yaml"]},
-            "forbidden": ["Do not guess missing project facts"],
-            "agent_profile": {
-                "persona": {
-                    "role": "Codex implementation agent",
-                    "tone": ["direct", "concise"],
-                    "constraints": ["deterministic output only"],
-                },
-                "reasoning_policy": {
-                    "private_reasoning": "Keep internal reasoning private.",
-                    "public_rationale": "Give concise, checkable rationale.",
-                    "checklist": ["summarize", "show checks", "list risks"],
-                    "prohibit_cot_transcript": True,
-                },
-                "output_contract": {
-                    "required_sections": ["Summary", "Verification", "Risks"],
-                    "format_notes": ["Use concise bullet points."],
-                },
-                "few_shot_examples": [
-                    {"input": "Task request", "output": "Concise task response"}
-                ],
-                "example_policy": {
-                    "max_examples": 3,
-                    "max_input_chars": 200,
-                    "max_output_chars": 250,
-                    "max_total_chars": 900,
-                    "derived_from_acts_max": 2,
-                    "ordering": "explicit_then_derived",
-                    "fallback_when_empty": "render_notice",
-                },
-            },
+            "frame": _frame("rules", "project_constraints"),
         }
         path = _write_yaml(str(tmp_path), "rules.yaml", rules)
         errors = validate_rules(path)
@@ -265,12 +190,8 @@ class TestConsistencyReport:
             },
         )
         result = semantic_validate(frame)
-        assert result.blocking == [
-            "facts.identity section is absent — add identity.name and identity.version",
-            "facts.goal section is absent — add goal.purpose and goal.scope",
-        ]
+        assert result.blocking == []
         assert any("Phase 'phase 1' is marked done" in warning or "phase 'phase 1'" in warning.lower() for warning in result.warnings)
-        assert any("verification discipline" in warning.lower() for warning in result.warnings)
 
     def test_semantic_validate_does_not_use_removed_expect_runs_key(self):
         frame = self._frame(
@@ -294,8 +215,9 @@ class TestConsistencyReport:
         result = semantic_validate(frame)
         assert not any("has no matching acts record" in item for item in result.blocking)
 
-    def test_rules_agent_profile_invalid_fields_report_paths(self, tmp_path):
+    def test_rules_profile_body_is_rejected_until_a_schema_slice_adds_it(self, tmp_path):
         rules = {
+            "frame": _frame("rules", "project_constraints"),
             "before_task": {"read_first": [".haxaml/facts.yaml"]},
             "boundaries": {"rules": ["Stay within scope"]},
             "after_task": {"report": ["what changed"], "update": [".haxaml/acts.yaml"]},
@@ -317,17 +239,11 @@ class TestConsistencyReport:
         }
         path = _write_yaml(str(tmp_path), "rules.yaml", rules)
         errors = validate_rules(path)
-        assert errors
-        assert any("[agent_profile.persona]" in err and "required property" in err for err in errors)
-        assert any("[agent_profile.reasoning_policy.prohibit_cot_transcript]" in err for err in errors)
-        assert any("[agent_profile.example_policy.fallback_when_empty]" in err for err in errors)
+        assert any("Additional properties" in error and "agent_profile" in error for error in errors)
 
     def test_rules_without_agent_profile_remains_valid(self, tmp_path):
         rules = {
-            "before_task": {"read_first": [".haxaml/facts.yaml"]},
-            "boundaries": {"rules": ["Stay within scope"]},
-            "after_task": {"report": ["what changed"], "update": [".haxaml/acts.yaml"]},
-            "forbidden": ["Do not guess missing project facts"],
+            "frame": _frame("rules", "project_constraints"),
         }
         path = _write_yaml(str(tmp_path), "rules.yaml", rules)
         errors = validate_rules(path)
@@ -335,6 +251,7 @@ class TestConsistencyReport:
 
     def test_rules_lifecycle_and_policy_extensions_validate(self, tmp_path):
         rules = {
+            "frame": _frame("rules", "project_constraints"),
             "before_task": {"read_first": [".haxaml/facts.yaml"]},
             "boundaries": {"rules": ["Stay within scope"]},
             "after_task": {"report": ["what changed"], "update": [".haxaml/acts.yaml"]},
@@ -374,10 +291,11 @@ class TestConsistencyReport:
         }
         path = _write_yaml(str(tmp_path), "rules.yaml", rules)
         errors = validate_rules(path)
-        assert errors == [], f"Expected no errors, got: {errors}"
+        assert any("Additional properties" in error for error in errors)
 
-    def test_rules_invalid_policy_values_are_reported(self, tmp_path):
+    def test_rules_policy_body_is_rejected_until_a_schema_slice_adds_it(self, tmp_path):
         rules = {
+            "frame": _frame("rules", "project_constraints"),
             "before_task": {"read_first": [".haxaml/facts.yaml"]},
             "boundaries": {"rules": ["Stay within scope"]},
             "after_task": {"report": ["what changed"], "update": [".haxaml/acts.yaml"]},
@@ -387,15 +305,14 @@ class TestConsistencyReport:
         }
         path = _write_yaml(str(tmp_path), "rules.yaml", rules)
         errors = validate_rules(path)
-        assert errors
-        assert any("[clarification_policy.mode]" in err for err in errors)
-        assert any("[context_policy.default_pack]" in err for err in errors)
+        assert any("Additional properties" in error and "clarification_policy" in error for error in errors)
 
 
 class TestActsLifecycleValidation:
 
     def test_acts_session_and_verification_extensions_validate(self, tmp_path):
         acts = {
+            "frame": _frame("acts", "checked_activity_record"),
             "current_phase": "Phase 1",
             "active_task": {"name": "session task"},
             "sessions": [
@@ -430,4 +347,4 @@ class TestActsLifecycleValidation:
         }
         path = _write_yaml(str(tmp_path), "acts.yaml", acts)
         errors = validate_acts(path)
-        assert errors == [], f"Expected no errors, got: {errors}"
+        assert any("Additional properties" in error for error in errors)

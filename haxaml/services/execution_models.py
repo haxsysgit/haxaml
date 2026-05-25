@@ -1,7 +1,7 @@
 """Small data models shared by execution services.
 
 These dataclasses are intentionally lightweight. They are the stable payloads
-used by the compatibility facade in ``haxaml.runner`` and by the tests that
+used by the ``haxaml.runner`` facade and by the tests that
 exercise the execution flow.
 """
 
@@ -34,4 +34,3 @@ class PreflightResult:
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     context_tokens: int = 0
-

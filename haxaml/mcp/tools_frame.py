@@ -40,10 +40,11 @@ def haxaml_init(directory: str = ".", detail: str = DETAIL_SHORT) -> dict:
 
     message = (
         f"✓ Initialized FRAME scaffold at {haxaml_root}\n"
-        f"  → .haxaml/facts.yaml — fill in project truth\n"
-        f"  → .haxaml/rules.yaml — define agent rules\n"
-        f"  → .haxaml/acts.yaml — diary starts here\n"
-        f"  → .haxaml/expect.yaml — plan your runs\n"
+        f"  → .haxaml/facts.yaml — FRAME frontmatter for project truth\n"
+        f"  → .haxaml/rules.yaml — FRAME frontmatter for constraints\n"
+        f"  → .haxaml/acts.yaml — FRAME frontmatter for activity records\n"
+        f"  → .haxaml/expect.yaml — FRAME frontmatter for planned direction\n"
+        f"  → Only frontmatter is valid in 0.8.0 until future schema slices add more fields\n"
         f"  → Run `haxaml setup` or call `haxaml_setup` for onboarding or adoption\n"
         f"  → Call haxaml_validate when ready"
     )

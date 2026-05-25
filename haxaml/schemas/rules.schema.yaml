@@ -1,365 +1,47 @@
 # rules.yaml JSON Schema — Agent Rules (FRAME model: R)
 # The rules AI agents must follow when working on this project.
-# Version: 0.3.0
+# Version: 0.8.0
 
 $schema: "https://json-schema.org/draft/2020-12/schema"
-title: "Haxaml Rules"
-description: "Structured agent rules — conventions, boundaries, forbidden actions."
+title: "FRAME Rules"
+description: "FRAME rules frontmatter. Only fields defined by this schema are valid in this slice."
 type: object
+additionalProperties: false
 
 required:
-  - before_task
-  - boundaries
-  - after_task
-  - forbidden
+  - frame
 
 properties:
 
-  governance:
+  frame:
     type: object
+    description: "FRAME frontmatter. Lets humans and tools identify this file before reading the body."
+    additionalProperties: false
+    required: [file, schema_version, role, status]
     properties:
-      system:
+      file:
         type: string
-      version:
+        const: rules
+        description: "The FRAME file name. Prevents a tool from treating one FRAME file as another."
+      schema_version:
         type: string
-
-  lifecycle:
-    type: object
-    description: "Session lifecycle policy for MCP-first execution."
-    additionalProperties: false
-    properties:
-      onboarding_full_reads:
-        type: integer
-        minimum: 1
-        maximum: 20
-      enforce_verify_before_record:
-        type: boolean
-      enforce_governed_evidence_on_validate:
-        type: boolean
-      phases:
-        type: array
-        items:
-          type: string
-          enum: [prebuild, start, plan, context, act, verify, record, export]
-
-  context_policy:
-    type: object
-    description: "Policy for compact task-specific context pack generation."
-    additionalProperties: false
-    properties:
-      default_pack:
+        const: "0.8.0"
+        description: "The schema contract this file claims to follow."
+      role:
         type: string
-        enum: [balanced, minimal, full]
-      max_items_per_section:
-        type: integer
-        minimum: 1
-        maximum: 50
-      max_chars_per_item:
-        type: integer
-        minimum: 40
-        maximum: 2000
-
-  memory_policy:
-    type: object
-    description: "Policy for hot/cold acts history and governed retrieval memory pressure."
-    additionalProperties: false
-    properties:
-      archive_mode:
+        const: project_constraints
+        description: "The job of rules.yaml: stable constraints that tools and agents should obey."
+      status:
         type: string
-        enum: [manual, on_record]
-      max_hot_runs:
-        type: integer
-        minimum: 1
-        maximum: 500
-      max_hot_sessions:
-        type: integer
-        minimum: 1
-        maximum: 500
-      max_hot_verifications:
-        type: integer
-        minimum: 1
-        maximum: 500
-      max_hot_completed_tasks:
-        type: integer
-        minimum: 1
-        maximum: 500
-      max_acts_bytes:
-        type: integer
-        minimum: 512
-        maximum: 5000000
-      keep_decisions_hot:
-        type: boolean
-
-  clarification_policy:
-    type: object
-    description: "Policy controlling when agent should ask clarifying questions before acting."
-    additionalProperties: false
-    properties:
-      mode:
-        type: string
-        enum: [risk_gated_soft_block, warn_only, hard_block]
-      high_risk_keywords:
-        type: array
-        items:
-          type: string
-      min_task_chars:
-        type: integer
-        minimum: 1
-        maximum: 500
-
-  verification_policy:
-    type: object
-    description: "Reflective verification policy and required checks."
-    additionalProperties: false
-    properties:
-      require_checks:
-        type: array
-        minItems: 1
-        items:
-          type: string
-          enum:
-            - understood_task
-            - inspected_context
-            - changed_right_files
-            - risky_or_unrelated_touch
-            - followed_rules
-            - updated_journal
-            - unresolved_logged
-            - explained_changes
-      allow_pass_with_risks:
-        type: boolean
-
-  guidance_policy:
-    type: object
-    description: "Prompt and guidance behavior for classifying tasks and asking better questions."
-    additionalProperties: false
-    properties:
-      task_type_hints:
-        type: object
-        additionalProperties:
-          type: array
-          items:
-            type: string
-      safer_path_templates:
-        type: array
-        items:
-          type: string
-
-  agent_profile:
-    type: object
-    description: "Optional deterministic prompt profile for high-quality exports."
-    required: [persona, reasoning_policy, output_contract]
-    additionalProperties: false
-    properties:
-      persona:
-        type: object
-        required: [role, tone, constraints]
-        additionalProperties: false
-        properties:
-          role:
-            type: string
-            minLength: 1
-          tone:
-            type: array
-            minItems: 1
-            maxItems: 8
-            items:
-              type: string
-              minLength: 1
-          constraints:
-            type: array
-            minItems: 1
-            maxItems: 12
-            items:
-              type: string
-              minLength: 1
-
-      reasoning_policy:
-        type: object
-        required: [private_reasoning, public_rationale, checklist]
-        additionalProperties: false
-        properties:
-          private_reasoning:
-            type: string
-            minLength: 1
-          public_rationale:
-            type: string
-            minLength: 1
-          checklist:
-            type: array
-            minItems: 1
-            items:
-              type: string
-              minLength: 1
-          prohibit_cot_transcript:
-            type: boolean
-            const: true
-            description: "Must stay true so exports avoid explicit chain-of-thought transcript requests."
-
-      output_contract:
-        type: object
-        required: [required_sections]
-        additionalProperties: false
-        properties:
-          required_sections:
-            type: array
-            minItems: 1
-            maxItems: 12
-            items:
-              type: string
-              minLength: 1
-          format_notes:
-            type: array
-            items:
-              type: string
-              minLength: 1
-
-      few_shot_examples:
-        type: array
-        maxItems: 12
-        items:
-          type: object
-          required: [input, output]
-          additionalProperties: false
-          properties:
-            title:
-              type: string
-            input:
-              type: string
-              minLength: 1
-            output:
-              type: string
-              minLength: 1
-
-      example_policy:
-        type: object
-        additionalProperties: false
-        properties:
-          max_examples:
-            type: integer
-            minimum: 1
-            maximum: 12
-          max_input_chars:
-            type: integer
-            minimum: 64
-            maximum: 4000
-          max_output_chars:
-            type: integer
-            minimum: 64
-            maximum: 6000
-          max_total_chars:
-            type: integer
-            minimum: 256
-            maximum: 12000
-          derived_from_acts_max:
-            type: integer
-            minimum: 0
-            maximum: 12
-          ordering:
-            type: string
-            enum: [explicit_then_derived]
-          fallback_when_empty:
-            type: string
-            enum: [render_notice, omit_section]
-
-  before_task:
-    type: object
-    description: "What the agent must do before starting any task."
-    required: [read_first]
-    properties:
-      read_first:
-        type: array
-        minItems: 1
-        items:
-          type: string
-        description: "Files the agent must read before any task."
-      then_read:
-        type: array
-        items:
-          type: string
-      check:
-        type: array
-        items:
-          type: string
-        description: "Pre-task validation checks."
-
-  boundaries:
-    type: object
-    description: "Module ownership and cross-boundary rules."
-    required: [rules]
-    properties:
-      modules:
-        type: object
-        additionalProperties:
-          type: object
-          required: [owns, purpose]
-          properties:
-            owns:
-              type: array
-              items:
-                type: string
-            purpose:
-              type: string
-            touches:
-              type: array
-              items:
-                type: string
-      rules:
-        type: array
-        minItems: 1
-        items:
-          type: string
-        description: "Boundary rules agents must follow."
-
-  while_coding:
-    type: object
-    properties:
-      constraints:
-        type: array
-        items:
-          type: string
-      discipline:
-        type: array
-        items:
-          type: string
-
-  after_task:
-    type: object
-    description: "What the agent must do after completing a task."
-    required: [report, update]
-    properties:
-      report:
-        type: array
-        minItems: 1
-        items:
-          type: string
-      update:
-        type: array
-        minItems: 1
-        items:
-          type: string
-      verify:
-        type: array
-        items:
-          type: string
-
-  forbidden:
-    type: array
-    minItems: 1
-    items:
-      type: string
-    description: "Actions agents must never take."
-
-  escalation:
-    type: object
-    properties:
-      act_independently:
-        type: array
-        items:
-          type: string
-      ask_first:
-        type: array
-        items:
-          type: string
-
-additionalProperties: false
+        enum: [draft, active, deprecated]
+        description: "Whether this file is still being shaped, trusted as active, or kept only for old projects."
+      last_reviewed:
+        type: ["string", "null"]
+        format: date
+        description: "Optional date when a human or tool last checked this file for stale rules."
+      updated_by:
+        type: ["string", "null"]
+        description: "Optional human, agent, or tool that last changed this file."
+      update_reason:
+        type: ["string", "null"]
+        description: "Optional short reason for the last change."
