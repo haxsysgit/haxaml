@@ -7,6 +7,8 @@ import yaml
 
 from haxaml.mcp_server import haxaml_about, haxaml_init
 
+from .helpers import write_runtime_state
+
 
 def _msg(result):
     if isinstance(result, dict):
@@ -145,12 +147,13 @@ def governed_project(fresh_project: Path) -> Path:
 
     haxaml_dir = fresh_project / ".haxaml"
     for name, data in [
-        ("facts.yaml", facts),
-        ("rules.yaml", rules),
-        ("acts.yaml", acts),
-        ("expect.yaml", expect),
+        ("facts.yaml", {"frame": facts["frame"]}),
+        ("rules.yaml", {"frame": rules["frame"]}),
+        ("acts.yaml", {"frame": acts["frame"]}),
+        ("expect.yaml", {"frame": expect["frame"]}),
     ]:
         (haxaml_dir / name).write_text(yaml.dump(data, default_flow_style=False, sort_keys=False))
+    write_runtime_state(fresh_project, {key: value for key, value in acts.items() if key != "frame"})
 
     about = haxaml_about(str(fresh_project))
     assert about["ok"] is True

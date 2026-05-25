@@ -197,7 +197,8 @@ def prepare_task_context(
     }
 
     if include_state and paths.acts_path.exists():
-        state = load_yaml(str(paths.acts_path))
+        manager = state_manager_for(paths)
+        state = manager.read() if manager else load_yaml(str(paths.acts_path))
         context["state"] = {
             "phase": state.get("current_phase", "unknown"),
             "active_task": state.get("active_task", {}),

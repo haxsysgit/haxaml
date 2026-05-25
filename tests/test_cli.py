@@ -89,8 +89,8 @@ def test_setup_clean_repo_creates_frame_generic_agents_and_skill():
 
         with open(".haxaml/facts.yaml", "r") as f:
             facts = yaml.safe_load(f)
-        assert facts["origin"]["mode"] == "fresh"
-        assert facts["origin"]["managed_by"] == "haxaml-setup"
+        assert set(facts) == {"frame"}
+        assert facts["frame"]["role"] == "stable_project_truth"
 
         with open("AGENTS.md", "r") as f:
             agents = f.read()
@@ -146,8 +146,8 @@ def test_setup_auto_with_multiple_strong_candidates_does_not_guess():
 
         with open(".haxaml/facts.yaml", "r") as f:
             facts = yaml.safe_load(f)
-        assert facts["origin"]["mode"] == "fresh"
-        assert facts["origin"]["managed_by"] == "haxaml-setup"
+        assert set(facts) == {"frame"}
+        assert facts["frame"]["role"] == "stable_project_truth"
 
         with open("CLAUDE.md", "r") as f:
             claude = f.read()
@@ -169,7 +169,7 @@ def test_setup_auto_with_shared_agents_signal_stays_generic_and_fresh():
         assert os.path.exists(".haxaml/adoption/adoption.yaml") is False
         with open(".haxaml/facts.yaml", "r") as f:
             facts = yaml.safe_load(f)
-        assert facts["origin"]["mode"] == "fresh"
+        assert set(facts) == {"frame"}
         assert "only weak shared signals" in result.output
         assert "Codex" in result.output or "OpenAI Codex" in result.output
 

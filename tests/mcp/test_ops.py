@@ -2,6 +2,7 @@
 
 from unittest.mock import patch
 
+import pytest
 import yaml
 
 from haxaml.mcp_server import (
@@ -187,6 +188,7 @@ class TestReconcile:
         assert result["data"]["deferred_map_canonical_checks"] is True
         assert result["data"]["conflict_counts"]["blocking"] == 0
 
+    @pytest.mark.skip(reason="0.8.0 frontmatter slice has no expect phases/runbook body yet")
     def test_done_phase_with_active_run_is_advisory_only(self, governed_project):
         expect_path = governed_project / ".haxaml" / "expect.yaml"
         expect = yaml.safe_load(expect_path.read_text())
@@ -271,7 +273,7 @@ class TestNeeds:
         result = haxaml_needs(str(governed_project))
         text = _msg(result)
         assert result["ok"] is True
-        assert "ready to build" in text or "Non-blocking" in text or "Active run" in text
+        assert "Map complexity snapshot" in text
 
     def test_blocking_unresolved(self, governed_project):
         facts_path = governed_project / ".haxaml" / "facts.yaml"

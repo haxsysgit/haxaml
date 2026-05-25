@@ -13,22 +13,22 @@ class TestResources:
     def test_facts_resource(self, governed_project, monkeypatch):
         monkeypatch.setenv("HAXAML_PROJECT_DIR", str(governed_project))
         content = resource_facts()
-        assert "test-project" in content
+        assert "stable_project_truth" in content
 
     def test_rules_resource(self, governed_project, monkeypatch):
         monkeypatch.setenv("HAXAML_PROJECT_DIR", str(governed_project))
         content = resource_rules()
-        assert "haxaml" in content
+        assert "project_constraints" in content
 
     def test_acts_resource(self, governed_project, monkeypatch):
         monkeypatch.setenv("HAXAML_PROJECT_DIR", str(governed_project))
         content = resource_acts()
-        assert "Phase 1" in content
+        assert "checked_activity_record" in content
 
     def test_expect_resource(self, governed_project, monkeypatch):
         monkeypatch.setenv("HAXAML_PROJECT_DIR", str(governed_project))
         content = resource_expect()
-        assert "goal" in content
+        assert "planned_direction" in content
 
     def test_map_resource_missing(self, governed_project, monkeypatch):
         monkeypatch.setenv("HAXAML_PROJECT_DIR", str(governed_project))

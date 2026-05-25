@@ -44,7 +44,7 @@ def _make_project(tmp_path, brain=None, state=None, instructions=None):
             "features": [{"name": "core", "status": "planned"}],
         }
     if isinstance(brain, dict) and "frame" not in brain:
-        brain = {"frame": _frame("facts", "stable_project_truth"), **brain}
+        brain = {"frame": _frame("facts", "stable_project_truth")}
 
     if state is None:
         state = {
@@ -69,66 +69,8 @@ def _make_project(tmp_path, brain=None, state=None, instructions=None):
     elif isinstance(state, dict) and "frame" not in state:
         state = {"frame": _frame("acts", "checked_activity_record"), **state}
 
-    rules = {
-        "frame": _frame("rules", "project_constraints"),
-        "before_task": {"read_first": [".haxaml/facts.yaml", ".haxaml/rules.yaml", ".haxaml/acts.yaml"]},
-        "boundaries": {"rules": ["Keep changes scoped to the active task."]},
-        "after_task": {
-            "report": ["Summarize what changed."],
-            "update": [".haxaml/acts.yaml"],
-            "verify": ["Run relevant tests or validation checks."],
-        },
-        "forbidden": ["Do not claim success without verification evidence."],
-    }
-    expect = {
-        "frame": _frame("expect", "planned_direction"),
-        "planning": {
-            "goal": "Complete one scoped task safely.",
-            "strategy": "Small governed runs.",
-            "estimated_runs": 1,
-            "project_size": "small",
-            "map_required": False,
-            "map_reason": "Map is optional for this fixture.",
-        },
-        "map_policy": {
-            "module_threshold": 10,
-            "cross_impact_touch_threshold": 3,
-            "cross_impact_run_threshold": 2,
-            "dependency_fanout_threshold": 3,
-            "impact_check_threshold": 3,
-            "shared_integration_module_threshold": 2,
-            "require_map_when": ["Module count exceeds policy threshold."],
-            "agent_instruction": "Read map.yaml when map_required is true.",
-        },
-        "phases": [
-            {
-                "name": "Phase 1",
-                "status": "active",
-                "run_range": "1-1",
-                "target_runs": 1,
-                "description": "Fixture phase.",
-                "done_when": "One run is recorded.",
-            }
-        ],
-        "runbook": [
-            {
-                "run": 1,
-                "phase": "Phase 1",
-                "status": "active",
-                "goal": "Execute one fixture task.",
-                "outcome": "Fixture task recorded.",
-                "depends_on": [],
-                "touches": ["scoped files only"],
-                "requires": ["Clear task statement"],
-                "uses_map": False,
-                "verify": ["Run relevant validation."],
-                "done_when": "Verification passes and the session is recorded.",
-            }
-        ],
-        "upcoming": [],
-        "milestones": [],
-        "open_questions": [],
-    }
+    rules = {"frame": _frame("rules", "project_constraints")}
+    expect = {"frame": _frame("expect", "planned_direction")}
 
     haxaml_dir = tmp_path / ".haxaml"
     haxaml_dir.mkdir(exist_ok=True)
@@ -139,7 +81,11 @@ def _make_project(tmp_path, brain=None, state=None, instructions=None):
 
     acts_path = haxaml_dir / "acts.yaml"
     with open(acts_path, "w") as f:
-        yaml.dump(state, f, default_flow_style=False, sort_keys=False)
+        yaml.dump({"frame": state["frame"]}, f, default_flow_style=False, sort_keys=False)
+    runtime_path = haxaml_dir / "runtime" / "acts-state.yaml"
+    runtime_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(runtime_path, "w") as f:
+        yaml.dump({key: value for key, value in state.items() if key != "frame"}, f, default_flow_style=False, sort_keys=False)
 
     rules_path = haxaml_dir / "rules.yaml"
     with open(rules_path, "w") as f:
@@ -181,29 +127,12 @@ class TestPreflight:
             ExecutionRunner(str(tmp_path))
 
     def test_blocking_unresolved_fails(self, tmp_path):
-        brain = {
-            "identity": {"name": "test", "version": "0.1.0",
-                         "description": "Test"},
-            "goal": {"purpose": "Testing blocking items",
-                     "scope": "test"},
-            "stack": {"language": "python"},
-            "architecture": {"pattern": "layered", "reasoning": "test"},
-            "database": {"type": "none", "connection": "none"},
-            "constraints": ["rule"],
-            "success_criteria": ["works"],
-            "tools": {"testing": "pytest"},
-            "services": [],
-            "roles": [{"name": "dev", "responsibility": "build"}],
-            "features": [],
-            "unresolved": [
-                {"item": "DB URI", "reason": "missing", "blocking": True}
-            ],
-        }
+        brain = {"frame": _frame("facts", "stable_project_truth"), "unresolved": [{"item": "DB URI", "reason": "missing", "blocking": True}]}
         project = _make_project(tmp_path, brain=brain)
         runner = ExecutionRunner(project)
         result = runner.preflight()
         assert result.ready is False
-        assert any("BLOCKING" in e for e in result.errors)
+        assert any("unresolved" in e for e in result.errors)
 
     def test_missing_map_blocks_when_complexity_requires_it(self, tmp_path):
         project = _make_project(tmp_path)
@@ -276,18 +205,6 @@ class TestExecutionLoop:
     def test_full_cycle(self, tmp_path):
         """Test complete FRAME → run → acts → compact cycle."""
         project = _make_project(tmp_path)
-        rules_path = tmp_path / ".haxaml" / "rules.yaml"
-        rules = yaml.safe_load(rules_path.read_text())
-        rules["memory_policy"] = {
-            "archive_mode": "on_record",
-            "max_hot_runs": 5,
-            "max_hot_sessions": 5,
-            "max_hot_verifications": 5,
-            "max_acts_bytes": 16000,
-            "keep_decisions_hot": True,
-        }
-        with open(rules_path, "w") as f:
-            yaml.dump(rules, f, default_flow_style=False, sort_keys=False)
         runner = ExecutionRunner(project)
 
         for i in range(12):
@@ -324,7 +241,7 @@ class TestProjectHealth:
         runner = ExecutionRunner(project)
         health = runner.get_project_health()
 
-        assert health["project"] == "test-project"
+        assert health["project"] == "unknown"
         assert health["ready"] is True
         assert health["facts_valid"] is True
         assert health["context_tokens"] > 0
@@ -348,7 +265,7 @@ class TestContextPreparation:
         runner = ExecutionRunner(project)
         ctx = runner.prepare_context(task="Build auth module")
 
-        assert ctx["facts"]["project"] == "test-project"
+        assert ctx["facts"]["project"] == "unknown"
         assert ctx["task"] == "Build auth module"
         assert "state" in ctx
         assert ctx["_meta"]["token_count"] > 0

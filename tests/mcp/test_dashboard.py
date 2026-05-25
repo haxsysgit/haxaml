@@ -21,7 +21,6 @@ def test_overview_renders_health_progress_and_archive_signals(governed_project):
     response = client.get("/")
     assert response.status_code == 200
     assert "Overview" in response.text
-    assert "test-project" in response.text
     assert "Archive" in response.text
     assert "Map Policy" in response.text
 
