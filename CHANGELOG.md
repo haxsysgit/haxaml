@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.8.0 - 2026-05-25
+
+- Started the `0.8.x` FRAME reset with a clean frontmatter-only schema slice instead of carrying old body fields forward.
+- Added a shared `frame.schema.yaml` header so all FRAME files agree on the same file, version, role, status, review, and update metadata.
+- Moved Haxaml runtime activity state beside FRAME instead of stuffing tool memory into strict `acts.yaml`.
+- Bumped `haxaml`, `haxaml-mcp`, and `haxaml-ui` together to `0.8.0`.
+
 ## 0.7.7 - 2026-05-19
 
 - Closed the `0.7.x` line as a real handoff instead of letting it drift: setup, state, workflow accommodation, and release plumbing now have one clear wrap-up story before `0.8.0`.

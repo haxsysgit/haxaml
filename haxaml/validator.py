@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -600,7 +601,51 @@ def load_schema(schema_name: str) -> dict:
     schema_path = SCHEMA_DIR / schema_name
     if not schema_path.exists():
         raise FileNotFoundError(f"Schema not found: {schema_path}")
-    return load_yaml(str(schema_path))
+    return _resolve_local_schema_refs(load_yaml(str(schema_path)))
+
+
+def _resolve_local_schema_refs(schema: Any, seen: set[str] | None = None) -> Any:
+    """Inline local schema refs so jsonschema can validate from loaded dicts."""
+    seen = seen or set()
+    if isinstance(schema, list):
+        return [_resolve_local_schema_refs(item, seen) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+
+    ref = schema.get("$ref")
+    if isinstance(ref, str) and ref.startswith("./"):
+        ref_path, _, pointer = ref.partition("#")
+        target_path = (SCHEMA_DIR / ref_path).resolve()
+        cache_key = f"{target_path}#{pointer}"
+        if cache_key in seen:
+            raise ValueError(f"Circular schema reference: {ref}")
+        target = load_yaml(str(target_path))
+        fragment = _schema_pointer(target, pointer)
+        resolved = _resolve_local_schema_refs(deepcopy(fragment), seen | {cache_key})
+        siblings = {key: value for key, value in schema.items() if key != "$ref"}
+        if siblings and isinstance(resolved, dict):
+            resolved = {**resolved, **_resolve_local_schema_refs(siblings, seen)}
+        return resolved
+
+    return {
+        key: _resolve_local_schema_refs(value, seen)
+        for key, value in schema.items()
+    }
+
+
+def _schema_pointer(schema: dict[str, Any], pointer: str) -> Any:
+    """Resolve a JSON pointer inside a loaded schema dict."""
+    if not pointer:
+        return schema
+    if not pointer.startswith("/"):
+        raise ValueError(f"Only JSON pointer schema refs are supported: #{pointer}")
+    current: Any = schema
+    for raw_part in pointer.lstrip("/").split("/"):
+        part = raw_part.replace("~1", "/").replace("~0", "~")
+        if not isinstance(current, dict) or part not in current:
+            raise KeyError(f"Schema pointer not found: #{pointer}")
+        current = current[part]
+    return current
 
 
 def validate_facts(facts_path: str) -> list[str]:

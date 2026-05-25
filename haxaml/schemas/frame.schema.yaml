@@ -1,0 +1,107 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://frame.dev/schemas/0.8.0/frame.schema.yaml"
+
+title: "FRAME Shared Definitions"
+description: "Shared schema pieces used by all FRAME files."
+
+$defs:
+  frame_header:
+    type: object
+    description: "Shared FRAME frontmatter. Every FRAME file starts with this header so humans and tools can identify the file, schema contract, role, and review state before reading any file-specific body."
+    additionalProperties: false
+    required:
+      - file
+      - schema_version
+      - role
+      - status
+    properties:
+      file:
+        type: string
+        description: "The FRAME file name. Prevents a tool from treating one FRAME file as another."
+      schema_version:
+        type: string
+        const: "0.8.0"
+        description: "The schema contract this file claims to follow."
+      role:
+        type: string
+        description: "The job this FRAME file is responsible for in the project brain."
+      status:
+        type: string
+        description: "Whether this file is still being shaped, trusted as active, or kept only for older projects."
+        enum:
+          - draft
+          - active
+          - deprecated
+      last_reviewed:
+        type:
+          - string
+          - "null"
+        format: date
+        description: "Optional date when a human or tool last checked this file for stale or misleading information."
+      updated_by:
+        type:
+          - string
+          - "null"
+        description: "Optional human, agent, or tool that last changed this file."
+      update_reason:
+        type:
+          - string
+          - "null"
+        description: "Optional short reason for the last change."
+
+  evidence:
+    type: object
+    additionalProperties: false
+    required:
+      - source
+      - why
+    properties:
+      source:
+        type:
+          - string
+          - "null"
+      why:
+        type:
+          - string
+          - "null"
+
+  confidence:
+    type: string
+    enum:
+      - unknown
+      - low
+      - medium
+      - high
+
+  severity:
+    type: string
+    enum:
+      - must
+      - should
+      - may
+      - forbidden
+
+  relationship_condition:
+    type: object
+    additionalProperties: false
+    required:
+      - fact_path
+      - operator
+    properties:
+      fact_path:
+        type: string
+      operator:
+        type: string
+        enum:
+          - exists
+          - missing
+          - equals
+          - not_equals
+          - includes
+      value:
+        type:
+          - string
+          - number
+          - boolean
+          - "null"
+          - array

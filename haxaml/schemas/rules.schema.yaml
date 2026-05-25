@@ -12,36 +12,15 @@ required:
   - frame
 
 properties:
-
   frame:
-    type: object
     description: "FRAME frontmatter. Lets humans and tools identify this file before reading the body."
-    additionalProperties: false
-    required: [file, schema_version, role, status]
-    properties:
-      file:
-        type: string
-        const: rules
-        description: "The FRAME file name. Prevents a tool from treating one FRAME file as another."
-      schema_version:
-        type: string
-        const: "0.8.0"
-        description: "The schema contract this file claims to follow."
-      role:
-        type: string
-        const: project_constraints
-        description: "The job of rules.yaml: stable constraints that tools and agents should obey."
-      status:
-        type: string
-        enum: [draft, active, deprecated]
-        description: "Whether this file is still being shaped, trusted as active, or kept only for old projects."
-      last_reviewed:
-        type: ["string", "null"]
-        format: date
-        description: "Optional date when a human or tool last checked this file for stale rules."
-      updated_by:
-        type: ["string", "null"]
-        description: "Optional human, agent, or tool that last changed this file."
-      update_reason:
-        type: ["string", "null"]
-        description: "Optional short reason for the last change."
+    allOf:
+      - $ref: "./frame.schema.yaml#/$defs/frame_header"
+      - type: object
+        properties:
+          file:
+            const: rules
+            description: "Identifies this FRAME file as rules.yaml."
+          role:
+            const: project_constraints
+            description: "The job of rules.yaml: stable constraints that tools and agents should obey."
